@@ -42,6 +42,17 @@
 | REQ-021 | 响应缓存 (相似问题复用) | P1 |
 | REQ-022 | 增量上下文 (只传变更) | P1 |
 
+### 代码智能
+
+| ID | 需求 | P |
+|----|------|---|
+| REQ-024 | LSP 跳转定义 (go-to-definition) | P0 |
+| REQ-025 | LSP 代码诊断 (diagnostics，直接在上下文中注入错误/警告) | P0 |
+| REQ-026 | LSP 悬停信息 (hover，查看类型/文档) | P1 |
+| REQ-027 | LSP 自动补全 (completion) | P1 |
+| REQ-028 | LSP 查找引用 (find-references) | P1 |
+| REQ-029 | 多语言 LSP 支持 (Python/JS/TS/Go/Rust 等按需启动) | P1 |
+
 ### 记忆系统
 
 | ID | 需求 | P |

@@ -111,7 +111,43 @@ query → embedding → 向量搜索 → 阈值过滤 → Top-K → Prompt注入
 
 **触发规则**: 上下文 > 80% 时压缩
 
-### 5. ToolExecutor (工具执行)
+### 5. LSP 集成 (代码智能)
+
+**定位**: 让 Agent 具备 IDE 级的代码语义理解能力，弥补 Tree-sitter 只能做语法级分析的不足。
+
+**架构**:
+
+```
+Agent Core → LSP Client → Language Server (各语言独立进程)
+                  ↓
+          响应缓存 (避免重复请求)
+```
+
+**核心能力**:
+
+| 能力 | 用途 | 推荐工具函数 |
+|------|------|-------------|
+| go-to-definition | 查找函数/变量定义位置 | `lsp_definition` |
+| diagnostics | 注入代码错误/警告到上下文 | `lsp_diagnostics` |
+| hover | 查看类型签名/文档 | `lsp_hover` |
+| completion | 代码补全建议 | `lsp_complete` |
+| find-references | 查找所有引用位置 | `lsp_references` |
+
+**实现要点**:
+- 通过 pyright、typescript-language-server 等标准 LSP Server 实现
+- 按需启动各语言 Server，空闲时关闭节省资源
+- 加入请求合并与缓存（同一文件诊断 -> 批量返回）
+- 支持 `$cwd` 自动检测项目根目录，自动匹配语言 Server
+
+**与 Tree-sitter 的分工**:
+
+| 场景 | 用谁 | 原因 |
+|------|------|------|
+| 上下文裁剪 | Tree-sitter | 纯语法解析，极快，无需进程 |
+| 理解代码含义 | LSP | 需要语义信息（类型、引用关系） |
+| 快速定位 | LSP | `go-to-definition` 比 grep 更精准 |
+
+### 6. ToolExecutor (工具执行)
 
 | 工具 | 命令 | 说明 |
 |------|------|------|
@@ -121,6 +157,9 @@ query → embedding → 向量搜索 → 阈值过滤 → Top-K → Prompt注入
 | Bash | `bash <cmd>` | 执行命令 |
 | Grep | `grep <pattern>` | 搜索内容 |
 | Find | `find <name>` | 搜索文件 |
+| LSP-Def | `lsp_def <symbol>` | 跳转到定义 (LSP) |
+| LSP-Diag | `lsp_diag <file>` | 获取文件诊断 (LSP) |
+| LSP-Hover | `lsp_hover <pos>` | 悬停信息 (LSP) |
 
 ---
 
@@ -130,7 +169,8 @@ query → embedding → 向量搜索 → 阈值过滤 → Top-K → Prompt注入
 |------|------|------|
 | LLM API | DeepSeek | OpenAI, Anthropic, 本地模型 |
 | 向量库 | Qdrant | Chroma, SQLite |
-| 代码解析 | Tree-sitter | LSP, regex |
+| 代码解析 (语法) | Tree-sitter | regex |
+| 代码智能 (语义) | LSP (pyright / typescript-language-server 等) | grep 手动查找 |
 | 依赖 | Python 3.10+ | - |
 
 ---

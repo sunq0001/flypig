@@ -4,7 +4,8 @@ import platform
 import subprocess
 import time
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+from .context_compressor import TreeSitterCompressor
 
 
 class ToolExecutor:
@@ -17,6 +18,7 @@ class ToolExecutor:
             self.workspace_dir = Path.cwd()
         self.is_windows = platform.system() == "Windows" or os.name == "nt"
         self.is_vscode = os.environ.get('TERM_PROGRAM', '') == 'vscode'
+        self.compressor = TreeSitterCompressor()
     
     def execute(self, tool_name: str, arguments: Dict[str, Any]) -> str:
         """执行工具"""
@@ -26,15 +28,22 @@ class ToolExecutor:
         return f"Unknown tool: {tool_name}"
     
     def tool_read_file(self, args: Dict) -> str:
-        """读取文件"""
+        """读取文件，可选项使用 Tree-sitter 上下文压缩"""
         file_path = self._resolve_path(args.get("path", ""))
-        
+        compress = args.get("compress", False)
+
         if not file_path.exists():
             return f"Error: File not found: {file_path}"
-        
+
         try:
             content = file_path.read_text(encoding="utf-8")
             max_chars = args.get("max_chars", 50000)
+
+            if compress:
+                content = self.compressor.compress(
+                    content, str(file_path), max_chars
+                )
+
             if len(content) > max_chars:
                 content = content[:max_chars] + f"\n... (truncated, total {len(content)} chars)"
             return content
@@ -342,11 +351,12 @@ class ToolExecutor:
                 "type": "function",
                 "function": {
                     "name": "read_file",
-                    "description": "Read the content of a file",
+                    "description": "Read the content of a file (with automatic context compression for large files)",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "path": {"type": "string", "description": "File path (absolute or relative to current directory)"}
+                            "path": {"type": "string", "description": "File path (absolute or relative to current directory)"},
+                            "compress": {"type": "boolean", "description": "Enable Tree-sitter context compression to reduce token usage. Use compress=true when you only need an overview (function signatures + docstrings). Use compress=false (default) when you need the full implementation to edit or understand details.", "default": False}
                         },
                         "required": ["path"]
                     }

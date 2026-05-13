@@ -38,10 +38,16 @@ $ python -m flypig
 
 ### TODO
 
-- [ ] 上下文压缩 (Tree-sitter裁剪)
-- [ ] 增量Diff (只传变更)
+**高优先级（省 Token，直接省钱）**:
+- [ ] 上下文压缩 (Tree-sitter裁剪) — 裁剪无关代码块，减少输入 token
+- [ ] 增量Diff (只传变更) — 减少重复上下文
+
+**中优先级（代码理解）**:
+- [ ] LSP 代码智能 — 跳转定义、诊断、补全、悬停信息，让 Agent 具备 IDE 级的代码理解能力
 - [ ] 短期记忆 (会话内)
 - [ ] CLAUDE.md 支持
+
+**低优先级（体验优化）**:
 - [ ] ModelAdapter 多协议支持 (Anthropic 原生 SDK)
 - [ ] 流式输出优化
 
