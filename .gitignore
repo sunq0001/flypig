@@ -12,3 +12,6 @@ flypig.zip
 # OS
 .DS_Store
 Thumbs.db
+
+# API Keys (do not commit)
+api_key
