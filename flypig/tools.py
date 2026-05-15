@@ -11,7 +11,7 @@ from .context_compressor import TreeSitterCompressor
 class ToolExecutor:
     """执行各种工具操作"""
     
-    def __init__(self, workspace_dir: str = None):
+    def __init__(self, workspace_dir: str = None, path_validator=None, sandbox_manager=None):
         if workspace_dir:
             self.workspace_dir = Path(workspace_dir)
         else:
@@ -19,6 +19,8 @@ class ToolExecutor:
         self.is_windows = platform.system() == "Windows" or os.name == "nt"
         self.is_vscode = os.environ.get('TERM_PROGRAM', '') == 'vscode'
         self.compressor = TreeSitterCompressor()
+        self.path_validator = path_validator
+        self.sandbox_manager = sandbox_manager
     
     def execute(self, tool_name: str, arguments: Dict[str, Any]) -> str:
         """执行工具"""
@@ -31,6 +33,11 @@ class ToolExecutor:
         """读取文件，可选项使用 Tree-sitter 上下文压缩"""
         file_path = self._resolve_path(args.get("path", ""))
         compress = args.get("compress", False)
+
+        # 沙箱路径验证
+        ok, err = self._validate_path(file_path, "read")
+        if not ok:
+            return err
 
         if not file_path.exists():
             return f"Error: File not found: {file_path}"
@@ -54,7 +61,12 @@ class ToolExecutor:
         """写入文件"""
         file_path = self._resolve_path(args.get("path", ""))
         content = args.get("content", "")
-        
+
+        # 沙箱路径验证（写入模式）
+        ok, err = self._validate_path(file_path, "write")
+        if not ok:
+            return err
+
         try:
             file_path.parent.mkdir(parents=True, exist_ok=True)
             file_path.write_text(content, encoding="utf-8")
@@ -67,7 +79,12 @@ class ToolExecutor:
         file_path = self._resolve_path(args.get("path", ""))
         old_str = args.get("old_str", "")
         new_str = args.get("new_str", "")
-        
+
+        # 沙箱路径验证（写入模式）
+        ok, err = self._validate_path(file_path, "write")
+        if not ok:
+            return err
+
         if not file_path.exists():
             return f"Error: File not found: {file_path}"
         
@@ -186,14 +203,36 @@ class ToolExecutor:
         return False, f"[Running in background] {command}\n[Log] tail -f {log_path}"
 
     def tool_bash(self, args: Dict) -> str:
-        """执行 shell 命令"""
+        """执行 shell 命令
+        
+        沙箱模式双模式执行：
+        - persist=True: spawn_command（非阻塞弹终端）
+        - persist=False/不传: run_command（阻塞 docker exec 返回输出）
+        """
         command = args.get("command", "")
         timeout_val = args.get("timeout", 60)
+        persist = args.get("persist", False)
 
         if not command:
             return "Error: No command provided"
 
-        # Windows 命令转换
+        # ── 沙箱模式：命令在 Docker 容器内执行 ──
+        if self.sandbox_manager:
+            # Windows 命令转换（容器内是 Linux，不需要）
+            if self.is_windows:
+                # 容器内只转 ls/cat 等常见命令
+                pass
+
+            if persist:
+                # 长驻/交互命令 → 非阻塞弹终端
+                workdir = str(self.workspace_dir)
+                return self.sandbox_manager.spawn_command(command, workdir)
+            else:
+                # 一次性命令 → 阻塞 docker exec 返回输出
+                workdir = "/workspace"
+                return self.sandbox_manager.run_command(command, timeout_val, workdir)
+
+        # ── 非沙箱模式：保留原有行为 ──
         if self.is_windows:
             command = self._convert_windows_command(command)
 
@@ -203,34 +242,69 @@ class ToolExecutor:
                 ok, msg = self._open_vscode_terminal(command)
                 if ok:
                     return msg
-                # 失败则回退到下一种方式
 
-            # ── Windows：新终端窗口 ──
+            # ── Windows ──
             if self.is_windows:
-                try:
-                    # 自动检测当前 Shell：PowerShell 还是 cmd
-                    if os.environ.get('PSModulePath'):
-                        shell_name = "powershell"
-                        start_cmd = (
-                            f'start "FlyPig" powershell -NoExit -Command '
-                            f'"cd \'{self.workspace_dir}\'; {command}"'
-                        )
-                    else:
-                        shell_name = "cmd"
-                        start_cmd = (
-                            f'start "FlyPig" cmd /k '
-                            f'"cd /d {self.workspace_dir} & {command}"'
-                        )
-                    subprocess.Popen(start_cmd, shell=True)
-                    return f"[Started in new {shell_name} window] {command}"
-                except Exception as e:
-                    return f"[error starting] {e}"
+                tmp_out = os.environ.get("TEMP", "/tmp")
+                log_file = f"{tmp_out}\\flypig_out_{int(time.time())}.txt"
+                workdir = str(self.workspace_dir)
+
+                if persist:
+                    # 持久命令 → 弹窗终端，手动关闭
+                    start_cmd = (
+                        f'start "FlyPig" powershell -NoExit -Command '
+                        f'"cd \'{workdir}\'; {command}"'
+                    )
+                else:
+                    # 非持久命令 → 弹窗执行，输出写入文件，按任意键关闭
+                    start_cmd = (
+                        f'start "FlyPig" powershell -NoExit -Command '
+                        f'"cd \'{workdir}\'; '
+                        f'{command} *> \'{log_file}\'; '
+                        f'Get-Content \'{log_file}\'; '
+                        f'Write-Host \'\n--- 按 Enter 关闭 ---\'; '
+                        f'Read-Host"'
+                    )
+
+                subprocess.Popen(
+                    start_cmd,
+                    shell=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+
+                if not persist:
+                    # 等待弹窗窗口关闭后读取输出文件
+                    timeout_end = time.time() + timeout_val
+                    while time.time() < timeout_end:
+                        if os.path.exists(log_file):
+                            time.sleep(0.5)
+                            try:
+                                with open(log_file, "r", encoding="utf-8", errors="replace") as f:
+                                    output = f.read().strip()
+                                if output:
+                                    return output
+                            except Exception:
+                                pass
+                        time.sleep(0.3)
+
+                    # 超时后尝试读取
+                    if os.path.exists(log_file):
+                        try:
+                            with open(log_file, "r", encoding="utf-8", errors="replace") as f:
+                                output = f.read().strip()
+                            if output:
+                                return output
+                        except Exception:
+                            pass
+                    return f"[Command executed in new window] {command}"
+
+                return f"[Started in new window] {command}"
 
             # ── Linux/Mac：开新终端窗口或后台运行 ──
             success, msg = self._open_new_terminal_linux(command)
             if success:
                 return msg
-            # 即使后台运行也返回，不阻塞
             return msg
 
         except Exception as e:
@@ -238,30 +312,39 @@ class ToolExecutor:
 
     
     def _convert_windows_command(self, command: str) -> str:
-        """转换 Linux 命令到 Windows"""
-        cmd = command.strip().lower()
-        
-        # ls 命令
-        if cmd.startswith("ls ") or cmd.startswith("ls\n"):
-            parts = command.split(None, 1)
-            if len(parts) > 1:
-                return "dir " + parts[1].replace("/", "\\")
-            return "dir"
-        
-        if cmd == "ls":
-            return "dir"
-        
-        # cat 命令
-        if cmd.startswith("cat "):
-            parts = command.split(None, 1)
-            if len(parts) > 1:
-                return "type " + parts[1].replace("/", "\\")
-        
-        # find 命令
-        if cmd.startswith("find "):
-            return command  # 复杂命令直接返回，让它失败
-        
+        """转换 Linux 命令到 Windows（保持原格式，仅转换命令本身）"""
+        # 只转换第一段命令单词，保留后面的参数
+        stripped = command.lstrip()
+        first_space = stripped.find(" ")
+        first_word = stripped[:first_space] if first_space > 0 else stripped
+
+        lower_word = first_word.lower()
+
+        # ls → dir（移除不兼容的 flag）
+        if lower_word in ("ls",):
+            # 去掉 -la, -l, -a, -lh 等常见 Linux ls flags
+            rest = stripped[len(first_word):].lstrip() if first_space > 0 else ""
+            rest = self._strip_ls_flags(rest)
+            return ("dir " + rest).rstrip()
+
+        # cat → type
+        if lower_word == "cat":
+            rest = stripped[len(first_word):].lstrip() if first_space > 0 else ""
+            return ("type " + rest).rstrip()
+
+        # rm → del
+        if lower_word == "rm":
+            rest = stripped[len(first_word):].lstrip() if first_space > 0 else ""
+            return ("del " + rest).rstrip()
+
         return command
+
+    @staticmethod
+    def _strip_ls_flags(args: str) -> str:
+        """移除 ls 的 -la -l -a -lh 等 flags，保留路径参数"""
+        parts = args.split()
+        filtered = [p for p in parts if not p.startswith("-")]
+        return " ".join(filtered)
     
     def tool_find_files(self, args: Dict) -> str:
         """查找文件"""
@@ -270,7 +353,12 @@ class ToolExecutor:
         
         # 解析路径
         search_path = self._resolve_path(path_str)
-        
+
+        # 沙箱路径验证（搜索目录也是一个读取操作）
+        ok, err = self._validate_path(search_path, "read")
+        if not ok:
+            return err
+
         try:
             # 使用 glob 模式搜索
             if "*" in pattern or "?" in pattern:
@@ -310,7 +398,12 @@ class ToolExecutor:
             return "Error: No pattern provided"
         
         search_path = self._resolve_path(path_str)
-        
+
+        # 沙箱路径验证
+        ok, err = self._validate_path(search_path, "read")
+        if not ok:
+            return err
+
         try:
             matches = []
             for file_path in search_path.rglob("*"):
@@ -329,6 +422,39 @@ class ToolExecutor:
         except Exception as e:
             return f"Error: {e}"
     
+    def _validate_path(self, path: Path, mode: str = "read") -> tuple:
+        """验证路径是否允许访问（沙箱集成）
+
+        Args:
+            path: 已解析的 Path 对象
+            mode: "read" | "write"
+
+        Returns:
+            (allowed: bool, error_message: str)
+        """
+        if not self.path_validator:
+            return True, ""
+
+        allowed, reason = self.path_validator.check_path(str(path), mode)
+        if allowed:
+            return True, ""
+
+        # 拒绝 → 尝试运行时审批
+        approval = self.path_validator.request_path_approval(str(path), mode)
+        if approval == "allow":
+            return True, ""
+        elif approval == "allow_always":
+            # 持久化到 config.yaml
+            from .config import Config
+            try:
+                cfg = Config()
+                cfg.save_sandbox_whitelist(str(path), mode)
+            except Exception:
+                pass
+            return True, ""
+        else:
+            return False, f"[SECURITY] Path access denied: {path}"
+
     def _resolve_path(self, path_str: str) -> Path:
         """解析路径"""
         if not path_str or path_str == ".":
@@ -397,12 +523,15 @@ class ToolExecutor:
                 "type": "function",
                 "function": {
                     "name": "bash",
-                    "description": f"Execute a shell command on {platform.system()}",
+                    "description": "Execute a shell command. "
+                                   "Short commands (compile, git, pip) return stdout directly. "
+                                   "Long-running commands (npm run dev, python server) need persist=true.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "command": {"type": "string", "description": "Shell command to execute"},
-                            "timeout": {"type": "integer", "description": "Timeout in seconds", "default": 60}
+                            "timeout": {"type": "integer", "description": "Timeout in seconds", "default": 60},
+                            "persist": {"type": "boolean", "description": "Keep terminal open (long-running commands like dev servers)", "default": False}
                         },
                         "required": ["command"]
                     }

@@ -89,6 +89,7 @@ def _ensure_provider_key(config: Config, provider: str) -> str:
 def main():
     try:
         config = Config()
+        config.prompt_workspace(task_mode=False)
 
         print_header()
 
@@ -105,22 +106,50 @@ def main():
 
         print(f"  工作区: {config.workspace}\n")
 
-        # 获取模型价格
-        prices, source = fetch_pricing(
-            llm_config["name"],
-            llm_config.get("provider", "")
-        )
-        if prices and source == "online":
-            print(f"  [价格] ${prices['input']}/${prices['output']} 每 1M tokens (来自官方定价页)\n")
-        elif prices and source == "builtin":
-            print(f"  [价格] ${prices['input']}/${prices['output']} 每 1M tokens (参考价，未查到官方数据)\n")
-        else:
-            print(f"  [价格] 未获取到 {llm_config['name']} 的价格信息\n")
+        # ── 沙箱组件初始化 ──
+        from .sandbox import create_sandbox_components, PathValidator
+        sandbox_cfg = config.build_sandbox_config()
+        sandbox_mgr, path_val = create_sandbox_components(sandbox_cfg, config.workspace)
+
+        if sandbox_cfg.enabled and sandbox_mgr is None:
+            print("[WARN] 沙箱已启用但 Docker 不可用，将以无沙箱模式运行")
+            if sandbox_cfg.mode == "mixed":
+                path_val = PathValidator(workspace_dir=config.workspace)
+            sandbox_mgr = None
 
         # 初始化
         model = ModelAdapter(llm_config)
         cost_tracker = CostTracker(config.pricing_dict)
-        tools = ToolExecutor(workspace_dir=config.workspace)
+        tools = ToolExecutor(
+            workspace_dir=config.workspace,
+            path_validator=path_val,
+            sandbox_manager=sandbox_mgr,
+        )
+
+        if sandbox_mgr:
+            print(f"[*] 沙箱模式: {sandbox_cfg.mode}")
+
+        # 获取模型价格并注入到 cost_tracker
+        prices, source = fetch_pricing(
+            llm_config["name"],
+            llm_config.get("provider", "")
+        )
+        if prices:
+            # ModelAdapter 发 API 时用 config.get("model", "deepseek-chat")
+            # 所以价格同时存显示名和 API 模型名两个 key
+            cost_tracker.set_pricing(llm_config["name"], prices)
+            api_model = llm_config.get("model", "deepseek-chat")
+            if api_model != llm_config["name"]:
+                cost_tracker.set_pricing(api_model, prices)
+            if source == "online":
+                print(f"  [价格] ${prices['input']}/${prices['output']} 每 1M tokens (来自官方定价页)\n")
+            elif source == "cached":
+                print(f"  [价格] ${prices['input']}/${prices['output']} 每 1M tokens (本地缓存)\n")
+            else:
+                print(f"  [价格] ${prices['input']}/${prices['output']} 每 1M tokens (参考价，未查到官方数据)\n")
+        else:
+            print(f"  [价格] 未获取到 {llm_config['name']} 的价格信息\n")
+
         agent = Agent(model=model, cost_tracker=cost_tracker, tools=tools,
                       system_prompt=config.system_prompt)
 
@@ -171,6 +200,10 @@ def main():
                 break
             except Exception as e:
                 print(f"\n[X] Error: {e}")
+
+        # 清理沙箱
+        if 'sandbox_mgr' in locals() and sandbox_mgr:
+            sandbox_mgr.cleanup()
     except Exception as e:
         print(f"[X] Fatal error: {e}")
         input("Press Enter to exit...")

@@ -39,10 +39,19 @@ $ python -m flypig
 ### TODO
 
 **高优先级（省 Token，直接省钱）**:
-- [ ] 上下文压缩 (Tree-sitter裁剪) — 裁剪无关代码块，减少输入 token
-- [ ] 增量Diff (只传变更) — 减少重复上下文
+- [x] 上下文压缩 (Tree-sitter裁剪) — 裁剪无关代码块，减少输入 token
 
-**中优先级（代码理解）**:
+**安全加固（沙箱隔离）**:
+- [ ] 创建沙箱核心模块 (sandbox.py) — SandboxManager (Docker 容器生命周期/命令执行) + PathValidator (路径白名单/运行时审批) + SandboxConfig 数据类
+- [ ] 构建沙箱 Docker 镜像 (Dockerfile.sandbox) — 基于 python:3.11-alpine，预装 bash/git/node/gcc/sudo，创建 flypig 非 root 用户 + passwordless sudo
+- [ ] 沙箱配置系统 (config.yaml + config.py) — 新增 sandbox 配置段 (enabled/mode/Docker 资源/白名单/审计)
+- [ ] 文件工具沙箱集成 (tools.py) — tool_read/write/edit/find/grep 走 PathValidator.check_path()，工作区外路径弹窗审批 (y/N/a)
+- [ ] 命令执行沙箱集成 (tools.py) — tool_bash 双模式：阻塞 run_command(docker exec) + 非阻塞 spawn_command(弹终端 docker exec -it)
+- [ ] Docker 安全加固 — --cap-drop=ALL / --no-new-privileges / --ulimit nproc=512 / --pids-limit=512 / --storage-opt size=10G / --read-only
+- [ ] 闲置回收 + 审计日志 + 退出清理 — 300s 无活动自动 docker stop，所有命令写入 ~/.flypig/audit.log，退出时 docker rm -f
+
+**中优先级（代码理解 + 省 Token）**:
+- [ ] 增量Diff (只传变更) — 减少重复上下文
 - [ ] LSP 代码智能 — 跳转定义、诊断、补全、悬停信息，让 Agent 具备 IDE 级的代码理解能力
 - [ ] 短期记忆 (会话内)
 - [ ] CLAUDE.md 支持

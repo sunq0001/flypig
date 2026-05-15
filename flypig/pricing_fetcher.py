@@ -1,10 +1,13 @@
 """模型价格自动获取与内置参考表"""
+import json
+import os
 import re
 import urllib.request
+from pathlib import Path
 from typing import Optional, Tuple
 
 # ============================================================
-# 内置价格参考表（$/1M tokens）— 仅当在线抓取失败时用
+# 内置价格参考表（$/1M tokens）— 出厂默认值，仅当无缓存且在线失败时用
 # ============================================================
 BUILTIN_PRICES = {
     # ── DeepSeek ──
@@ -23,6 +26,37 @@ BUILTIN_PRICES = {
     "claude-4-opus":       {"input": 15.00,  "output": 75.00},
 }
 
+# 缓存文件路径（与内置表同目录）
+_CACHE_PATH = Path(__file__).parent / "pricing_cache.json"
+
+
+def _load_cache() -> dict:
+    """加载本地价格缓存（缓存表 + 内置表，缓存优先）"""
+    cache = dict(BUILTIN_PRICES)
+    if _CACHE_PATH.exists():
+        try:
+            with open(_CACHE_PATH, "r", encoding="utf-8") as f:
+                cached = json.load(f)
+            cache.update(cached)  # 缓存覆盖内置表
+        except Exception:
+            pass
+    return cache
+
+
+def _save_to_cache(model_name: str, prices: dict):
+    """将在线获取的价格持久化到缓存文件"""
+    try:
+        data = {}
+        if _CACHE_PATH.exists():
+            with open(_CACHE_PATH, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        data[model_name] = prices
+        with open(_CACHE_PATH, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except Exception:
+        pass
+
+
 # 官方价格页面 URL
 PRICING_URLS = {
     "DeepSeek":  "https://api-docs.deepseek.com/quick_start/pricing",
@@ -39,15 +73,22 @@ def fetch_pricing(model_name: str, provider: str = "") -> Tuple[Optional[dict], 
         (None, None) — 完全获取失败
 
     source 取值:
-        "online"   — 从提供商官方页面抓取
+        "online"   — 从提供商官方页面抓取（会写入本地缓存）
+        "cached"   — 本地价格缓存
         "builtin"  — 使用内置价格参考表
     """
-    # 1. 在线抓取
+    # 1. 优先在线抓取（最新价格）
     prices = _try_web_fetch(model_name, provider)
     if prices:
+        _save_to_cache(model_name, prices)
         return prices, "online"
 
-    # 2. 内置参考表
+    # 2. 本地缓存（包含历史在线抓取结果）
+    cache = _load_cache()
+    if model_name in cache:
+        return dict(cache[model_name]), "cached"
+
+    # 3. 内置出厂表
     if model_name in BUILTIN_PRICES:
         return dict(BUILTIN_PRICES[model_name]), "builtin"
 

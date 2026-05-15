@@ -2,11 +2,28 @@
 from typing import Optional
 
 
+def _format_cost(cost: float) -> str:
+    """动态格式化金额：自动选择合适的小数位数"""
+    if cost >= 0.01:
+        return f"${cost:.4f}"
+    elif cost >= 0.0001:
+        return f"${cost:.6f}"
+    elif cost > 0:
+        # 非常小的金额，用科学记数法
+        return f"${cost:.2e}"
+    else:
+        return "$0.00"
+
+
 class CostTracker:
     def __init__(self, pricing: dict):
         self.pricing = pricing
         self.reset()
     
+    def set_pricing(self, model: str, prices: dict):
+        """为指定模型设置价格（用于注入动态获取的价格）"""
+        self.pricing[model] = prices
+
     def reset(self):
         """重置会话统计"""
         self.total_input_tokens = 0
@@ -40,13 +57,13 @@ class CostTracker:
             f"  API Calls: {self.api_calls}\n"
             f"  Total Tokens: {total_tokens:,} "
             f"(In: {self.total_input_tokens:,} / Out: {self.total_output_tokens:,})\n"
-            f"  Total Cost: ${self.total_cost:.4f}"
+            f"  Total Cost: {_format_cost(self.total_cost)}"
         )
     
     def format_usage(self, input_tokens: int, output_tokens: int, cost: float) -> str:
         """格式化单次使用信息"""
         total = input_tokens + output_tokens
-        return f"[Tokens: {total:,}] [Cost: ${cost:.4f}]"
+        return f"[Tokens: {total:,}] [Cost: {_format_cost(cost)}]"
 
 
 def format_token_count(tokens: int) -> str:

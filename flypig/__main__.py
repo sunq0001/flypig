@@ -17,8 +17,10 @@ def main():
         from .cost import CostTracker
         from .tools import ToolExecutor
         from .agent import Agent
+        from .pricing_fetcher import fetch_pricing
 
         config = Config()
+        config.prompt_workspace(task_mode=True)
 
         # 检查 API Key
         default_cfg = config.default_model
@@ -36,8 +38,36 @@ def main():
 
         default_cfg["api_key"] = api_key
         model = ModelAdapter(default_cfg)
+
+        # 注入价格
         cost_tracker = CostTracker(config.pricing_dict)
-        tools = ToolExecutor(workspace_dir=config.workspace)
+        prices, _ = fetch_pricing(default_cfg["name"], default_cfg.get("provider", ""))
+        if prices:
+            cost_tracker.set_pricing(default_cfg["name"], prices)
+            api_model = default_cfg.get("model", "deepseek-chat")
+            if api_model != default_cfg["name"]:
+                cost_tracker.set_pricing(api_model, prices)
+
+        # ── 沙箱组件初始化 ──
+        from .sandbox import create_sandbox_components, PathValidator
+        sandbox_cfg = config.build_sandbox_config()
+        sandbox_mgr, path_val = create_sandbox_components(sandbox_cfg, config.workspace)
+
+        if sandbox_cfg.enabled and sandbox_mgr is None:
+            print("[WARN] 沙箱已启用但 Docker 不可用，将以无沙箱模式运行")
+            if sandbox_cfg.mode == "mixed":
+                path_val = PathValidator(workspace_dir=config.workspace)
+            sandbox_mgr = None
+
+        tools = ToolExecutor(
+            workspace_dir=config.workspace,
+            path_validator=path_val,
+            sandbox_manager=sandbox_mgr,
+        )
+
+        if sandbox_mgr:
+            print(f"[*] 沙箱模式: {sandbox_cfg.mode} (容器将在首次命令时启动)")
+
         agent = Agent(
             model=model,
             cost_tracker=cost_tracker,
@@ -49,6 +79,10 @@ def main():
         response = agent.run(args.task)
         print(f"\n[Result]: {response}")
         print(f"\n[Cost Summary]:\n{agent.get_session_summary()}")
+
+        # 清理沙箱
+        if hasattr(tools, 'sandbox_manager') and tools.sandbox_manager:
+            tools.sandbox_manager.cleanup()
     else:
         # 交互模式
         cli_main()
