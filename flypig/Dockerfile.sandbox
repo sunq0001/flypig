@@ -1,0 +1,45 @@
+# Flypig Sandbox Container
+# 基于轻量 python:3.11-alpine，预装常用开发工具
+# 非 root 用户 flypig + passwordless sudo
+
+FROM python:3.11-alpine
+
+# ── 系统工具 ──
+RUN apk add --no-cache \
+        bash \
+        curl \
+        git \
+        gcc \
+        g++ \
+        make \
+        musl-dev \
+        sudo \
+        tree \
+        vim \
+        wget \
+        && rm -rf /var/cache/apk/*
+
+# ── Node.js ──
+RUN apk add --no-cache \
+        nodejs \
+        npm \
+        && rm -rf /var/cache/apk/*
+
+# ── 常用 Python 工具 ──
+RUN pip install --no-cache-dir \
+        black \
+        flake8 \
+        pytest \
+        && rm -rf /root/.cache/pip
+
+# ── 非 root 用户 ──
+RUN adduser -D -h /home/flypig flypig \
+    && echo "flypig ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers \
+    && mkdir -p /home/flypig/.cache \
+    && chown -R flypig:flypig /home/flypig
+
+USER flypig
+WORKDIR /workspace
+
+# 保持容器运行
+CMD ["tail", "-f", "/dev/null"]

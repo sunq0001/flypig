@@ -15,3 +15,7 @@ Thumbs.db
 
 # API Keys (do not commit)
 api_key
+
+# Workspace directories (user-generated, not project code)
+workspace/
+myproject/
