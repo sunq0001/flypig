@@ -314,6 +314,9 @@ def api_init_agent():
     prices, _ = fetch_pricing(model_config["name"], model_config.get("provider", ""))
     if prices:
         cost_tracker.set_pricing(model_config["name"], prices)
+        api_model = model_config.get("model", "deepseek-chat")
+        if api_model != model_config["name"]:
+            cost_tracker.set_pricing(api_model, prices)
 
     ws_prompt = _config.system_prompt + (
         f"\n\nCurrent working directory: {workspace}\n"

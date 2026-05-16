@@ -5,8 +5,20 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>FlyPig Agent</title>
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/theme/material-darker.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/mode/simple.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/javascript/javascript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/xml/xml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/css/css.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/htmlmixed/htmlmixed.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/markdown/markdown.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/yaml/yaml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/shell/shell.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/json/json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -26,14 +38,14 @@
   --chat-w:360px;
   --status-h:28px;
 }
-html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:14px;overflow:hidden}
+html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsoft YaHei','微软雅黑','PingFang SC','Segoe UI',system-ui,-apple-system,sans-serif;font-size:14px;overflow:hidden}
 #app{display:flex;flex-direction:column;height:100vh}
 
 /* 三栏主区域 */
 #layout{display:flex;flex:1;overflow:hidden}
 
 /* 左侧面板 */
-#sidebar{width:var(--sidebar-w);min-width:180px;display:flex;flex-direction:column;background:var(--bg2);border-right:1px solid var(--border)}
+#sidebar{width:var(--sidebar-w);min-width:180px;display:flex;flex-direction:column;background:var(--bg2)}
 .sidebar-header{padding:10px 12px;font-size:12px;font-weight:600;color:var(--fg2);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px}
 .sidebar-header .icon{font-size:14px}
 #file-tree{flex:1;overflow-y:auto;padding:4px 0}
@@ -55,19 +67,29 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Segoe UI
 
 /* 中间面板 */
 #center{flex:1;min-width:200px;display:flex;flex-direction:column;overflow:hidden}
-#center-header{padding:8px 16px;font-size:13px;color:var(--fg2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;min-height:36px;background:var(--bg2)}
-#center-header .file-icon{font-size:13px}
-#center-header .file-path{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#file-viewer{flex:1;overflow:auto;padding:0}
-#file-viewer::-webkit-scrollbar{width:8px}
-#file-viewer::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
-#file-viewer pre{font-family:'JetBrains Mono','Cascadia Code','Fira Code',monospace;font-size:13px;line-height:1.6;padding:16px;margin:0}
-#file-viewer code{background:transparent!important;padding:0!important}
 #empty-state{flex:1;display:flex;align-items:center;justify-content:center;color:var(--fg3);font-size:14px;flex-direction:column;gap:8px}
 #empty-state .big-icon{font-size:48px;opacity:.3}
 
+/* 文件标签页 */
+#file-tabs{display:flex;height:35px;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0}
+#file-tabs::-webkit-scrollbar{height:2px}
+#file-tabs::-webkit-scrollbar-thumb{background:var(--border);border-radius:1px}
+.file-tab{display:flex;align-items:center;gap:4px;padding:0 10px;font-size:12px;color:var(--fg3);border-right:1px solid var(--border);cursor:pointer;white-space:nowrap;user-select:none;min-width:0}
+.file-tab:hover{color:var(--fg);background:var(--bg3)}
+.file-tab.active{color:var(--fg);background:var(--bg);border-bottom:2px solid var(--accent)}
+.file-tab .name{overflow:hidden;text-overflow:ellipsis;max-width:150px}
+.file-tab .close{font-size:10px;padding:0 2px;border-radius:3px;opacity:0;transition:opacity .1s}
+.file-tab:hover .close,.file-tab.active .close{opacity:.6}
+.file-tab .close:hover{opacity:1;background:var(--border);color:var(--red)}
+
+/* CodeMirror 编辑器区域 */
+#editor-container{flex:1;overflow:hidden}
+#editor-container .CodeMirror{height:100%;font-family:'JetBrains Mono','Cascadia Code','Fira Code',Consolas,monospace;font-size:13px;line-height:1.6}
+#editor-container .CodeMirror-gutters{background:var(--bg2);border-right:1px solid var(--border)}
+#editor-container .CodeMirror-linenumber{color:var(--fg3);padding:0 8px}
+
 /* 右侧面板 */
-#chat{width:var(--chat-w);min-width:280px;display:flex;flex-direction:column;background:var(--bg2);border-left:1px solid var(--border)}
+#chat{width:var(--chat-w);min-width:280px;display:flex;flex-direction:column;background:var(--bg2)}
 .chat-header{padding:10px 12px;font-size:12px;font-weight:600;color:var(--fg2);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;justify-content:space-between}
 .chat-header .toolbar{display:flex;gap:4px}
 .chat-header .tool-btn{background:none;border:none;color:var(--fg3);cursor:pointer;padding:2px 6px;border-radius:4px;font-size:12px}
@@ -130,9 +152,32 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Segoe UI
 .setup-actions .btn-secondary:disabled{opacity:.3;cursor:not-allowed}
 .setup-error{color:var(--red);font-size:12px;margin-top:-8px;margin-bottom:12px}
 
+/* Markdown 内容样式（在气泡内） */
+.bubble h1,.bubble h2,.bubble h3,.bubble h4{font-size:inherit;font-weight:600;margin:8px 0 4px}
+.bubble p{margin:4px 0}
+.bubble ul,.bubble ol{padding-left:20px;margin:4px 0}
+.bubble li{margin:2px 0}
+.bubble code{padding:1px 5px;border-radius:4px;font-size:12px;background:rgba(108,112,134,.2);font-family:'JetBrains Mono','Fira Code',Consolas,monospace}
+.bubble pre{margin:8px 0;border-radius:6px;overflow-x:auto}
+.bubble pre code{display:block;padding:10px 14px;background:var(--bg) !important;border:1px solid var(--border);border-radius:6px;font-size:12px;line-height:1.5}
+.bubble strong{font-weight:600}
+.bubble a{color:var(--accent);text-decoration:none}
+.bubble a:hover{text-decoration:underline}
+.bubble blockquote{border-left:3px solid var(--accent);padding-left:12px;margin:6px 0;color:var(--fg3)}
+.bubble hr{border:none;border-top:1px solid var(--border);margin:8px 0}
+.bubble table{border-collapse:collapse;margin:6px 0;font-size:12px}
+.bubble th,.bubble td{border:1px solid var(--border);padding:4px 8px;text-align:left}
+.bubble th{background:var(--bg3);font-weight:600}
+
 /* 加载动画 */
 .loading-dots::after{content:'';animation:dots 1.5s infinite}
 @keyframes dots{0%{content:'.'}33%{content:'..'}66%{content:'...'}}
+
+/* 拖拽分割条 — VS Code 风格：2px 细条，hover 时亮起 */
+.divider{width:2px;cursor:col-resize;flex-shrink:0;position:relative;z-index:10;transition:background .08s}
+.divider:hover,.divider.active{background:var(--accent)}
+/* 增大热区方便点击（视觉上还是 2px） */
+.divider::after{content:'';position:absolute;left:-4px;right:-4px;top:0;bottom:0}
 
 /* 通用 */
 .ml-auto{margin-left:auto}
@@ -196,9 +241,9 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Segoe UI
   </div>
 
   <!-- 主界面 -->
-  <div id="layout" v-show="!showSetup">
+  <div id="layout" v-show="!showSetup" ref="layoutRef">
     <!-- 左侧：文件树 -->
-    <div id="sidebar">
+    <div id="sidebar" :style="{width: leftWidth + 'px'}">
       <div class="sidebar-header"><span class="icon">📁</span> 文件</div>
       <div id="file-tree">
         <template v-if="fileTree && fileTree.children">
@@ -207,7 +252,7 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Segoe UI
             :key="node.path"
             :node="node"
             :depth="0"
-            :selected-path="selectedFile"
+            :selected-path="activeTabIndex >= 0 ? openTabs[activeTabIndex].path : ''"
             @select="openFile"
           />
         </template>
@@ -215,22 +260,32 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Segoe UI
       </div>
     </div>
 
-    <!-- 中间：代码查看 -->
+    <div class="divider" :class="{active: resizing === 'left'}"
+         @mousedown.prevent="startResize($event, 'left')"></div>
+
+    <!-- 中间：代码编辑器 + 标签页 -->
     <div id="center">
-      <div id="center-header" v-if="selectedFile">
-        <span class="file-icon">{{ fileIcon }}</span>
-        <span class="file-path">{{ selectedFile }}</span>
+      <div id="file-tabs" v-if="openTabs.length > 0">
+        <div v-for="(tab, i) in openTabs" :key="tab.path"
+             class="file-tab" :class="{active: i === activeTabIndex}"
+             @click="switchTab(i)" @mouseup.middle="closeTab(i)">
+          <span class="name">{{ tab.name }}</span>
+          <span class="close" @click.stop="closeTab(i)">×</span>
+        </div>
       </div>
-      <div id="file-viewer" v-if="fileContent !== null" v-html="highlightedCode"></div>
-      <div id="empty-state" v-else>
+      <div id="editor-container" ref="editorContainer" v-show="openTabs.length > 0"></div>
+      <div id="empty-state" v-show="openTabs.length === 0">
         <div class="big-icon">📄</div>
         <div>点击左侧文件查看内容</div>
         <div style="font-size:12px;color:var(--fg3)">或发送消息让 AI 工作</div>
       </div>
     </div>
 
+    <div class="divider" :class="{active: resizing === 'right'}"
+         @mousedown.prevent="startResize($event, 'right')"></div>
+
     <!-- 右侧：对话 -->
-    <div id="chat">
+    <div id="chat" :style="{width: rightWidth + 'px'}">
       <div class="chat-header">
         <span>💬 对话</span>
         <div class="toolbar">
@@ -240,7 +295,8 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Segoe UI
       </div>
       <div id="messages" ref="messagesRef">
         <div v-for="(m, i) in messages" :key="i" :class="'msg msg-' + m.type">
-          <div class="bubble">{{ m.content }}</div>
+          <div class="bubble" v-if="m.type==='agent'||m.type==='summary'" v-html="renderMarkdown(m.content)"></div>
+          <div class="bubble" v-else>{{ m.content }}</div>
         </div>
       </div>
       <div id="input-area">
@@ -249,7 +305,7 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Segoe UI
             id="chat-input"
             v-model="userInput"
             @keydown="handleKeydown"
-            placeholder="输入消息... (Ctrl+Enter 发送)"
+            placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
             :disabled="agentRunning"
             rows="1"
           ></textarea>
@@ -287,8 +343,8 @@ app = createApp({
     const selectedProvider = ref('');
 
     const fileTree = ref(null);
-    const selectedFile = ref(null);
-    const fileContent = ref(null);
+    const openTabs = ref([]);       // [{path, name, content}]
+    const activeTabIndex = ref(-1);
     const messages = ref([]);
     const userInput = ref('');
     const agentRunning = ref(false);
@@ -296,29 +352,74 @@ app = createApp({
     const statusClass = ref('offline');
     const costStr = ref('');
     const messagesRef = ref(null);
+    const layoutRef = ref(null);
+    const editorContainer = ref(null);
+    let _editor = null;             // CodeMirror 实例
 
-    // ── 计算属性 ──
-    const fileIcon = computed(() => {
-      if (!selectedFile.value) return '📄';
-      const ext = selectedFile.value.split('.').pop();
-      const icons = {py:'🐍',js:'📜',ts:'📘',jsx:'⚛',tsx:'⚛',go:'🔷',rs:'🦀',md:'📝',json:'📋',yaml:'⚙',yml:'⚙',toml:'⚙',html:'🌐',css:'🎨',vue:'💚',sh:'💻',bat:'💻',ps1:'💻'};
-      return icons[ext] || '📄';
-    });
+    // ── 面板拖拽 ──
+    const leftWidth = ref(260);
+    const rightWidth = ref(360);
+    const resizing = ref(null);
+    let _resizeStartX = 0;
+    let _resizeStartLeft = 260;
+    let _resizeStartRight = 360;
 
-    const highlightedCode = computed(() => {
-      if (!fileContent.value) return '';
-      let lang = 'plaintext';
-      if (selectedFile.value) {
-        const ext = selectedFile.value.split('.').pop();
-        const langMap = {py:'python',js:'javascript',ts:'typescript',jsx:'javascript',tsx:'typescript',go:'go',rs:'rust',md:'markdown',json:'json',yaml:'yaml',yml:'yaml',toml:'toml',html:'html',css:'css',vue:'html',sh:'bash',bat:'powershell',ps1:'powershell'};
-        lang = langMap[ext] || 'plaintext';
+    function startResize(e, side) {
+      resizing.value = side;
+      _resizeStartX = e.clientX;
+      _resizeStartLeft = leftWidth.value;
+      _resizeStartRight = rightWidth.value;
+      document.addEventListener('mousemove', onResize);
+      document.addEventListener('mouseup', stopResize);
+    }
+
+    function onResize(e) {
+      if (!resizing.value) return;
+      const dx = e.clientX - _resizeStartX;
+      if (resizing.value === 'left') {
+        const w = Math.max(180, Math.min(500, _resizeStartLeft + dx));
+        leftWidth.value = w;
+      } else {
+        const w = Math.max(280, Math.min(600, _resizeStartRight - dx));
+        rightWidth.value = w;
       }
-      const code = document.createElement('code');
-      code.textContent = fileContent.value;
-      code.className = `language-${lang}`;
-      hljs.highlightElement(code);
-      return `<pre><code class="hljs language-${lang}">${code.innerHTML}</code></pre>`;
-    });
+    }
+
+    function stopResize() {
+      resizing.value = null;
+      document.removeEventListener('mousemove', onResize);
+      document.removeEventListener('mouseup', stopResize);
+    }
+
+    // ── CodeMirror mode 映射 ──
+    function getMode(ext) {
+      const map = {py:'python',js:'javascript',ts:'javascript',jsx:'javascript',tsx:'javascript',
+                   go:'go',rs:'rust',md:'markdown',json:'json',yaml:'yaml',yml:'yaml',
+                   html:'htmlmixed',css:'css',vue:'htmlmixed',sh:'shell',bat:'powershell',
+                   ps1:'powershell',toml:'yaml',xml:'xml',sql:'sql'};
+      return map[ext] || 'text/plain';
+    }
+
+    function _initEditor(content, mode) {
+      const container = editorContainer.value;
+      if (!container) return;
+      if (_editor) _editor.toTextArea();
+      const ta = document.createElement('textarea');
+      ta.value = content || '';
+      container.innerHTML = '';
+      container.appendChild(ta);
+      _editor = CodeMirror.fromTextArea(ta, {
+        mode: mode,
+        theme: 'material-darker',
+        lineNumbers: true,
+        readOnly: true,
+        lineWrapping: false,
+        tabSize: 2,
+        indentUnit: 2,
+        viewportMargin: Infinity,
+      });
+      _editor.setSize('100%', '100%');
+    }
 
     // ── 初始化 ──
     onMounted(async () => {
@@ -395,7 +496,7 @@ app = createApp({
           statusText.value = `工具链: ${data.tool_count} 个工具 | ${data.tokens?.toLocaleString()} tokens`;
           break;
         case 'llm_end':
-          costStr.value = `💵 $${data.session_cost?.toFixed(6)} | ${data.session_tokens?.toLocaleString()} tokens`;
+          costStr.value = formatCost(data.session_cost, data.session_tokens);
           break;
         case 'response':
           messages.value.push({type:'agent', content: data.content || '[无回复]'});
@@ -600,17 +701,44 @@ app = createApp({
     }
 
     async function openFile(path) {
-      selectedFile.value = path;
+      // 检查是否已打开
+      const existing = openTabs.value.findIndex(t => t.path === path);
+      if (existing >= 0) {
+        switchTab(existing);
+        return;
+      }
       try {
         const res = await fetch('/api/file?path=' + encodeURIComponent(path));
         const data = await res.json();
-        if (data.error) {
-          fileContent.value = '// Error: ' + data.error;
-        } else {
-          fileContent.value = data.content;
-        }
+        const name = path.split('/').pop() || path;
+        openTabs.value.push({
+          path: data.path || path,
+          name: name,
+          content: data.content || '// Error: ' + (data.error || ''),
+        });
+        switchTab(openTabs.value.length - 1);
       } catch(e) {
-        fileContent.value = '// Error: ' + e.message;
+        openTabs.value.push({path, name: path.split('/').pop(), content: '// Error: ' + e.message});
+        switchTab(openTabs.value.length - 1);
+      }
+    }
+
+    function switchTab(index) {
+      if (index < 0 || index >= openTabs.value.length) return;
+      activeTabIndex.value = index;
+      const tab = openTabs.value[index];
+      const ext = tab.name.split('.').pop();
+      _initEditor(tab.content, getMode(ext));
+    }
+
+    function closeTab(index) {
+      if (index < 0 || index >= openTabs.value.length) return;
+      openTabs.value.splice(index, 1);
+      if (openTabs.value.length === 0) {
+        activeTabIndex.value = -1;
+        if (_editor) { _editor.toTextArea(); _editor = null; }
+      } else if (index <= activeTabIndex.value) {
+        switchTab(Math.max(0, activeTabIndex.value - 1));
       }
     }
 
@@ -636,11 +764,35 @@ app = createApp({
       }
     }
 
+    function renderMarkdown(text) {
+      if (!text) return '';
+      try {
+        return marked.parse(text, {breaks: true});
+      } catch(e) {
+        return text;
+      }
+    }
+
     function handleKeydown(e) {
-      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         sendMessage();
       }
+    }
+
+    function formatCost(cost, tokens) {
+      if (cost == null) return '';
+      let costStr;
+      if (cost >= 0.01) {
+        costStr = '$' + cost.toFixed(4);
+      } else if (cost >= 0.0001) {
+        costStr = '$' + cost.toFixed(6);
+      } else if (cost > 0) {
+        costStr = cost.toExponential(2).replace('e', '×10^');
+      } else {
+        costStr = '$0.00';
+      }
+      return `💵 ${costStr} | ${(tokens || 0).toLocaleString()} tokens`;
     }
 
     async function resetChat() {
@@ -679,11 +831,12 @@ app = createApp({
     return {
       showSetup, setupStep, setupWorkspace, setupModel, setupApiKey,
       setupError, setupLoading, models, selectedProvider,
-      fileTree, selectedFile, fileContent,
-      messages, userInput, agentRunning, statusText, statusClass, costStr, messagesRef,
-      highlightedCode, fileIcon,
-      browseWorkspace, setupNext, setupFinish, openFile, sendMessage,
-      handleKeydown, resetChat, showCost,
+      fileTree, openTabs, activeTabIndex,
+      messages, userInput, agentRunning, statusText, statusClass, costStr,
+      messagesRef, layoutRef, editorContainer,
+      leftWidth, rightWidth, resizing, startResize,
+      browseWorkspace, setupNext, setupFinish, openFile, switchTab, closeTab,
+      sendMessage, handleKeydown, resetChat, showCost, renderMarkdown,
     };
   }
 });
