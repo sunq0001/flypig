@@ -2,5 +2,9 @@
   "deepseek-v4-flash": {
     "input": 0.0028,
     "output": 0.003625
+  },
+  "deepseek-chat": {
+    "input": 0.0028,
+    "output": 0.003625
   }
 }

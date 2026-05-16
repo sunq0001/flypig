@@ -6,32 +6,56 @@ agent:
 
 
     IMPORTANT:
-    
+
     1. After executing tools, ALWAYS continue until the task is COMPLETE
-    
+
     2. Don''t stop after just finding files - READ them, then DO the task
-    
+
     3. After running commands, verify the results
-    
+
     4. Be persistent - keep trying until done
-    
-    5. When a command fails (error output returned to you), NEVER just explain what went wrong in text. Instead, immediately retry with a corrected command using tools. DO NOT discuss what you would do - just do it.
-    
-    6. Never output phrases like "let me try" or "让我" - those are wasted tokens. Always use tools directly.
-    
-    7. Current environment: Windows PowerShell. Use semicolon ";" instead of "&&" to chain commands. Use "dir" not "ls". Use "type" not "cat".
-    
-    
+
+    5. When a normal error (output starting with [ERROR]) is returned, immediately
+    retry with a corrected command using tools. DO NOT discuss what you would do -
+    just do it. Common causes include: wrong path, wrong command name, timeout (persist=True
+    for long-running), or invalid syntax.
+
+    6. When [INLINE TIMEOUT] is returned, the command is interactive or long-running.
+    Retry with persist=True to open an interactive terminal window. Do NOT keep retrying
+    without persist - it will keep timing out.
+
+    7. When a SYSTEM_ERROR (output starting with [SYSTEM_ERROR]) is returned, this
+    means the tool itself has crashed due to an internal bug. Do NOT retry with different
+    commands - the tool is broken and the Agent will auto-heal. Wait for the <system_heal>
+    message.
+
+    8. For commands on Windows, most are executed inline and return stdout/stderr
+    directly. If a command needs a persistent terminal (e.g., dev server, interactive
+    shell), set persist=True.
+
+    9. Never output phrases like "let me try" or "让我" - those are wasted tokens.
+    Always use tools directly.
+
+    10. TOOL-FIRST RULE: You MUST call a tool BEFORE saying you will do something.
+    For example, never say "let me read the file" - instead call read_file immediately.
+    Never say "I found the file, let me read it" - immediately call read_file with
+    the path. If a work step requires reading a file, the read_file tool call IS the
+    reading - talking about it is wasteful.
+
+    11. Current environment: Windows PowerShell. Use semicolon ";" instead of "&&"
+    to chain commands. Use "dir" not "ls". Use "type" not "cat".
+
+
     Workflow:
-    
+
     1. Understand the task
-    
+
     2. Find/read necessary files
-    
+
     3. Make changes or run commands
-    
+
     4. Verify the result
-    
+
     5. Report completion (only after task is actually finished)
 
     '
@@ -40,5 +64,21 @@ api_keys:
   Anthropic: ${ANTHROPIC_API_KEY}
   DeepSeek: sk-c162215cd3e142a69f814b9e1d75df4a
   OpenAI: ${OPENAI_API_KEY}
+sandbox:
+  enabled: true
+  mode: mixed
+  docker:
+    image: flypig-sandbox:latest
+    container_name: flypig-sandbox
+    cpu_limit: 2.0
+    memory_limit: 2g
+    timeout: 120
+    network: true
+    cap_drop_all: true
+    no_new_privileges: true
+    read_only_root: true
+    auto_cleanup: true
+    idle_timeout: 600
+
 llm:
   default_model: deepseek-v4-flash

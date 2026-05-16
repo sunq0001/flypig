@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>FlyPig Agent</title>
+<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#1e1e2e;
+  --bg2:#252536;
+  --bg3:#2d2d44;
+  --fg:#cdd6f4;
+  --fg2:#a6adc8;
+  --fg3:#6c7086;
+  --accent:#89b4fa;
+  --accent2:#b4befe;
+  --green:#a6e3a1;
+  --yellow:#f9e2af;
+  --red:#f38ba8;
+  --border:#313244;
+  --sidebar-w:260px;
+  --chat-w:360px;
+  --status-h:28px;
+}
+html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Segoe UI',system-ui,-apple-system,sans-serif;font-size:14px;overflow:hidden}
+#app{display:flex;flex-direction:column;height:100vh}
+
+/* 三栏主区域 */
+#layout{display:flex;flex:1;overflow:hidden}
+
+/* 左侧面板 */
+#sidebar{width:var(--sidebar-w);min-width:180px;display:flex;flex-direction:column;background:var(--bg2);border-right:1px solid var(--border)}
+.sidebar-header{padding:10px 12px;font-size:12px;font-weight:600;color:var(--fg2);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px}
+.sidebar-header .icon{font-size:14px}
+#file-tree{flex:1;overflow-y:auto;padding:4px 0}
+#file-tree::-webkit-scrollbar{width:5px}
+#file-tree::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* 文件树样式 */
+.tree-node{cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tree-node:hover{background:var(--bg3)}
+.tree-node.selected{background:rgba(137,180,250,.15);color:var(--accent)}
+.tree-node .indent{display:inline-block}
+.tree-node .toggle{display:inline-block;width:16px;text-align:center;color:var(--fg3);font-size:11px;user-select:none}
+.tree-node .toggle.expanded{color:var(--accent)}
+.tree-node .name{display:inline-block;padding:3px 4px 3px 2px;font-size:13px;border-radius:3px}
+.tree-node .name.dir{font-weight:500}
+.tree-node .name.file{color:var(--fg2)}
+.tree-node:hover .name{color:var(--fg)}
+.tree-children{overflow:hidden}
+
+/* 中间面板 */
+#center{flex:1;min-width:200px;display:flex;flex-direction:column;overflow:hidden}
+#center-header{padding:8px 16px;font-size:13px;color:var(--fg2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;min-height:36px;background:var(--bg2)}
+#center-header .file-icon{font-size:13px}
+#center-header .file-path{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#file-viewer{flex:1;overflow:auto;padding:0}
+#file-viewer::-webkit-scrollbar{width:8px}
+#file-viewer::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+#file-viewer pre{font-family:'JetBrains Mono','Cascadia Code','Fira Code',monospace;font-size:13px;line-height:1.6;padding:16px;margin:0}
+#file-viewer code{background:transparent!important;padding:0!important}
+#empty-state{flex:1;display:flex;align-items:center;justify-content:center;color:var(--fg3);font-size:14px;flex-direction:column;gap:8px}
+#empty-state .big-icon{font-size:48px;opacity:.3}
+
+/* 右侧面板 */
+#chat{width:var(--chat-w);min-width:280px;display:flex;flex-direction:column;background:var(--bg2);border-left:1px solid var(--border)}
+.chat-header{padding:10px 12px;font-size:12px;font-weight:600;color:var(--fg2);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;justify-content:space-between}
+.chat-header .toolbar{display:flex;gap:4px}
+.chat-header .tool-btn{background:none;border:none;color:var(--fg3);cursor:pointer;padding:2px 6px;border-radius:4px;font-size:12px}
+.chat-header .tool-btn:hover{color:var(--fg);background:var(--bg3)}
+#messages{flex:1;overflow-y:auto;padding:8px}
+#messages::-webkit-scrollbar{width:5px}
+#messages::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+.msg{margin-bottom:8px;animation:fadeIn .15s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+.msg-user{text-align:right}
+.msg-user .bubble{display:inline-block;background:rgba(137,180,250,.2);color:var(--accent);padding:6px 12px;border-radius:12px 12px 4px 12px;max-width:85%;font-size:13px;line-height:1.5}
+.msg-agent .bubble{display:inline-block;background:var(--bg3);color:var(--fg);padding:6px 12px;border-radius:12px 12px 12px 4px;max-width:100%;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.msg-thinking .bubble{background:transparent;color:var(--fg3);font-style:italic;font-size:12px;padding:4px 8px}
+.msg-tool .bubble{background:rgba(166,227,161,.08);color:var(--green);padding:6px 12px;border-radius:8px;font-size:12px;font-family:monospace;line-height:1.4;white-space:pre-wrap;word-break:break-all}
+.msg-tool-end .bubble{background:rgba(108,112,134,.1);color:var(--fg2);padding:6px 12px;border-radius:8px;font-size:12px;font-family:monospace;line-height:1.4;max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+.msg-error .bubble{background:rgba(243,139,168,.1);color:var(--red);padding:6px 12px;border-radius:8px;font-size:12px}
+.msg-info .bubble{background:transparent;color:var(--fg3);padding:4px 8px;font-size:11px;text-align:center}
+.msg-chain .bubble{background:rgba(180,190,254,.08);color:var(--accent2);padding:4px 10px;border-radius:6px;font-size:11px;text-align:center}
+.msg-summary .bubble{background:rgba(166,227,161,.06);color:var(--green);padding:6px 12px;border-radius:8px;font-size:11px;font-family:monospace}
+
+/* 输入区域 */
+#input-area{padding:8px 10px 10px;border-top:1px solid var(--border)}
+#input-row{display:flex;gap:6px;align-items:flex-end}
+#chat-input{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--fg);font-size:13px;font-family:inherit;outline:none;resize:none;min-height:36px;max-height:120px;line-height:1.4}
+#chat-input:focus{border-color:var(--accent)}
+#chat-input::placeholder{color:var(--fg3)}
+#send-btn{background:var(--accent);color:var(--bg);border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity .15s;height:36px;display:flex;align-items:center;gap:4px}
+#send-btn:hover{opacity:.85}
+#send-btn:disabled{opacity:.3;cursor:not-allowed}
+
+/* 状态栏 */
+#status-bar{height:var(--status-h);background:var(--bg3);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 12px;font-size:12px;color:var(--fg3);gap:16px}
+#status-bar .status-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+#status-bar .status-dot.offline{background:var(--red)}
+#status-bar .status-dot.online{background:var(--green)}
+#status-bar .status-dot.running{background:var(--yellow);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+#status-bar .status-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 初始化向导 overlay */
+#setup-overlay{position:fixed;inset:0;background:rgba(30,30,46,.92);z-index:100;display:flex;align-items:center;justify-content:center}
+#setup-box{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:32px 40px;min-width:420px;max-width:480px}
+#setup-box h2{font-size:20px;font-weight:600;margin-bottom:4px}
+#setup-box p.sub{color:var(--fg3);font-size:13px;margin-bottom:20px}
+.setup-step{display:none}
+.setup-step.active{display:block}
+.setup-step label{display:block;margin-bottom:4px;font-size:12px;color:var(--fg2);font-weight:500}
+.setup-step input,.setup-step select{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:14px;color:var(--fg);outline:none;margin-bottom:16px}
+.setup-step input:focus,.setup-step select:focus{border-color:var(--accent)}
+.setup-step select{cursor:pointer}
+.setup-step select option{background:var(--bg2)}
+.setup-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+.setup-actions button{padding:8px 20px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer}
+.setup-actions .btn-primary{background:var(--accent);color:var(--bg)}
+.setup-actions .btn-primary:hover{opacity:.85}
+.setup-actions .btn-secondary{background:var(--bg3);color:var(--fg2)}
+.setup-actions .btn-secondary:hover{background:var(--border);color:var(--fg)}
+.setup-actions .btn-secondary:disabled{opacity:.3;cursor:not-allowed}
+.setup-error{color:var(--red);font-size:12px;margin-top:-8px;margin-bottom:12px}
+
+/* 加载动画 */
+.loading-dots::after{content:'';animation:dots 1.5s infinite}
+@keyframes dots{0%{content:'.'}33%{content:'..'}66%{content:'...'}}
+
+/* 通用 */
+.ml-auto{margin-left:auto}
+.flex{display:flex}
+.gap-4{gap:4px}
+.text-sm{font-size:12px}
+.text-muted{color:var(--fg3)}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 初始化向导 -->
+  <div id="setup-overlay" v-if="showSetup">
+    <div id="setup-box">
+      <h2>🚀 FlyPig Agent</h2>
+      <p class="sub">你的 AI 编码助手</p>
+
+      <!-- Step 1: 工作区 -->
+      <div class="setup-step" :class="{active: setupStep===1}">
+        <label>📂 工作区目录</label>
+        <input v-model="setupWorkspace" placeholder="输入工作区路径..." @keyup.enter="setupNext">
+        <div style="margin-top:-12px;margin-bottom:16px">
+          <button @click="browseWorkspace" style="background:none;border:none;color:var(--accent);font-size:12px;cursor:pointer;padding:4px 0">📁 浏览...</button>
+        </div>
+        <div class="setup-actions">
+          <button class="btn-primary" @click="setupNext">下一步 →</button>
+        </div>
+      </div>
+
+      <!-- Step 2: 模型 -->
+      <div class="setup-step" :class="{active: setupStep===2}">
+        <label>🤖 AI 模型</label>
+        <select v-model="setupModel" style="margin-bottom:8px">
+          <option v-for="m in models" :key="m.name" :value="m.name" :disabled="!m.has_key && m.provider !== 'DeepSeek'">
+            {{ m.name }} ({{ m.provider }}) {{ m.has_key ? '✓' : '' }}
+          </option>
+        </select>
+        <div class="setup-actions">
+          <button class="btn-secondary" @click="setupStep=1">← 上一步</button>
+          <button class="btn-primary" @click="setupNext">下一步 →</button>
+        </div>
+      </div>
+
+      <!-- Step 3: API Key -->
+      <div class="setup-step" :class="{active: setupStep===3}">
+        <label>🔑 API Key</label>
+        <div style="font-size:12px;color:var(--fg3);margin-bottom:8px">提供商: {{ selectedProvider }}</div>
+        <input v-model="setupApiKey" type="password" placeholder="输入 API Key（留空使用已有配置）" @keyup.enter="setupFinish">
+        <div class="setup-error" v-if="setupError">{{ setupError }}</div>
+        <div class="setup-actions">
+          <button class="btn-secondary" @click="setupStep=2">← 上一步</button>
+          <button class="btn-primary" @click="setupFinish">开始使用 →</button>
+        </div>
+      </div>
+
+      <!-- 加载中 -->
+      <div v-if="setupLoading" style="text-align:center;padding:20px">
+        <div style="font-size:14px;color:var(--fg2)">初始化中<span class="loading-dots"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 主界面 -->
+  <div id="layout" v-show="!showSetup">
+    <!-- 左侧：文件树 -->
+    <div id="sidebar">
+      <div class="sidebar-header"><span class="icon">📁</span> 文件</div>
+      <div id="file-tree">
+        <template v-if="fileTree && fileTree.children">
+          <tree-node
+            v-for="node in fileTree.children"
+            :key="node.path"
+            :node="node"
+            :depth="0"
+            :selected-path="selectedFile"
+            @select="openFile"
+          />
+        </template>
+        <div v-else style="padding:16px;color:var(--fg3);font-size:12px;text-align:center">暂无文件</div>
+      </div>
+    </div>
+
+    <!-- 中间：代码查看 -->
+    <div id="center">
+      <div id="center-header" v-if="selectedFile">
+        <span class="file-icon">{{ fileIcon }}</span>
+        <span class="file-path">{{ selectedFile }}</span>
+      </div>
+      <div id="file-viewer" v-if="fileContent !== null" v-html="highlightedCode"></div>
+      <div id="empty-state" v-else>
+        <div class="big-icon">📄</div>
+        <div>点击左侧文件查看内容</div>
+        <div style="font-size:12px;color:var(--fg3)">或发送消息让 AI 工作</div>
+      </div>
+    </div>
+
+    <!-- 右侧：对话 -->
+    <div id="chat">
+      <div class="chat-header">
+        <span>💬 对话</span>
+        <div class="toolbar">
+          <button class="tool-btn" @click="resetChat" title="重置对话">↺</button>
+          <button class="tool-btn" @click="showCost" title="查看费用">💰</button>
+        </div>
+      </div>
+      <div id="messages" ref="messagesRef">
+        <div v-for="(m, i) in messages" :key="i" :class="'msg msg-' + m.type">
+          <div class="bubble">{{ m.content }}</div>
+        </div>
+      </div>
+      <div id="input-area">
+        <div id="input-row">
+          <textarea
+            id="chat-input"
+            v-model="userInput"
+            @keydown="handleKeydown"
+            placeholder="输入消息... (Ctrl+Enter 发送)"
+            :disabled="agentRunning"
+            rows="1"
+          ></textarea>
+          <button id="send-btn" @click="sendMessage" :disabled="agentRunning || !userInput.trim()">
+            ▶
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 状态栏 -->
+  <div id="status-bar" v-show="!showSetup">
+    <span class="status-dot" :class="statusClass"></span>
+    <span class="status-text">{{ statusText }}</span>
+    <span v-if="costStr" class="text-sm text-muted">{{ costStr }}</span>
+  </div>
+</div>
+
+<script>
+const { createApp, ref, computed, watch, nextTick, onMounted } = Vue;
+
+// ── 文件树组件（递归） ──
+app = createApp({
+  setup() {
+    // ── 状态 ──
+    const showSetup = ref(true);
+    const setupStep = ref(1);
+    const setupWorkspace = ref('');
+    const setupModel = ref('');
+    const setupApiKey = ref('');
+    const setupError = ref('');
+    const setupLoading = ref(false);
+    const models = ref([]);
+    const selectedProvider = ref('');
+
+    const fileTree = ref(null);
+    const selectedFile = ref(null);
+    const fileContent = ref(null);
+    const messages = ref([]);
+    const userInput = ref('');
+    const agentRunning = ref(false);
+    const statusText = ref('未连接');
+    const statusClass = ref('offline');
+    const costStr = ref('');
+    const messagesRef = ref(null);
+
+    // ── 计算属性 ──
+    const fileIcon = computed(() => {
+      if (!selectedFile.value) return '📄';
+      const ext = selectedFile.value.split('.').pop();
+      const icons = {py:'🐍',js:'📜',ts:'📘',jsx:'⚛',tsx:'⚛',go:'🔷',rs:'🦀',md:'📝',json:'📋',yaml:'⚙',yml:'⚙',toml:'⚙',html:'🌐',css:'🎨',vue:'💚',sh:'💻',bat:'💻',ps1:'💻'};
+      return icons[ext] || '📄';
+    });
+
+    const highlightedCode = computed(() => {
+      if (!fileContent.value) return '';
+      let lang = 'plaintext';
+      if (selectedFile.value) {
+        const ext = selectedFile.value.split('.').pop();
+        const langMap = {py:'python',js:'javascript',ts:'typescript',jsx:'javascript',tsx:'typescript',go:'go',rs:'rust',md:'markdown',json:'json',yaml:'yaml',yml:'yaml',toml:'toml',html:'html',css:'css',vue:'html',sh:'bash',bat:'powershell',ps1:'powershell'};
+        lang = langMap[ext] || 'plaintext';
+      }
+      const code = document.createElement('code');
+      code.textContent = fileContent.value;
+      code.className = `language-${lang}`;
+      hljs.highlightElement(code);
+      return `<pre><code class="hljs language-${lang}">${code.innerHTML}</code></pre>`;
+    });
+
+    // ── 初始化 ──
+    onMounted(async () => {
+      await loadConfig();
+    });
+
+    async function loadConfig() {
+      try {
+        const res = await fetch('/api/config');
+        const data = await res.json();
+        if (data.status === 'not_initialized') return;
+        setupWorkspace.value = data.workspace || '';
+        models.value = data.models || [];
+        setupModel.value = data.default_model || '';
+        if (data.workspace) {
+          showSetup.value = false;
+          await initAgent(data.workspace, data.default_model, '');
+        }
+      } catch (e) {
+        console.error('load config error:', e);
+      }
+    }
+
+    // ── SSE 连接 ──
+    let eventSource = null;
+
+    function connectSSE() {
+      if (eventSource) eventSource.close();
+      eventSource = new EventSource('/api/events');
+      statusClass.value = 'online';
+      statusText.value = '已连接';
+
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          handleEvent(data);
+        } catch (e) {}
+      };
+
+      eventSource.onerror = () => {
+        statusClass.value = 'offline';
+        statusText.value = '连接断开，正在重连...';
+        setTimeout(connectSSE, 2000);
+      };
+    }
+
+    function handleEvent(data) {
+      switch (data.type) {
+        case 'thinking':
+          messages.value.push({type:'thinking', content:'🧠 '+data.content});
+          break;
+        case 'tool_start': {
+          const name = data.name;
+          const args = data.arguments || {};
+          let desc = '';
+          if (name === 'bash') desc = '💻 '+ (args.command || '').slice(0,100);
+          else if (name === 'read_file') desc = '📖 '+ (args.path || '');
+          else if (name === 'write_file') desc = '✏️ 写入 '+ (args.path || '');
+          else if (name === 'edit_file') desc = '🔧 编辑 '+ (args.path || '');
+          else if (name === 'find_files') desc = '🔍 '+ (args.pattern || '');
+          else if (name === 'grep') desc = '🔎 '+ (args.pattern || '');
+          else desc = `🔧 ${name}`;
+          messages.value.push({type:'tool', content: desc});
+          break;
+        }
+        case 'tool_end': {
+          const result = (data.result || '').slice(0,300);
+          if (result.trim()) {
+            messages.value.push({type:'tool-end', content: result});
+          }
+          break;
+        }
+        case 'tool_chain_end':
+          statusText.value = `工具链: ${data.tool_count} 个工具 | ${data.tokens?.toLocaleString()} tokens`;
+          break;
+        case 'llm_end':
+          costStr.value = `💵 $${data.session_cost?.toFixed(6)} | ${data.session_tokens?.toLocaleString()} tokens`;
+          break;
+        case 'response':
+          messages.value.push({type:'agent', content: data.content || '[无回复]'});
+          statusText.value = '就绪';
+          agentRunning.value = false;
+          break;
+        case 'summary':
+          messages.value.push({type:'summary', content: data.content});
+          break;
+        case 'error':
+          messages.value.push({type:'error', content: '❌ ' + data.content});
+          agentRunning.value = false;
+          statusText.value = '出错了';
+          break;
+        case 'done':
+          agentRunning.value = false;
+          statusText.value = '就绪';
+          break;
+      }
+      scrollMessages();
+    }
+
+    function scrollMessages() {
+      nextTick(() => {
+        const el = messagesRef.value;
+        if (el) el.scrollTop = el.scrollHeight;
+      });
+    }
+
+    // ── 文件树组件注册 ──
+    app.component('tree-node', {
+      props: {
+        node: Object,
+        depth: Number,
+        selectedPath: String,
+      },
+      emits: ['select'],
+      setup(props, { emit }) {
+        const expanded = ref(!props.node.is_dir || props.depth < 1);
+        const isSelected = computed(() => props.node.path === props.selectedPath);
+
+        function toggle() {
+          if (props.node.is_dir) {
+            expanded.value = !expanded.value;
+          } else {
+            emit('select', props.node.path);
+          }
+        }
+
+        return { expanded, isSelected, toggle };
+      },
+      template: `
+        <div>
+          <div class="tree-node" :class="{selected: isSelected}" @click="toggle" :style="{paddingLeft: (depth*16+4)+'px'}">
+            <span class="toggle" v-if="node.is_dir" :class="{expanded: expanded}">
+              {{ expanded ? '▼' : '▶' }}
+            </span>
+            <span class="toggle" v-else style="visibility:hidden">▶</span>
+            <span class="name" :class="{dir: node.is_dir, file: !node.is_dir}">
+              {{ node.is_dir ? '📁 ' : '📄 ' }}{{ node.name }}
+            </span>
+          </div>
+          <div v-if="node.is_dir && expanded" class="tree-children">
+            <template v-if="node.children && node.children.length">
+              <tree-node
+                v-for="child in node.children"
+                :key="child.path"
+                :node="child"
+                :depth="depth + 1"
+                :selected-path="selectedPath"
+                @select="(p) => emit('select', p)"
+              />
+            </template>
+            <div v-else style="padding:2px 0 2px 20px;color:var(--fg3);font-size:11px">（空）</div>
+          </div>
+        </div>
+      `
+    });
+
+    // ── 方法 ──
+    async function browseWorkspace() {
+      try {
+        const input = document.createElement('input');
+        input.type = 'file';
+        // 使用 nw-dialog 或简单的 path 输入
+        // 在 webview 中可用 <input webkitdirectory>，但浏览器不行
+        // 直接用文件浏览器预览窗口，使用 input
+        const dirInput = document.createElement('input');
+        dirInput.type = 'text';
+        // 浏览器不支持文件夹选择器 API，回退到手动输入
+        setupWorkspace.value = prompt('输入工作区绝对路径:', setupWorkspace.value) || setupWorkspace.value;
+      } catch(e) {}
+    }
+
+    async function setupNext() {
+      setupError.value = '';
+      if (setupStep.value === 1) {
+        if (!setupWorkspace.value.trim()) {
+          setupError.value = '请输入工作区路径';
+          return;
+        }
+        // 验证工作区
+        try {
+          const res = await fetch('/api/config/workspace', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({path: setupWorkspace.value}),
+          });
+          const data = await res.json();
+          if (data.error) { setupError.value = data.error; return; }
+          setupWorkspace.value = data.workspace;
+        } catch(e) {
+          setupError.value = '连接服务器失败';
+          return;
+        }
+        // 加载模型列表
+        await loadModels();
+        setupStep.value = 2;
+      } else if (setupStep.value === 2) {
+        if (!setupModel.value) {
+          setupError.value = '请选择一个模型';
+          return;
+        }
+        const model = models.value.find(m => m.name === setupModel.value);
+        if (model) selectedProvider.value = model.provider;
+        if (model && model.has_key) {
+          // Key 已配置，直接完成
+          await setupFinish();
+        } else {
+          setupStep.value = 3;
+        }
+      }
+    }
+
+    async function loadModels() {
+      try {
+        const res = await fetch('/api/config');
+        const data = await res.json();
+        models.value = data.models || [];
+        if (!setupModel.value && models.value.length > 0) {
+          setupModel.value = models.value[0].name;
+        }
+      } catch(e) {
+        console.error('load models error:', e);
+      }
+    }
+
+    async function setupFinish() {
+      setupError.value = '';
+      setupLoading.value = true;
+      try {
+        // 保存 API Key（如果有）
+        if (setupApiKey.value && selectedProvider.value) {
+          await fetch('/api/config/apikey', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({provider: selectedProvider.value, api_key: setupApiKey.value}),
+          });
+        }
+        // 初始化 Agent
+        const ok = await initAgent(setupWorkspace.value, setupModel.value, setupApiKey.value);
+        if (ok) {
+          showSetup.value = false;
+        } else {
+          setupError.value = '初始化失败，请检查配置';
+        }
+      } catch(e) {
+        setupError.value = '初始化失败: ' + e.message;
+      } finally {
+        setupLoading.value = false;
+      }
+    }
+
+    async function initAgent(workspace, model, apiKey) {
+      try {
+        const res = await fetch('/api/init', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({workspace, model, api_key: apiKey}),
+        });
+        const data = await res.json();
+        if (data.error) return false;
+        // 加载文件树
+        await loadFileTree();
+        // 连接 SSE
+        connectSSE();
+        statusText.value = '就绪';
+        messages.value.push({type:'info', content:'🚀 FlyPig Agent 已就绪'});
+        return true;
+      } catch(e) {
+        return false;
+      }
+    }
+
+    async function loadFileTree() {
+      try {
+        const res = await fetch('/api/tree');
+        fileTree.value = await res.json();
+      } catch(e) {
+        console.error('load tree error:', e);
+      }
+    }
+
+    async function openFile(path) {
+      selectedFile.value = path;
+      try {
+        const res = await fetch('/api/file?path=' + encodeURIComponent(path));
+        const data = await res.json();
+        if (data.error) {
+          fileContent.value = '// Error: ' + data.error;
+        } else {
+          fileContent.value = data.content;
+        }
+      } catch(e) {
+        fileContent.value = '// Error: ' + e.message;
+      }
+    }
+
+    async function sendMessage() {
+      const text = userInput.value.trim();
+      if (!text || agentRunning.value) return;
+      userInput.value = '';
+      messages.value.push({type:'user', content: text});
+      scrollMessages();
+      agentRunning.value = true;
+      statusText.value = 'AI 思考中...';
+      statusClass.value = 'running';
+      try {
+        await fetch('/api/run', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({message: text}),
+        });
+      } catch(e) {
+        messages.value.push({type:'error', content: '❌ ' + e.message});
+        agentRunning.value = false;
+        statusText.value = '出错了';
+      }
+    }
+
+    function handleKeydown(e) {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        sendMessage();
+      }
+    }
+
+    async function resetChat() {
+      if (agentRunning.value) return;
+      await fetch('/api/agent/command', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({command: 'reset'}),
+      });
+      messages.value = [];
+      messages.value.push({type:'info', content:'对话已重置'});
+      costStr.value = '';
+    }
+
+    async function showCost() {
+      if (agentRunning.value) return;
+      const res = await fetch('/api/agent/command', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({command: 'cost'}),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        messages.value.push({type:'info', content: data.response});
+      }
+    }
+
+    watch(userInput, (val) => {
+      const ta = document.getElementById('chat-input');
+      if (ta) {
+        ta.style.height = 'auto';
+        ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+      }
+    });
+
+    return {
+      showSetup, setupStep, setupWorkspace, setupModel, setupApiKey,
+      setupError, setupLoading, models, selectedProvider,
+      fileTree, selectedFile, fileContent,
+      messages, userInput, agentRunning, statusText, statusClass, costStr, messagesRef,
+      highlightedCode, fileIcon,
+      browseWorkspace, setupNext, setupFinish, openFile, sendMessage,
+      handleKeydown, resetChat, showCost,
+    };
+  }
+});
+
+app.mount('#app');
+</script>
+</body>
+</html>

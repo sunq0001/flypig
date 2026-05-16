@@ -40,6 +40,8 @@ $ python -m flypig
 
 **高优先级（省 Token，直接省钱）**:
 - [x] 上下文压缩 (Tree-sitter裁剪) — 裁剪无关代码块，减少输入 token
+- [x] 工具错误自愈 (SYSTEM_ERROR检测 + 自动修复) — 防止系统性崩溃下的盲目重试浪费 token
+- [x] Windows bash 内联执行 (非 persist 命令直接捕获输出，失败回退弹窗) — 消除弹窗丢失输出导致的 Agent 死循环
 
 **安全加固（沙箱隔离）**:
 - [ ] 创建沙箱核心模块 (sandbox.py) — SandboxManager (Docker 容器生命周期/命令执行) + PathValidator (路径白名单/运行时审批) + SandboxConfig 数据类
@@ -57,8 +59,20 @@ $ python -m flypig
 - [ ] CLAUDE.md 支持
 
 **低优先级（体验优化）**:
+- [x] 钩子系统 + 工具链可视化 (6 个生命周期钩子, 中文说明, 链成本统计, 会话累计)
 - [ ] ModelAdapter 多协议支持 (Anthropic 原生 SDK)
 - [ ] 流式输出优化
+
+**Web UI 交互 (Phase 2 独立版块)**:
+- [x] Flask + Vue 3 后端/前端框架搭建
+- [x] 三栏布局 — 文件树(左) + 代码查看(中) + 对话(右)
+- [x] 文件目录树 — 递归扫描、排除隐藏目录、点击打开
+- [x] 代码查看器 — highlight.js 语法高亮
+- [x] SSE 事件推流 — Agent 实时事件推送至浏览器
+- [x] 初始化向导 — 工作区/模型/API Key 浏览器内配置
+- [ ] xterm.js 终端面板 — 多标签、WebSocket PTY 桥接
+- [ ] 文件标签 + 可编辑模式
+- [ ] 折叠式对话 — 摘要行默认折叠、点击展开详情
 
 ---
 

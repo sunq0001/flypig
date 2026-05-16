@@ -150,8 +150,13 @@ def main():
         else:
             print(f"  [价格] 未获取到 {llm_config['name']} 的价格信息\n")
 
+        # 追加工作目录信息到系统提示
+        ws_prompt = config.system_prompt + (
+            f"\n\nCurrent working directory: {config.workspace}\n"
+            f"All file paths in tool results are relative to this directory.\n"
+        )
         agent = Agent(model=model, cost_tracker=cost_tracker, tools=tools,
-                      system_prompt=config.system_prompt)
+                      system_prompt=ws_prompt)
 
         print("[*] Commands: /help /debug /reset /cost /model /exit")
         print()
@@ -161,9 +166,36 @@ def main():
             try:
                 sys.stdout.flush()
                 sys.stderr.flush()
-                user_input = input("\n> ").strip()
+
+                # ── 有 bash 历史时调整提示 ──
+                bash_hint = ""
+                if hasattr(agent, 'bash_history') and agent.bash_history:
+                    bash_hint = " [T] 打开终端"
+                user_input = input(f"\n>{bash_hint} ").strip()
                 if not user_input:
                     continue
+
+                # ── 终端打开命令 ──
+                if user_input.lower() == "t":
+                    agent.open_terminal()
+                    continue
+                elif user_input.lower().startswith("t "):
+                    parts = user_input.lower().split()
+                    if len(parts) == 2:
+                        if parts[1] == "list":
+                            for i, cmd in enumerate(agent.bash_history, 1):
+                                short = cmd[:80] + "..." if len(cmd) > 80 else cmd
+                                print(f"  [{i}] {short}")
+                            continue
+                        try:
+                            idx = int(parts[1])
+                            if idx < 1 or idx > len(agent.bash_history):
+                                print(f"  [X] 无效序号，范围为 1-{len(agent.bash_history)}")
+                                continue
+                            agent.open_terminal(idx - 1)  # 1-based → 0-based
+                            continue
+                        except ValueError:
+                            pass  # 不是数字，作为普通消息发给 Agent
 
                 if user_input.startswith("/"):
                     cmd = user_input.lower()

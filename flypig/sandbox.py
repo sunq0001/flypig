@@ -262,7 +262,7 @@ class PathValidator:
         try:
             result = subprocess.run(
                 ["powershell", "-NoProfile", "-Command", ps_cmd],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
             )
             return result.stdout.strip() or "n"
         except subprocess.TimeoutExpired:
@@ -388,6 +388,47 @@ class SandboxManager:
 
     # ── 命令执行 ──
 
+    def _validate_workdir(self, workdir: str) -> Optional[str]:
+        """校验容器内 workdir 是否存在，不存在时返回诊断信息"""
+        try:
+            check = subprocess.run(
+                ["docker", "exec", self._container_name,
+                 "bash", "-c", f"test -d {shlex.quote(workdir)} && echo OK || echo MISSING"],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+            )
+            if "MISSING" in check.stdout:
+                listing = self._list_container_dir("/workspace")
+                return (
+                    f"[PATH ERROR] Directory not found: {workdir}\n"
+                    f"[HINT] Your workspace folder '{self.workspace_dir.name}' is "
+                    f"mounted at /workspace inside the container.\n"
+                    f"       To access subdirectories, use: cd /workspace/<subfolder_name>\n"
+                    f"       Available directories in /workspace:{listing}\n"
+                    f"[FIX] Check the exact subdirectory name and correct the path."
+                )
+        except Exception:
+            pass  # 校验失败不阻塞，让后面的实际执行去报错
+        return None
+
+    def _list_container_dir(self, path: str = "/workspace") -> str:
+        """列出容器内指定路径的非隐藏目录"""
+        try:
+            result = subprocess.run(
+                ["docker", "exec", self._container_name,
+                 "bash", "-c", f"ls -1d {shlex.quote(path)}/*/ 2>/dev/null || echo '(empty)'"],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+            )
+            items = [l.strip() for l in result.stdout.split("\n") if l.strip()]
+            if not items or items == ["(empty)"]:
+                return "\n       (no subdirectories)"
+            shown = items[:15]
+            text = "\n" + "\n".join(f"       - {d}" for d in shown)
+            if len(items) > 15:
+                text += f"\n       ... and {len(items)-15} more"
+            return text
+        except Exception:
+            return "\n       (unable to list, may need a moment after container creation)"
+
     def run_command(
         self,
         command: str,
@@ -407,10 +448,15 @@ class SandboxManager:
             if not approved:
                 return "[SECURITY] Command rejected by user."
 
-        self._ensure_container()
+        self.ensure_container()
 
         timeout = timeout or self.config.timeout
         workdir = workdir or "/workspace"
+
+        # ── 前置校验：检查 workdir 在容器内是否存在 ──
+        dir_check = self._validate_workdir(workdir)
+        if dir_check is not None:
+            return dir_check
 
         full_cmd = ["docker", "exec"]
         if timeout:
@@ -428,6 +474,7 @@ class SandboxManager:
             result = subprocess.run(
                 full_cmd,
                 capture_output=True, text=True,
+                encoding="utf-8", errors="replace",
                 timeout=timeout + 10,
             )
             elapsed = time.time() - start_time
@@ -436,7 +483,28 @@ class SandboxManager:
             output = result.stdout or ""
             if result.stderr:
                 output += f"\n[stderr]\n{result.stderr}"
+
+            # ── 命令失败时附加诊断 ──
             if result.returncode != 0:
+                error_lower = (result.stderr or "").lower()
+                stderr_text = result.stderr or ""
+
+                # 检测交互式脚本（input() 无 stdin 导致的 EOFError）
+                if "eof" in error_lower or "eof when reading" in error_lower:
+                    output += (
+                        "\n\n[INTERACTIVE] This script needs user input (input() without stdin).\n"
+                        "[HINT] Retry with persist=True to run in the interactive terminal.\n"
+                    )
+
+                if "no such file or directory" in error_lower or "not found" in error_lower:
+                    listing = self._list_container_dir("/workspace")
+                    output += (
+                        f"\n[PATH ERROR] The directory may not exist.\n"
+                        f"[HINT] Your workspace folder is mounted at /workspace.\n"
+                        f"       The workspace folder name is: {self.workspace_dir.name}\n"
+                        f"       Available subdirectories in /workspace:{listing}\n"
+                        f"[FIX] Use the exact path: cd /workspace/<subfolder>"
+                    )
                 output += f"\n[exit code: {result.returncode}]"
 
             # 审计
@@ -455,9 +523,7 @@ class SandboxManager:
 
         适合长驻命令（npm run dev / python server.py / tail -f）
         """
-        self._ensure_container()
-
-        workdir = workdir or "/workspace"
+        self.ensure_container()
         docker_cmd = (
             f"docker exec -it {self._container_name} "
             f"bash -c 'cd {shlex.quote(workdir)} && {command}'"
@@ -486,7 +552,7 @@ class SandboxManager:
         try:
             result = subprocess.run(
                 ["docker", "images", "-q", self._image_name],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
             )
             return bool(result.stdout.strip())
         except Exception:
@@ -552,7 +618,7 @@ CMD ["tail", "-f", "/dev/null"]
         try:
             result = subprocess.run(
                 ["docker", "ps", "-q", "-f", f"name={self._container_name}"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
             )
             if result.stdout.strip():
                 self._container_id = result.stdout.strip()[:12]
@@ -621,7 +687,7 @@ CMD ["tail", "-f", "/dev/null"]
         cmd.extend(["tail", "-f", "/dev/null"])
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
             if result.returncode != 0:
                 raise RuntimeError(f"Failed to create container: {result.stderr}")
             self._container_id = result.stdout.strip()[:12]
@@ -644,7 +710,7 @@ CMD ["tail", "-f", "/dev/null"]
             result = subprocess.run(
                 ["docker", "inspect", self._container_name,
                  "--format", "{{json .Mounts}}"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
             )
             if result.returncode != 0:
                 self._panic("Container verification failed: inspect error")
@@ -670,7 +736,7 @@ CMD ["tail", "-f", "/dev/null"]
             priv_result = subprocess.run(
                 ["docker", "inspect", self._container_name,
                  "--format", "{{.HostConfig.Privileged}}"],
-                capture_output=True, text=True, timeout=5,
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
             )
             if priv_result.stdout.strip() != "false":
                 self._panic("Container has privileged access!")
@@ -732,7 +798,7 @@ CMD ["tail", "-f", "/dev/null"]
                 )
                 result = subprocess.run(
                     ["powershell", "-NoProfile", "-Command", ps_cmd],
-                    capture_output=True, text=True, timeout=30,
+                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
                 )
                 return result.stdout.strip() == "yes"
             else:
@@ -899,7 +965,7 @@ def is_docker_available() -> bool:
     try:
         result = subprocess.run(
             ["docker", "info", "--format", "{{.ServerVersion}}"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
         )
         return result.returncode == 0 and bool(result.stdout.strip())
     except (subprocess.TimeoutExpired, FileNotFoundError):

@@ -3,14 +3,49 @@ import os
 import platform
 import subprocess
 import time
+import re
 from pathlib import Path
 from typing import Dict, Any, Optional
 from .context_compressor import TreeSitterCompressor
 
 
+# ── ANSI escape sequences 清理 ──
+_ANSI_ESC = re.compile(
+    # Windows DSR mouse (ESC [[<...M/m) — 先匹配更精确的
+    r'\x1b\[\[[<][0-?]*[Mm]'
+    # CSI sequences (ESC [... )
+    r'|\x1b\[[0-?]*[ -/]*[@-~]'
+    # 控制字符 (保留 \t\n\r)
+    r'|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]'
+    # C1 控制字符
+    r'|[\x80-\x9f]'
+    # 其他 ESC + 1 字符
+    r'|\x1b.'
+)
+
+# 残留序列清理（\x1b 已被 strip 但留下 [[<35;1;0M 文本）
+_ANSI_FRAGMENT = re.compile(
+    r'\[\[<\d+(?:;\d+)*[Mm]'       # DSR 鼠标残留 [[<...M/m
+    r'|\[\[\d+(?:;\d+)*[A-Za-z]'    # 其他 [[... 残留
+    r'|\[\d+(?:;\d+)*[A-Za-z]'      # 更短变种 [... 残留
+    r'|<Objs[^>]*>'                 # CLIXML 标签头
+    r'|</?[A-Z][A-Za-z0-9_.]*[^>]*>'  # 其他 XML 标签
+    r'|[\r\n]+'                      # 多余空行压缩（保留一个）
+)
+
+def strip_ansi(text: str) -> str:
+    """移除 ANSI escape sequences + 清理残留的控制序列片段"""
+    t = _ANSI_ESC.sub('', text)
+    t = _ANSI_FRAGMENT.sub('', t)
+    # 压缩连续空行
+    t = re.sub(r'\n{3,}', '\n\n', t)
+    return t.strip()
+
+
+
 class ToolExecutor:
     """执行各种工具操作"""
-    
+
     def __init__(self, workspace_dir: str = None, path_validator=None, sandbox_manager=None):
         if workspace_dir:
             self.workspace_dir = Path(workspace_dir)
@@ -21,7 +56,8 @@ class ToolExecutor:
         self.compressor = TreeSitterCompressor()
         self.path_validator = path_validator
         self.sandbox_manager = sandbox_manager
-    
+        self._web_mode = False  # Web UI 模式下内联执行命令
+
     def execute(self, tool_name: str, arguments: Dict[str, Any]) -> str:
         """执行工具"""
         method = getattr(self, f"tool_{tool_name}", None)
@@ -137,7 +173,7 @@ class ToolExecutor:
         """检测是否在 WSL 中运行"""
         try:
             return 'microsoft' in subprocess.run(
-                ['uname', '-r'], capture_output=True, text=True, timeout=2
+                ['uname', '-r'], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=2
             ).stdout.lower()
         except Exception:
             return False
@@ -154,7 +190,7 @@ class ToolExecutor:
             try:
                 win_path = subprocess.run(
                     ['wslpath', '-w', workspace],
-                    capture_output=True, text=True, timeout=2
+                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=2
                 ).stdout.strip()
                 # 转义双引号
                 safe_cmd = command.replace('"', '\\"')
@@ -204,10 +240,12 @@ class ToolExecutor:
 
     def tool_bash(self, args: Dict) -> str:
         """执行 shell 命令
-        
+
         沙箱模式双模式执行：
         - persist=True: spawn_command（非阻塞弹终端）
         - persist=False/不传: run_command（阻塞 docker exec 返回输出）
+
+        Web UI 模式：始终内联执行，persist 仅表示更长超时（300s）
         """
         command = args.get("command", "")
         timeout_val = args.get("timeout", 60)
@@ -216,20 +254,16 @@ class ToolExecutor:
         if not command:
             return "Error: No command provided"
 
+        # ── Web/Headless 模式：始终内联执行，不弹外部窗口 ──
+        if self._web_mode:
+            return self._run_inline(command, timeout_val, persist)
+
         # ── 沙箱模式：命令在 Docker 容器内执行 ──
         if self.sandbox_manager:
-            # Windows 命令转换（容器内是 Linux，不需要）
-            if self.is_windows:
-                # 容器内只转 ls/cat 等常见命令
-                pass
-
+            workdir = "/workspace"  # 容器内固定挂载点
             if persist:
-                # 长驻/交互命令 → 非阻塞弹终端
-                workdir = str(self.workspace_dir)
                 return self.sandbox_manager.spawn_command(command, workdir)
             else:
-                # 一次性命令 → 阻塞 docker exec 返回输出
-                workdir = "/workspace"
                 return self.sandbox_manager.run_command(command, timeout_val, workdir)
 
         # ── 非沙箱模式：保留原有行为 ──
@@ -245,60 +279,29 @@ class ToolExecutor:
 
             # ── Windows ──
             if self.is_windows:
-                tmp_out = os.environ.get("TEMP", "/tmp")
-                log_file = f"{tmp_out}\\flypig_out_{int(time.time())}.txt"
+                if not persist:
+                    output = self._run_inline_windows(command, timeout_val)
+                    if output is not None:
+                        return output
+                    return (
+                        f"[INLINE TIMEOUT] Command exceeded {timeout_val}s: {command}\n"
+                        f"  If this command needs an interactive terminal, "
+                        f"retry with persist=True."
+                    )
+
+                # persist=True → 弹新终端窗口
                 workdir = str(self.workspace_dir)
-
-                if persist:
-                    # 持久命令 → 弹窗终端，手动关闭
-                    start_cmd = (
-                        f'start "FlyPig" powershell -NoExit -Command '
-                        f'"cd \'{workdir}\'; {command}"'
-                    )
-                else:
-                    # 非持久命令 → 弹窗执行，输出写入文件，按任意键关闭
-                    start_cmd = (
-                        f'start "FlyPig" powershell -NoExit -Command '
-                        f'"cd \'{workdir}\'; '
-                        f'{command} *> \'{log_file}\'; '
-                        f'Get-Content \'{log_file}\'; '
-                        f'Write-Host \'\n--- 按 Enter 关闭 ---\'; '
-                        f'Read-Host"'
-                    )
-
+                safe_cmd = command.replace("'", "''").replace("\n", " ")
+                start_cmd = (
+                    f'start "FlyPig" powershell -NoExit -Command '
+                    f'"cd ''{workdir}''; {safe_cmd}"'
+                )
                 subprocess.Popen(
                     start_cmd,
                     shell=True,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL
                 )
-
-                if not persist:
-                    # 等待弹窗窗口关闭后读取输出文件
-                    timeout_end = time.time() + timeout_val
-                    while time.time() < timeout_end:
-                        if os.path.exists(log_file):
-                            time.sleep(0.5)
-                            try:
-                                with open(log_file, "r", encoding="utf-8", errors="replace") as f:
-                                    output = f.read().strip()
-                                if output:
-                                    return output
-                            except Exception:
-                                pass
-                        time.sleep(0.3)
-
-                    # 超时后尝试读取
-                    if os.path.exists(log_file):
-                        try:
-                            with open(log_file, "r", encoding="utf-8", errors="replace") as f:
-                                output = f.read().strip()
-                            if output:
-                                return output
-                        except Exception:
-                            pass
-                    return f"[Command executed in new window] {command}"
-
                 return f"[Started in new window] {command}"
 
             # ── Linux/Mac：开新终端窗口或后台运行 ──
@@ -308,9 +311,129 @@ class ToolExecutor:
             return msg
 
         except Exception as e:
-            return f"[error] {e}"
+            return f"[SYSTEM_ERROR] Tool internal exception ({type(e).__name__}): {e}"
+
+    def _run_inline(self, command: str, timeout_val: int, persist: bool) -> str:
+        """内联执行命令（Web/Headless 模式专用）
+
+        简化的执行逻辑：使用 subprocess.run 执行并返回输出。
+        persist=True 时使用更长超时（300s）。
+        """
+        effective_timeout = max(timeout_val, 300) if persist else timeout_val
+
+        # ── 沙箱：走 docker exec，返回干净文本 ──
+        if self.sandbox_manager:
+            output = self.sandbox_manager.run_command(command, effective_timeout)
+            return strip_ansi(output)
+
+        # ── 无沙箱：走本地 subprocess ──
+        effective_timeout = max(timeout_val, 300) if persist else timeout_val
+        max_wait = effective_timeout
+        check_interval = 3
+
+        import threading as _threading
+        result_holder = {"output": None, "exception": None}
+
+        def _run():
+            try:
+                result = subprocess.run(
+                    command,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=max_wait,
+                )
+                raw_stdout = strip_ansi(result.stdout or "")
+                raw_stderr = strip_ansi(result.stderr or "")
+                if result.returncode == 0:
+                    output = raw_stdout if raw_stdout else (raw_stderr if raw_stderr else "[OK] (no output)")
+                else:
+                    detail = raw_stdout[:500] if raw_stdout else ""
+                    if raw_stderr:
+                        detail = (detail + "\n" + raw_stderr[:500]).strip()
+                    output = f"[ERROR] Exit code {result.returncode}\n{detail[:2000]}"
+                result_holder["output"] = output
+            except subprocess.TimeoutExpired:
+                result_holder["exception"] = f"[INLINE TIMEOUT] {effective_timeout}s exceeded"
+            except Exception as e:
+                result_holder["exception"] = f"[SYSTEM_ERROR] {type(e).__name__}: {e}"
+
+        t = _threading.Thread(target=_run, daemon=True)
+        t.start()
+
+        import time as time_module
+        elapsed = 0
+        while t.is_alive() and elapsed < effective_timeout:
+            time_module.sleep(min(check_interval, effective_timeout - elapsed))
+            elapsed += check_interval
+
+        if result_holder["output"] is not None:
+            return result_holder["output"]
+        if result_holder["exception"]:
+            return result_holder["exception"]
+
+        return (
+            f"[TIMEOUT] Command still running after {effective_timeout}s: {command[:100]}\n"
+            f"  The command may be running in background. Check output manually."
+        )
 
     
+    @staticmethod
+    def _should_run_inline(command: str) -> bool:
+        """判断命令是否应该在当前进程内直接执行"""
+        stripped = command.lstrip()
+        if not stripped:
+            return False
+        first_word = stripped.split(None, 1)[0].lower()
+        # 白名单命令：这些命令的 stdout 输出有价值，弹窗反而看不到
+        inline_whitelist = {
+            "dir", "type", "where", "echo", "cd", "git", "python", "pip",
+            "node", "npm", "wsl", "powershell", "cmd", "findstr",
+        }
+        return first_word in inline_whitelist
+
+    def _run_inline_windows(self, command: str, timeout_val: int) -> Optional[str]:
+        """在当前进程内直接执行命令，捕获 stdout/stderr
+
+        输出已 strip ANSI escape sequences。
+
+        Returns:
+            str: 输出内容
+            None: 执行失败，应由调用方回退到弹窗
+        """
+        try:
+            result = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=timeout_val,
+            )
+
+            stdout = strip_ansi(result.stdout or "").strip()
+            stderr = strip_ansi(result.stderr or "").strip()
+
+            if result.returncode == 0:
+                if stdout:
+                    return stdout
+                if stderr:
+                    return stderr
+                return f"[OK] Command completed (no output): {command[:100]}"
+
+            detail = stdout[:200] if stdout else ""
+            if stderr:
+                detail = (detail + "\n" + stderr[:500]).strip()
+            return f"[ERROR] Exit code {result.returncode}: {command[:100]}\n{detail[:1000]}"
+
+        except subprocess.TimeoutExpired:
+            return None
+        except Exception:
+            return None
+
     def _convert_windows_command(self, command: str) -> str:
         """转换 Linux 命令到 Windows（保持原格式，仅转换命令本身）"""
         # 只转换第一段命令单词，保留后面的参数
@@ -384,7 +507,12 @@ class ToolExecutor:
                     except ValueError:
                         rel_files.append(str(f))
             
-            return "\n".join(rel_files) if rel_files else "No files found"
+            if not rel_files:
+                return "No files found"
+
+            result = f"[Search base: {search_path}]\n"
+            result += "\n".join(rel_files)
+            return result
             
         except Exception as e:
             return f"Error: {e}"
@@ -422,6 +550,24 @@ class ToolExecutor:
         except Exception as e:
             return f"Error: {e}"
     
+    @staticmethod
+    def clear_pycache(target_dir: str = None):
+        """清除目录下的所有 __pycache__ 缓存"""
+        if target_dir:
+            base = Path(target_dir)
+        else:
+            base = Path.cwd()
+
+        count = 0
+        for pyc in base.rglob("__pycache__"):
+            try:
+                import shutil
+                shutil.rmtree(str(pyc))
+                count += 1
+            except Exception:
+                pass
+        return f"Cleared {count} __pycache__ directories"
+
     def _validate_path(self, path: Path, mode: str = "read") -> tuple:
         """验证路径是否允许访问（沙箱集成）
 

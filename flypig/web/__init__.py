@@ -1,0 +1,1 @@
+"""FlyPig Web UI package"""

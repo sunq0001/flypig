@@ -147,7 +147,27 @@ Agent Core → LSP Client → Language Server (各语言独立进程)
 | 理解代码含义 | LSP | 需要语义信息（类型、引用关系） |
 | 快速定位 | LSP | `go-to-definition` 比 grep 更精准 |
 
-### 6. ToolExecutor (工具执行)
+### 6. HookSystem (生命周期钩子)
+
+**定位**: 在 Agent 核心循环的各个节点插入观察者，用于日志、成本追踪、审计、遥测等横切关注点。
+
+**架构位置**:
+```
+Agent Run Loop
+  │
+  ├─ on_llm_start ───────────  LLM 调用前
+  ├─ on_llm_end ─────────────  LLM 响应后
+  │
+  ├─ on_tool_start ──────────  每个工具执行前
+  ├─ on_tool_end ────────────  每个工具执行后
+  ├─ on_tool_chain_end ──────  整轮工具链执行完毕 → 汇总统计
+  │
+  └─ on_response ────────────  Agent 最终回复前
+```
+
+**默认实现 `CostPrintHook`**: 在控制台输出带中文说明的工具链过程 + 链级/会话级 Token/Cost 统计。
+
+### 7. ToolExecutor (工具执行)
 
 | 工具 | 命令 | 说明 |
 |------|------|------|

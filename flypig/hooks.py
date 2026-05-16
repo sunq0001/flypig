@@ -11,6 +11,35 @@
             send_to_telemetry(usage)
 """
 
+import os
+from pathlib import Path
+
+
+# ── 工具中文说明 ──
+_TOOL_DESCRIPTION = {
+    "bash": "\u8fd0\u884c\u547d\u4ee4",          # 运行命令
+    "read_file": "\u8bfb\u53d6\u6587\u4ef6",      # 读取文件
+    "write_file": "\u5199\u5165\u6587\u4ef6",      # 写入文件
+    "edit_file": "\u7f16\u8f91\u6587\u4ef6",      # 编辑文件
+    "find_files": "\u67e5\u627e\u6587\u4ef6",      # 查找文件
+    "grep": "\u641c\u7d22\u5185\u5bb9",            # 搜索内容
+}
+
+# ── 工具参数摘要提取（控制在 50 字以内） ──
+def _summarize_args(tool_name: str, arguments: dict) -> str:
+    """提取关键参数作为说明文字"""
+    if tool_name == "bash":
+        cmd = arguments.get("command", "")
+        # 截取核心命令
+        return cmd[:90] + ("..." if len(cmd) > 90 else "")
+    elif tool_name in ("read_file", "write_file", "edit_file"):
+        return arguments.get("path", "")
+    elif tool_name == "find_files":
+        return f"pattern={arguments.get('pattern', '*')}"
+    elif tool_name == "grep":
+        return f"'{arguments.get('pattern', '')[:40]}'"
+    return ""
+
 
 class EventHook:
     """Agent 生命周期钩子基类 — 所有方法都是空实现，子类按需覆盖"""
@@ -24,52 +53,108 @@ class EventHook:
     def on_tool_start(self, tool_name: str, arguments: dict):
         """工具执行前触发"""
 
-    def on_tool_end(self, tool_name: str, result: str):
+    def on_tool_end(self, tool_name: str, result: str, arguments: dict = None):
         """工具执行后触发"""
+
+    def on_tool_chain_end(self, tool_results: list, cost_info: dict, iteration: int):
+        """当前迭代的所有工具调用执行完毕后触发"""
 
     def on_response(self, content: str, usage_line: str):
         """Agent 返回最终回复时触发"""
 
+    def on_thinking(self, content: str):
+        """Agent 思考过程（LLM 返回内容但尚未开始工具调用时触发）"""
+
 
 class CostPrintHook(EventHook):
-    """默认钩子：每次 LLM 返回时打印 token 用量到控制台"""
+    """默认钩子：每次 LLM 返回时打印 token 用量 + 工具链可视化"""
+
+    def __init__(self, workspace_dir: str = None):
+        # 会话级累计
+        self.session_tokens = 0
+        self.session_cost = 0.0
+        self.session_tools = 0
+        self.workspace_dir = workspace_dir
+        self.bash_history: list = []  # bash 命令历史（非阻塞记录）
 
     def on_llm_end(self, usage: dict, cost_info: dict, iteration: int):
         total = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
         cost = cost_info.get("cost", 0)
+        self.session_tokens += total
+        self.session_cost += cost
         from .cost import _format_cost
         print(f"[Tokens: {total:,}] [Cost: {_format_cost(cost)}]")
 
-    def on_tool_start(self, tool_name: str, arguments: dict):
-        """工具调用前打印：显示关键参数"""
-        if tool_name == "bash":
-            cmd = arguments.get("command", "")
-            display = cmd[:120] + ("..." if len(cmd) > 120 else "")
-            print(f"[>] bash: {display}")
-        elif tool_name in ("read_file", "write_file", "edit_file"):
-            path = arguments.get("path", "")
-            print(f"[>] {tool_name}: {path}")
-        elif tool_name == "find_files":
-            pattern = arguments.get("pattern", "")
-            print(f"[>] find: {pattern}")
-        elif tool_name == "grep":
-            pattern = arguments.get("pattern", "")
-            print(f"[>] grep: {pattern}")
-        else:
-            print(f"[>] {tool_name}")
+    def on_thinking(self, content: str):
+        print(f"  [思考] {content}")
 
-    def on_tool_end(self, tool_name: str, result: str):
-        """工具执行后打印输出（仅截取非 bash 工具的简要结果）"""
-        if tool_name == "bash":
-            # bash 输出可能很长，只打印非空且不太长的响应
-            lines = result.strip().split("\n")
-            if len(lines) <= 5 and all(len(l) < 200 for l in lines):
-                for l in lines:
-                    print(f"  {l}")
-            elif lines and lines[0]:
-                print(f"  {lines[0]}")
-                if len(lines) > 1:
-                    print(f"  ... ({len(result)} chars)")
+    def on_tool_start(self, tool_name: str, arguments: dict):
+        """工具调用前打印：带中文说明"""
+        desc = _TOOL_DESCRIPTION.get(tool_name, tool_name)
+        summary = _summarize_args(tool_name, arguments)
+        if summary:
+            print(f"  [>] {desc}: {summary}")
+        else:
+            print(f"  [>] {desc}")
+
+    def on_tool_end(self, tool_name: str, result: str, arguments: dict = None):
+        """工具执行后打印输出，bash 命令额外提供打开交互终端选项"""
+        lines = result.strip().split("\n")
+        if len(lines) <= 3 and all(len(l) < 200 for l in lines):
+            for l in lines:
+                if l:
+                    print(f"    {l}")
+        elif lines and lines[0]:
+            first = lines[0][:120]
+            print(f"    {first}")
+            if len(lines) > 1:
+                print(f"    ... ({len(result)} chars)")
+
+        # ── bash 命令 → 非阻塞记录历史 + 提示 ──
+        if tool_name == "bash" and arguments:
+            cmd = arguments.get("command", "")
+            persist = arguments.get("persist", False)
+            if cmd and not persist:
+                self.bash_history.append(cmd)
+                idx = len(self.bash_history)
+                print(f"  [T] 输入 t 打开终端 (#{idx} 条)")
+
+    def open_terminal(self, index=-1):
+        """在控制台中打印历史命令（不再弹独立窗口）
+
+        Args:
+            index: 在 bash_history 中的索引，-1 表示最后一条
+        """
+        if not self.bash_history:
+            print("  [X] 没有可用的终端历史")
+            return
+
+        try:
+            command = self.bash_history[index]
+        except IndexError:
+            print(f"  [X] 无效的序号，历史命令共 {len(self.bash_history)} 条")
+            return
+
+        print(f"\n{'=' * 50}")
+        print(f"  [终端 #{index + 1}] 命令:")
+        print(f"  {command}")
+        print(f"  工作目录: {self.workspace_dir or os.getcwd()}")
+        print(f"  [*] 请复制命令到终端中执行")
+        print(f"{'=' * 50}")
+
+    def on_tool_chain_end(self, tool_results: list, cost_info: dict, iteration: int):
+        """当前迭代的工具链结束后打印累计"""
+        tool_count = len(tool_results)
+        self.session_tools += tool_count
+        total_tokens = cost_info.get("input_tokens", 0) + cost_info.get("output_tokens", 0)
+        cost = cost_info.get("cost", 0)
+        from .cost import _format_cost
+        print(f"  [Chain: {tool_count} tools, Tokens: {total_tokens:,}, Cost: {_format_cost(cost)}]")
+
+    def on_response(self, content: str, usage_line: str):
+        """Agent 返回最终回复时打印会话累计"""
+        from .cost import _format_cost
+        print(f"[Done] Tools: {self.session_tools}, Total Tokens: {self.session_tokens:,}, Total Cost: {_format_cost(self.session_cost)}")
 
 
 # 未来扩展的钩子可以加在这里，或者单独文件

@@ -110,12 +110,16 @@ class Config:
 
     @property
     def workspace(self) -> str:
-        """工作区目录：运行时覆盖 > config.yaml > CWD"""
+        """工作区目录（绝对路径）：运行时覆盖 > config.yaml > CWD"""
         if self._workspace_override:
             return self._workspace_override
-        cfg_ws = self.data.get("agent", {}).get("workspace", "")
-        if cfg_ws:
-            return cfg_ws
+        cfg_ws = self.data.get("agent", {}).get("workspace", ".")
+        if cfg_ws and cfg_ws != ".":
+            # 相对路径 → 基于 CWD 解析为绝对路径
+            p = Path(cfg_ws)
+            if not p.is_absolute():
+                p = Path(os.getcwd()) / cfg_ws
+            return str(p.resolve())
         return os.getcwd()
 
     def prompt_workspace(self, task_mode: bool = False):
@@ -131,7 +135,7 @@ class Config:
             return
 
         cwd = Path(os.getcwd())
-        default_name = self.data.get("agent", {}).get("workspace", "workspace")
+        default_name = self.data.get("agent", {}).get("workspace", cwd.name or "workspace")
 
         # ── 收集候选工作区目录（排除代码/系统目录） ──
         _EXCLUDE = {"flypig", "docs", ".git", ".vscode", "__pycache__",
@@ -215,6 +219,8 @@ class Config:
 
     def _save_workspace_config(self, name: str):
         """将工作区名称持久化到 config.yaml"""
+        if os.environ.get("FLYPIG_TEST"):
+            return  # 测试模式不写真实配置
         current = self.data.get("agent", {}).get("workspace", "")
         if name == current:
             return
