@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 from flask import Flask, Response, jsonify, request, send_from_directory
+from flask_socketio import SocketIO, emit
 
 # ── Agent 模块导入（延迟加载避免循环依赖） ──
 from ..hooks import EventHook
@@ -108,6 +109,10 @@ class WebEventHook(EventHook):
 
 static_dir = Path(__file__).parent / "static"
 app = Flask(__name__, static_folder=str(static_dir), static_url_path="")
+socketio = SocketIO(app, async_mode="threading", cors_allowed_origins="*")
+# 终端会话集 {sid: TerminalSession}
+_terminal_sessions: dict[str, "TerminalSession"] = {}
+_terminal_lock = threading.Lock()
 
 
 @app.route("/")
@@ -495,12 +500,77 @@ def _broadcast(data: dict):
 
 
 # ═══════════════════════════════════════════════════════════════
+# SocketIO 终端事件
+# ═══════════════════════════════════════════════════════════════
+
+
+@socketio.on("connect")
+def on_connect():
+    print(f"  [终端] WebSocket 已连接")
+
+
+@socketio.on("disconnect")
+def on_disconnect():
+    sid = request.sid
+    with _terminal_lock:
+        session = _terminal_sessions.pop(sid, None)
+    if session:
+        session.stop()
+        print(f"  [终端] 会话 {sid[:8]} 已断开")
+
+
+@socketio.on("terminal:start")
+def on_terminal_start(data):
+    """创建新终端会话"""
+    sid = request.sid
+    from .terminal import TerminalSession
+
+    def _on_output(sid, data):
+        socketio.emit("terminal:output", {"data": data}, to=sid)
+
+    session = TerminalSession(sid, workspace_dir=_workspace, on_output=_on_output)
+    session.start()
+
+    with _terminal_lock:
+        # 关闭旧会话
+        old = _terminal_sessions.pop(sid, None)
+        if old:
+            old.stop()
+        _terminal_sessions[sid] = session
+
+    emit("terminal:ready", {"ok": True})
+    print(f"  [终端] 会话 {sid[:8]} 已创建")
+
+
+@socketio.on("terminal:input")
+def on_terminal_input(data):
+    """用户键盘输入 → PTY stdin"""
+    sid = request.sid
+    with _terminal_lock:
+        session = _terminal_sessions.get(sid)
+    if session and session.is_alive():
+        session.write(data.get("data", ""))
+
+
+@socketio.on("terminal:resize")
+def on_terminal_resize(data):
+    """调整终端大小"""
+    sid = request.sid
+    with _terminal_lock:
+        session = _terminal_sessions.get(sid)
+    if session and session.is_alive():
+        cols = data.get("cols", 80)
+        rows = data.get("rows", 24)
+        session.resize(cols, rows)
+
+
+# ═══════════════════════════════════════════════════════════════
 # 启动入口
 # ═══════════════════════════════════════════════════════════════
 
 def start_server(config, host: str = "127.0.0.1", port: int = 8321,
                   open_browser: bool = True):
-    """启动 Flask Web 服务器"""
+    """启动 Web 服务器"""
     global _config, _workspace, _tree_cache
 
     _config = config
@@ -513,11 +583,11 @@ def start_server(config, host: str = "127.0.0.1", port: int = 8321,
     print(f"\n  [FlyPig Web UI] 启动服务器...")
     print(f"  [URL] {url}")
     print(f"  [工作区] {_workspace}")
+    print(f"  [终端] WebSocket 端口: {port}")
     print()
 
     if open_browser:
         webbrowser.open(url)
 
-    # 使用 Flask 内置服务器（开发用）
-    # 生产环境应使用 gunicorn/uvicorn + eventlet
-    app.run(host=host, port=port, debug=False, use_reloader=False)
+    # 启动 SocketIO 服务器（需 allow_unsafe_werkzeug 支持 threading 模式）
+    socketio.run(app, host=host, port=port, debug=False, allow_unsafe_werkzeug=True)

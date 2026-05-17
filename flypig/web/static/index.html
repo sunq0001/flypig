@@ -19,6 +19,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/shell/shell.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/json/json.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -69,6 +73,26 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
 #center{flex:1;min-width:200px;display:flex;flex-direction:column;overflow:hidden}
 #empty-state{flex:1;display:flex;align-items:center;justify-content:center;color:var(--fg3);font-size:14px;flex-direction:column;gap:8px}
 #empty-state .big-icon{font-size:48px;opacity:.3}
+
+/* 编辑器区域 (上半) */
+#editor-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:80px}
+
+/* 垂直拖拽分割条 */
+.v-divider{height:3px;cursor:row-resize;flex-shrink:0;position:relative;z-index:10;transition:background .08s}
+.v-divider:hover,.v-divider.active{background:var(--accent)}
+.v-divider::after{content:'';position:absolute;left:0;right:0;top:-4px;bottom:-4px}
+
+/* 终端区域 (下半) */
+#terminal-area{height:200px;min-height:60px;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+#terminal-area .term-header{display:flex;align-items:center;padding:2px 10px;height:28px;background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);flex-shrink:0;gap:8px;font-size:11px;color:var(--fg3)}
+#terminal-area .term-header .term-title{flex:1;font-weight:500}
+#terminal-area .term-header .term-btn{background:none;border:none;color:var(--fg3);cursor:pointer;padding:2px 6px;border-radius:3px;font-size:11px}
+#terminal-area .term-header .term-btn:hover{color:var(--fg);background:var(--bg3)}
+#terminal-xterm{flex:1;overflow:hidden;padding:2px}
+#terminal-xterm .xterm{height:100%;padding:4px}
+#terminal-xterm .xterm-viewport{scrollbar-width:thin}
+#terminal-xterm .xterm-viewport::-webkit-scrollbar{width:5px}
+#terminal-xterm .xterm-viewport::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 
 /* 文件标签页 */
 #file-tabs{display:flex;height:35px;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0}
@@ -263,21 +287,35 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
     <div class="divider" :class="{active: resizing === 'left'}"
          @mousedown.prevent="startResize($event, 'left')"></div>
 
-    <!-- 中间：代码编辑器 + 标签页 -->
+    <!-- 中间：代码编辑器 + 标签页 + 终端 -->
     <div id="center">
-      <div id="file-tabs" v-if="openTabs.length > 0">
-        <div v-for="(tab, i) in openTabs" :key="tab.path"
-             class="file-tab" :class="{active: i === activeTabIndex}"
-             @click="switchTab(i)" @mouseup.middle="closeTab(i)">
-          <span class="name">{{ tab.name }}</span>
-          <span class="close" @click.stop="closeTab(i)">×</span>
+      <div id="editor-area">
+        <div id="file-tabs" v-if="openTabs.length > 0">
+          <div v-for="(tab, i) in openTabs" :key="tab.path"
+               class="file-tab" :class="{active: i === activeTabIndex}"
+               @click="switchTab(i)" @mouseup.middle="closeTab(i)">
+            <span class="name">{{ tab.name }}</span>
+            <span class="close" @click.stop="closeTab(i)">×</span>
+          </div>
+        </div>
+        <div id="editor-container" ref="editorContainer" v-show="openTabs.length > 0"></div>
+        <div id="empty-state" v-show="openTabs.length === 0">
+          <div class="big-icon">📄</div>
+          <div>点击左侧文件查看内容</div>
+          <div style="font-size:12px;color:var(--fg3)">或发送消息让 AI 工作</div>
         </div>
       </div>
-      <div id="editor-container" ref="editorContainer" v-show="openTabs.length > 0"></div>
-      <div id="empty-state" v-show="openTabs.length === 0">
-        <div class="big-icon">📄</div>
-        <div>点击左侧文件查看内容</div>
-        <div style="font-size:12px;color:var(--fg3)">或发送消息让 AI 工作</div>
+
+      <div class="v-divider" :class="{active: vResizing}"
+           @mousedown.prevent="startVResize($event)"></div>
+
+      <div id="terminal-area" :style="{height: termHeight + 'px'}">
+        <div class="term-header">
+          <span class="term-title">⬢ 终端</span>
+          <button class="term-btn" @click="resetTerminal" title="重启终端">↺</button>
+          <button class="term-btn" @click="toggleTerminal" title="折叠终端">{{ termCollapsed ? '⬆' : '⬇' }}</button>
+        </div>
+        <div id="terminal-xterm" ref="terminalXterm" v-show="!termCollapsed"></div>
       </div>
     </div>
 
@@ -356,6 +394,17 @@ app = createApp({
     const editorContainer = ref(null);
     let _editor = null;             // CodeMirror 实例
 
+    // ── 终端状态 ──
+    const terminalXterm = ref(null);
+    const termHeight = ref(200);
+    const termCollapsed = ref(false);
+    const vResizing = ref(false);
+    let _termSocket = null;
+    let _xterm = null;
+    let _xtermFit = null;
+    let _vResizeStartY = 0;
+    let _vResizeStartH = 200;
+
     // ── 面板拖拽 ──
     const leftWidth = ref(260);
     const rightWidth = ref(360);
@@ -389,6 +438,26 @@ app = createApp({
       resizing.value = null;
       document.removeEventListener('mousemove', onResize);
       document.removeEventListener('mouseup', stopResize);
+    }
+
+    // ── 垂直拖拽（编辑器/终端分割） ──
+    function startVResize(e) {
+      vResizing.value = true;
+      _vResizeStartY = e.clientY;
+      _vResizeStartH = termHeight.value;
+      document.addEventListener('mousemove', onVResize);
+      document.addEventListener('mouseup', stopVResize);
+    }
+    function onVResize(e) {
+      if (!vResizing.value) return;
+      const dy = _vResizeStartY - e.clientY;
+      const h = Math.max(60, Math.min(600, _vResizeStartH + dy));
+      termHeight.value = h;
+    }
+    function stopVResize() {
+      vResizing.value = null;
+      document.removeEventListener('mousemove', onVResize);
+      document.removeEventListener('mouseup', stopVResize);
     }
 
     // ── CodeMirror mode 映射 ──
@@ -683,6 +752,8 @@ app = createApp({
         await loadFileTree();
         // 连接 SSE
         connectSSE();
+        // 启动终端
+        setTimeout(() => initTerminal(), 500);
         statusText.value = '就绪';
         messages.value.push({type:'info', content:'🚀 FlyPig Agent 已就绪'});
         return true;
@@ -729,6 +800,75 @@ app = createApp({
       const tab = openTabs.value[index];
       const ext = tab.name.split('.').pop();
       _initEditor(tab.content, getMode(ext));
+    }
+
+    // ── 终端 ──
+    function initTerminal() {
+      const container = terminalXterm.value;
+      if (!container || _xterm) return;
+      _xterm = new Terminal({
+        cursorBlink: true,
+        cursorStyle: 'bar',
+        fontSize: 13,
+        fontFamily: "'JetBrains Mono','Cascadia Code','Fira Code',Consolas,'Courier New',monospace",
+        theme: {
+          background: '#1e1e2e', foreground: '#cdd6f4',
+          cursor: '#89b4fa', selectionBackground: '#45475a',
+          black: '#45475a', red: '#f38ba8', green: '#a6e3a1',
+          yellow: '#f9e2af', blue: '#89b4fa', magenta: '#f5c2e7',
+          cyan: '#94e2d5', white: '#bac2de',
+          brightBlack: '#585b70', brightRed: '#f38ba8',
+          brightGreen: '#a6e3a1', brightYellow: '#f9e2af',
+          brightBlue: '#89b4fa', brightMagenta: '#f5c2e7',
+          brightCyan: '#94e2d5', brightWhite: '#a6adc8',
+        },
+        allowProposedApi: true,
+      });
+      _xtermFit = new FitAddon.FitAddon();
+      _xterm.loadAddon(_xtermFit);
+      _xterm.open(container);
+      _xtermFit.fit();
+
+      // 连接 SocketIO
+      _termSocket = io({ transports: ['websocket'], upgrade: false });
+      _termSocket.on('connect', () => {
+        _xterm.write('\r\n\x1b[32m[已连接到终端]\x1b[0m\r\n');
+        _termSocket.emit('terminal:start', {});
+      });
+      _termSocket.on('terminal:ready', () => {
+        _xterm.focus();
+      });
+      _termSocket.on('terminal:output', (data) => {
+        if (_xterm) _xterm.write(data.data);
+      });
+      _termSocket.on('disconnect', () => {
+        if (_xterm) _xterm.write('\r\n\x1b[31m[连接断开]\x1b[0m\r\n');
+      });
+
+      // 键盘输入 → SocketIO
+      _xterm.onData((data) => {
+        if (_termSocket && _termSocket.connected) {
+          _termSocket.emit('terminal:input', { data });
+        }
+      });
+
+      // 窗口大小变化时自适应
+      window.addEventListener('resize', () => {
+        if (_xtermFit) setTimeout(() => _xtermFit.fit(), 50);
+      });
+    }
+
+    function resetTerminal() {
+      if (_termSocket) { _termSocket.disconnect(); _termSocket = null; }
+      if (_xterm) { _xterm.dispose(); _xterm = null; }
+      initTerminal();
+    }
+
+    function toggleTerminal() {
+      termCollapsed.value = !termCollapsed.value;
+      if (!termCollapsed.value && _xtermFit) {
+        setTimeout(() => _xtermFit.fit(), 100);
+      }
     }
 
     function closeTab(index) {
@@ -834,9 +974,11 @@ app = createApp({
       fileTree, openTabs, activeTabIndex,
       messages, userInput, agentRunning, statusText, statusClass, costStr,
       messagesRef, layoutRef, editorContainer,
-      leftWidth, rightWidth, resizing, startResize,
+      leftWidth, rightWidth, resizing, vResizing, startResize, startVResize,
+      terminalXterm, termHeight, termCollapsed,
       browseWorkspace, setupNext, setupFinish, openFile, switchTab, closeTab,
       sendMessage, handleKeydown, resetChat, showCost, renderMarkdown,
+      initTerminal, resetTerminal, toggleTerminal,
     };
   }
 });
