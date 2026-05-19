@@ -70,7 +70,7 @@ $ python -m flypig
 - [x] 代码查看器 — highlight.js 语法高亮
 - [x] SSE 事件推流 — Agent 实时事件推送至浏览器
 - [x] 初始化向导 — 工作区/模型/API Key 浏览器内配置
-- [ ] xterm.js 终端面板 — 多标签、WebSocket PTY 桥接
+- [x] xterm.js 终端面板 — 原生 WebSocket PTY 桥接（已重构：移除 SocketIO，asyncio WS + 双端口）
 - [ ] 文件标签 + 可编辑模式
 - [ ] 折叠式对话 — 摘要行默认折叠、点击展开详情
 

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>FlyPig Agent</title>
-<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/theme/material-darker.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
@@ -22,7 +22,6 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
-<script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -394,14 +393,15 @@ app = createApp({
     const editorContainer = ref(null);
     let _editor = null;             // CodeMirror 实例
 
-    // ── 终端状态 ──
+    // ── 终端状态（原生 WebSocket） ──
     const terminalXterm = ref(null);
     const termHeight = ref(200);
     const termCollapsed = ref(false);
     const vResizing = ref(false);
-    let _termSocket = null;
+    let _ptyWs = null;          // PTY WebSocket 连接
     let _xterm = null;
     let _xtermFit = null;
+    let _wsPort = 8322;         // PTY WebSocket 端口（从 /api/config 更新）
     let _vResizeStartY = 0;
     let _vResizeStartH = 200;
 
@@ -503,6 +503,7 @@ app = createApp({
         setupWorkspace.value = data.workspace || '';
         models.value = data.models || [];
         setupModel.value = data.default_model || '';
+        if (data.ws_port) _wsPort = data.ws_port;
         if (data.workspace) {
           showSetup.value = false;
           await initAgent(data.workspace, data.default_model, '');
@@ -802,10 +803,11 @@ app = createApp({
       _initEditor(tab.content, getMode(ext));
     }
 
-    // ── 终端 ──
+    // ── 终端（原生 WebSocket ↔ PTY） ──
     function initTerminal() {
       const container = terminalXterm.value;
       if (!container || _xterm) return;
+
       _xterm = new Terminal({
         cursorBlink: true,
         cursorStyle: 'bar',
@@ -829,26 +831,20 @@ app = createApp({
       _xterm.open(container);
       _xtermFit.fit();
 
-      // 连接 SocketIO
-      _termSocket = io({ transports: ['websocket'], upgrade: false });
-      _termSocket.on('connect', () => {
-        _xterm.write('\r\n\x1b[32m[已连接到终端]\x1b[0m\r\n');
-        _termSocket.emit('terminal:start', {});
-      });
-      _termSocket.on('terminal:ready', () => {
-        _xterm.focus();
-      });
-      _termSocket.on('terminal:output', (data) => {
-        if (_xterm) _xterm.write(data.data);
-      });
-      _termSocket.on('disconnect', () => {
-        if (_xterm) _xterm.write('\r\n\x1b[31m[连接断开]\x1b[0m\r\n');
+      // 连接原生 WebSocket → PTY
+      _connectPtyWs();
+
+      // 键盘输入 → WebSocket 发送原始字节
+      _xterm.onData((data) => {
+        if (_ptyWs && _ptyWs.readyState === WebSocket.OPEN) {
+          _ptyWs.send(data);
+        }
       });
 
-      // 键盘输入 → SocketIO
-      _xterm.onData((data) => {
-        if (_termSocket && _termSocket.connected) {
-          _termSocket.emit('terminal:input', { data });
+      // resize → 文本帧 JSON
+      _xterm.onResize(({ cols, rows }) => {
+        if (_ptyWs && _ptyWs.readyState === WebSocket.OPEN) {
+          _ptyWs.send(JSON.stringify({ type: 'resize', cols, rows }));
         }
       });
 
@@ -858,10 +854,54 @@ app = createApp({
       });
     }
 
+    function _connectPtyWs() {
+      const termId = 'term_' + Date.now();
+      const hostname = location.hostname;
+      const url = `ws://${hostname}:${_wsPort}/pty/${termId}`;
+      console.log('[PTY WS] connecting to', url);
+
+      _ptyWs = new WebSocket(url);
+      _ptyWs.binaryType = 'arraybuffer';
+
+      _ptyWs.onopen = () => {
+        console.log('[PTY WS] connected');
+        if (_xterm) {
+          _xterm.write('\r\n\x1b[32m[终端已连接]\x1b[0m\r\n');
+          _xterm.focus();
+        }
+      };
+
+      _ptyWs.onmessage = (e) => {
+        if (_xterm) {
+          if (e.data instanceof ArrayBuffer) {
+            _xterm.write(new Uint8Array(e.data));
+          } else if (typeof e.data === 'string') {
+            _xterm.write(e.data);
+          }
+        }
+      };
+
+      _ptyWs.onclose = () => {
+        console.log('[PTY WS] disconnected');
+        if (_xterm) {
+          _xterm.write('\r\n\x1b[31m[连接断开，2秒后重连]\x1b[0m\r\n');
+        }
+        _ptyWs = null;
+        // 自动重连
+        setTimeout(() => {
+          if (_xterm && !_ptyWs) _connectPtyWs();
+        }, 2000);
+      };
+
+      _ptyWs.onerror = (err) => {
+        console.error('[PTY WS] error:', err);
+      };
+    }
+
     function resetTerminal() {
-      if (_termSocket) { _termSocket.disconnect(); _termSocket = null; }
+      if (_ptyWs) { _ptyWs.close(); _ptyWs = null; }
       if (_xterm) { _xterm.dispose(); _xterm = null; }
-      initTerminal();
+      setTimeout(() => initTerminal(), 100);
     }
 
     function toggleTerminal() {

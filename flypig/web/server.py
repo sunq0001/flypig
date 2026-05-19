@@ -11,7 +11,6 @@ from pathlib import Path
 from typing import Optional
 
 from flask import Flask, Response, jsonify, request, send_from_directory
-from flask_socketio import SocketIO, emit
 
 # ── Agent 模块导入（延迟加载避免循环依赖） ──
 from ..hooks import EventHook
@@ -28,6 +27,7 @@ _event_queues: dict[str, queue.Queue] = {}
 _queue_lock = threading.Lock()
 _agent_lock = threading.Lock()  # 防止并发 agent 调用
 _workspace = ""
+_ws_port = 8322  # PTY WebSocket 端口，由 start_server 设置
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -109,10 +109,9 @@ class WebEventHook(EventHook):
 
 static_dir = Path(__file__).parent / "static"
 app = Flask(__name__, static_folder=str(static_dir), static_url_path="")
-socketio = SocketIO(app, async_mode="threading", cors_allowed_origins="*")
-# 终端会话集 {sid: TerminalSession}
-_terminal_sessions: dict[str, "TerminalSession"] = {}
-_terminal_lock = threading.Lock()
+# PTY 终端管理器（线程安全，Flask + asyncio WS 共享）
+from .terminal import TerminalManager
+_terminal_manager = TerminalManager()
 
 
 @app.route("/")
@@ -215,6 +214,7 @@ def api_config():
         "workspace": _workspace,
         "default_model": _config.default_model_name,
         "models": models,
+        "ws_port": _ws_port,
     })
 
 
@@ -500,68 +500,117 @@ def _broadcast(data: dict):
 
 
 # ═══════════════════════════════════════════════════════════════
-# SocketIO 终端事件
+# PTY WebSocket 终端（asyncio 服务器，独立端口 8322）
 # ═══════════════════════════════════════════════════════════════
 
 
-@socketio.on("connect")
-def on_connect():
-    print(f"  [终端] WebSocket 已连接")
+def _run_pty_server(host: str = "127.0.0.1", port: int = 8322):
+    """在新线程中启动 asyncio WebSocket PTY 服务器"""
+    import asyncio
+    import websockets
+    from concurrent.futures import ThreadPoolExecutor
+
+    async def handle_pty(websocket):
+        """单个 PTY WebSocket 连接处理"""
+        # 获取 term_id（不同 websockets 版本 path 位置不同）
+        try:
+            path = websocket.path
+        except AttributeError:
+            path = getattr(getattr(websocket, 'request', None), 'path', '/pty/')
+        term_id = path.split("/pty/")[-1] if "/pty/" in path else f"term_{id(websocket)}"
+        print(f"  [PTY] 新连接 {term_id}")
+
+        term = _terminal_manager.get(term_id)
+        if not term:
+            print(f"  [PTY] 创建终端 {term_id}, cwd={_workspace}")
+            term = _terminal_manager.create(term_id, cwd=_workspace)
+            print(f"  [PTY] 创建结果 alive={term.is_alive()}")
+
+        if not term.is_alive():
+            err_msg = f"[ERROR] 终端创建失败 (cwd={_workspace})\r\n"
+            print(f"  [PTY] {err_msg.strip()}")
+            await websocket.send(err_msg.encode())
+            return
+
+        loop = asyncio.get_event_loop()
+
+        async def pty_reader():
+            """后台：PTY 输出 → WebSocket"""
+            while term.is_alive():
+                try:
+                    data = await loop.run_in_executor(None, term.read, 4096)
+                except RuntimeError:
+                    break  # 解释器关闭中
+                if data is None:
+                    break
+                if data:  # 跳过空数据（暂无可读内容）
+                    try:
+                        await websocket.send(data)
+                    except Exception:
+                        break
+                else:
+                    # 无数据时等一会再试，避免 busy loop
+                    await asyncio.sleep(0.01)
+
+        async def ws_writer():
+            """前台：WebSocket 消息 → PTY stdin"""
+            try:
+                async for message in websocket:
+                    if isinstance(message, bytes):
+                        term.write(message)
+                    elif isinstance(message, str):
+                        # 先尝试解析为 JSON 控制消息（resize）
+                        try:
+                            cmd = json.loads(message)
+                            if cmd.get("type") == "resize":
+                                term.resize(cmd["cols"], cmd["rows"])
+                            continue
+                        except json.JSONDecodeError:
+                            pass
+                        # 不是 JSON → xterm.js 按键输入，写入 PTY
+                        term.write(message.encode("utf-8"))
+                    else:
+                        pass
+            except Exception:
+                pass
+
+        try:
+            await asyncio.gather(pty_reader(), ws_writer())
+        finally:
+            _terminal_manager.destroy(term_id)
+
+    # 手动管理事件循环 + executor（避免 asyncio.run() 在关闭时清理 executor）
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="pty")
+    loop.set_default_executor(executor)
+
+    async def ws_server():
+        async with websockets.serve(handle_pty, host, port, reuse_address=True):
+            print(f"  [PTY WebSocket] 服务器已启动 ws://{host}:{port}")
+            await asyncio.Future()  # 永远运行
+
+    try:
+        loop.run_until_complete(ws_server())
+    except KeyboardInterrupt:
+        pass
+    finally:
+        executor.shutdown(wait=False)
+        try:
+            loop.run_until_complete(loop.shutdown_asyncgens())
+        except Exception:
+            pass
+        loop.close()
 
 
-@socketio.on("disconnect")
-def on_disconnect():
-    sid = request.sid
-    with _terminal_lock:
-        session = _terminal_sessions.pop(sid, None)
-    if session:
-        session.stop()
-        print(f"  [终端] 会话 {sid[:8]} 已断开")
-
-
-@socketio.on("terminal:start")
-def on_terminal_start(data):
-    """创建新终端会话"""
-    sid = request.sid
-    from .terminal import TerminalSession
-
-    def _on_output(sid, data):
-        socketio.emit("terminal:output", {"data": data}, to=sid)
-
-    session = TerminalSession(sid, workspace_dir=_workspace, on_output=_on_output)
-    session.start()
-
-    with _terminal_lock:
-        # 关闭旧会话
-        old = _terminal_sessions.pop(sid, None)
-        if old:
-            old.stop()
-        _terminal_sessions[sid] = session
-
-    emit("terminal:ready", {"ok": True})
-    print(f"  [终端] 会话 {sid[:8]} 已创建")
-
-
-@socketio.on("terminal:input")
-def on_terminal_input(data):
-    """用户键盘输入 → PTY stdin"""
-    sid = request.sid
-    with _terminal_lock:
-        session = _terminal_sessions.get(sid)
-    if session and session.is_alive():
-        session.write(data.get("data", ""))
-
-
-@socketio.on("terminal:resize")
-def on_terminal_resize(data):
-    """调整终端大小"""
-    sid = request.sid
-    with _terminal_lock:
-        session = _terminal_sessions.get(sid)
-    if session and session.is_alive():
-        cols = data.get("cols", 80)
-        rows = data.get("rows", 24)
-        session.resize(cols, rows)
+def start_pty_server(host: str = "127.0.0.1", port: int = 8322):
+    """以守护线程启动 PTY WebSocket 服务器"""
+    t = threading.Thread(
+        target=_run_pty_server, args=(host, port),
+        daemon=True, name="pty-ws-server",
+    )
+    t.start()
+    return t
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -569,25 +618,29 @@ def on_terminal_resize(data):
 # ═══════════════════════════════════════════════════════════════
 
 def start_server(config, host: str = "127.0.0.1", port: int = 8321,
-                  open_browser: bool = True):
-    """启动 Web 服务器"""
-    global _config, _workspace, _tree_cache
+                  ws_port: int = 8322, open_browser: bool = True):
+    """启动 Web 服务器 + PTY WebSocket 服务器"""
+    global _config, _workspace, _tree_cache, _ws_port
 
     _config = config
     _workspace = config.workspace
+    _ws_port = ws_port
 
     # 初始化扫描工作区
     _scan_workspace_tree()
 
+    # 启动 PTY WebSocket 服务器（守护线程）
+    start_pty_server(host, ws_port)
+
     url = f"http://{host}:{port}"
     print(f"\n  [FlyPig Web UI] 启动服务器...")
-    print(f"  [URL] {url}")
+    print(f"  [HTTP] {url}")
     print(f"  [工作区] {_workspace}")
-    print(f"  [终端] WebSocket 端口: {port}")
+    print(f"  [PTY WebSocket] ws://{host}:{ws_port}")
     print()
 
     if open_browser:
         webbrowser.open(url)
 
-    # 启动 SocketIO 服务器（需 allow_unsafe_werkzeug 支持 threading 模式）
-    socketio.run(app, host=host, port=port, debug=False, allow_unsafe_werkzeug=True)
+    # 启动 Flask（threading 模式，无 gevent）
+    app.run(host=host, port=port, threaded=True, debug=False)
