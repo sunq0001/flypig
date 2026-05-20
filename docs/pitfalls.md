@@ -147,3 +147,88 @@ v3: config.yaml 只写名字 + model_registry → 改 registry 一处
 ```
 
 **最终方案**: `model_registry.py` 作为单一模型来源，`config.yaml` 只记录用户偏好（default_model, api_keys）。
+
+---
+
+## 11. Quart WebSocket：`async for` 不可用
+
+**问题**: 使用 `async for message in websocket:` 报错 `LocalProxy does not have __aiter__ method`。
+
+**原因**: Quart 的 `websocket` 是 `LocalProxy`（context-local 代理），不支持 async 迭代协议。
+
+**修复**: 改用 `while True: message = await websocket.receive()`。
+
+```python
+# 错误 ❌
+async for message in websocket:
+    ...
+
+# 正确 ✅
+while True:
+    message = await websocket.receive()
+    if message is None:
+        break
+    ...
+```
+
+---
+
+## 12. Quart WebSocket：广播协程被丢弃
+
+**问题**: Agent 事件（thinking、tool_call、response）客户端收不到，但服务端日志显示 Hook 调用了广播。
+
+**原因**: `WsEventHook` 用 `call_soon_threadsafe` 调度广播函数，但广播是 `async def`。`call_soon_threadsafe` 只会调用函数拿到协程对象然后丢弃，**协程永远不会被执行**。
+
+**修复**: 改用 `asyncio.run_coroutine_threadsafe(coro, loop)` 直接调度协程。
+
+```python
+# 错误 ❌
+self._loop.call_soon_threadsafe(self._broadcast_func, data)
+# → _broadcast_func(data) 创建协程对象，未 await，静默丢失
+
+# 正确 ✅
+asyncio.run_coroutine_threadsafe(self._broadcast_func(data), self._loop)
+```
+
+---
+
+## 13. Quart WebSocket：`websocket` proxy 跨协程丢失上下文
+
+**问题**: 从 `asyncio.create_task` 或 `run_coroutine_threadsafe` 调度的协程中调用 `websocket.send()`，数据发不到正确的客户端。
+
+**原因**: Quart 的 `websocket` 是 context-local proxy，依赖调用链中的 WS 上下文。跨协程调用时上下文丢失，send 的目标不确定。
+
+**修复**: 在 handler 内用 `@copy_current_websocket_context` 包裹发送函数。
+
+```python
+@app.websocket("/ws/chat")
+async def ws_chat():
+    @copy_current_websocket_context
+    async def send_msg(data: str):
+        await websocket.send(data)
+    _ws_senders[client_id] = send_msg
+```
+
+---
+
+## 14. PTY WebSocket：阻塞读堵住键盘输入
+
+**问题**: PTY 终端的键盘输入无响应，但 PTY 进程本身是活着的。
+
+**原因**: 用单协程轮询方案交替检查 WS 消息和 PTY 输出时，`term.read()` 是阻塞调用，读 PTY 期间 WS 消息被堵住。
+
+**修复**: 后台线程读 PTY + async handler 收 WS 输入。
+
+```python
+def pty_reader():
+    """独立线程读 PTY"""
+    while term.is_alive() and not stop_event.is_set():
+        data = term.read(4096)
+        if data:
+            asyncio.run_coroutine_threadsafe(pty_send(data), loop)
+
+# async handler 专心处理 WS 输入
+while True:
+    msg = await websocket.receive()
+    term.write(msg)
+```
