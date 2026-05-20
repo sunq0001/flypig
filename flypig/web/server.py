@@ -411,7 +411,8 @@ async def ws_chat():
                     continue
 
                 # 在线程池中运行 Agent（阻塞的同步调用）
-                asyncio.get_event_loop().run_in_executor(None, _run_agent, text, client_id)
+                # 使用 _agent_lock 防止并发 Agent 调用
+                asyncio.get_event_loop().run_in_executor(None, _run_agent_locked, text)
 
             elif msg_type == "card_action":
                 await _handle_card_action(data)
@@ -491,7 +492,16 @@ def _write_to_terminal(command: str):
             term.write((command + "\r\n").encode("utf-8"))
 
 
-def _run_agent(message: str, client_id: str):
+_agent_lock = threading.Lock()
+
+
+def _run_agent_locked(message: str):
+    """带锁的 Agent 执行（防止并发调用）"""
+    with _agent_lock:
+        _run_agent(message)
+
+
+def _run_agent(message: str):
     """在后台线程中运行 Agent（同步阻塞调用）"""
     import asyncio
     loop = asyncio.new_event_loop()

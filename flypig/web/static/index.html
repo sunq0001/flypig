@@ -1119,13 +1119,12 @@ app = createApp({
 
     async function switchToModel(modelName, apiKey) {
       if (_chatWs) { _chatWs.close(); _chatWs = null; }
-      if (_agentLock) return; // 防止重复初始化
       messages.value.push({type:'info', content:`🔄 切换到 ${modelName}`});
       const res = await fetch('/api/init', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
-          workspace: _workspace || setupWorkspace.value,
+          workspace: setupWorkspace.value,
           model: modelName,
           api_key: apiKey,
         }),
