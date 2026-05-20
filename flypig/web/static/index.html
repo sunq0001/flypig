@@ -145,6 +145,30 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
 #send-btn:hover{opacity:.85}
 #send-btn:disabled{opacity:.3;cursor:not-allowed}
 
+/* 模型切换条 */
+#model-bar{display:flex;align-items:center;gap:6px;padding:4px 10px 0;font-size:12px;color:var(--fg3)}
+#model-bar select{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--fg);outline:none;cursor:pointer}
+#model-bar select:focus{border-color:var(--accent)}
+#model-bar select option{background:var(--bg2)}
+#model-bar .model-status{font-size:10px;padding:2px 6px;border-radius:4px}
+#model-bar .model-status.has-key{color:var(--green)}
+#model-bar .model-status.no-key{color:var(--yellow);cursor:pointer}
+#model-bar .model-status.no-key:hover{background:var(--bg3)}
+
+/* API Key 弹窗 */
+#api-key-modal{position:fixed;inset:0;background:rgba(30,30,46,.85);z-index:200;display:flex;align-items:center;justify-content:center}
+#api-key-box{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 28px;min-width:360px;max-width:420px}
+#api-key-box h3{font-size:15px;font-weight:600;margin-bottom:4px}
+#api-key-box p.sub{color:var(--fg3);font-size:12px;margin-bottom:16px}
+#api-key-box input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--fg);outline:none;margin-bottom:12px}
+#api-key-box input:focus{border-color:var(--accent)}
+#api-key-box .modal-actions{display:flex;gap:8px;justify-content:flex-end}
+#api-key-box button{padding:6px 16px;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer}
+#api-key-box .btn-primary{background:var(--accent);color:var(--bg)}
+#api-key-box .btn-primary:hover{opacity:.85}
+#api-key-box .btn-secondary{background:var(--bg3);color:var(--fg2)}
+#api-key-box .btn-secondary:hover{background:var(--border);color:var(--fg)}
+
 /* 状态栏 */
 #status-bar{height:var(--status-h);background:var(--bg3);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 12px;font-size:12px;color:var(--fg3);gap:16px}
 #status-bar .status-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
@@ -337,6 +361,18 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
         </div>
       </div>
       <div id="input-area">
+        <div id="model-bar">
+          <span>🤖</span>
+          <select v-model="currentModel" @change="onModelChange">
+            <option v-for="m in models" :key="m.name" :value="m.name">
+              {{ m.name }} ({{ m.provider }})
+            </option>
+          </select>
+          <span class="model-status" :class="currentModelHasKey ? 'has-key' : 'no-key'"
+                @click="currentModelHasKey ? null : showApiKeyModal=true">
+            {{ currentModelHasKey ? '✓ 已配置' : '⚙ 设置 Key' }}
+          </span>
+        </div>
         <div id="input-row">
           <textarea
             id="chat-input"
@@ -349,6 +385,19 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
           <button id="send-btn" @click="sendMessage" :disabled="agentRunning || !userInput.trim()">
             ▶
           </button>
+        </div>
+      </div>
+
+      <!-- API Key 弹窗 -->
+      <div id="api-key-modal" v-if="showApiKeyModal">
+        <div id="api-key-box">
+          <h3>🔑 配置 API Key</h3>
+          <p class="sub">提供商: {{ pendingModelProvider }}</p>
+          <input v-model="pendingApiKey" type="password" placeholder="输入 API Key" @keyup.enter="saveApiKey">
+          <div class="modal-actions">
+            <button class="btn-secondary" @click="showApiKeyModal=false">取消</button>
+            <button class="btn-primary" @click="saveApiKey" :disabled="!pendingApiKey.trim()">保存并切换</button>
+          </div>
         </div>
       </div>
     </div>
@@ -388,10 +437,23 @@ app = createApp({
     const statusText = ref('未连接');
     const statusClass = ref('offline');
     const costStr = ref('');
+
+    // ── 模型切换 ──
+    const currentModel = ref('');
+    const showApiKeyModal = ref(false);
+    const pendingApiKey = ref('');
+    const pendingModelProvider = ref('');
+
+    const currentModelHasKey = computed(() => {
+      if (!currentModel.value || !models.value.length) return false;
+      const m = models.value.find(x => x.name === currentModel.value);
+      return m ? m.has_key : false;
+    });
     const messagesRef = ref(null);
     const layoutRef = ref(null);
     const editorContainer = ref(null);
     let _editor = null;             // CodeMirror 实例
+    let _agentLock = false;         // 防止重复初始化
 
     // ── 终端状态（原生 WebSocket） ──
     const terminalXterm = ref(null);
@@ -759,6 +821,7 @@ app = createApp({
     }
 
     async function initAgent(workspace, model, apiKey) {
+      _agentLock = true;
       try {
         const res = await fetch('/api/init', {
           method:'POST',
@@ -767,6 +830,8 @@ app = createApp({
         });
         const data = await res.json();
         if (data.error) return false;
+        // 更新模型选择器
+        if (model) currentModel.value = model;
         // 加载文件树
         await loadFileTree();
         // 连接 WebSocket Chat
@@ -778,6 +843,8 @@ app = createApp({
         return true;
       } catch(e) {
         return false;
+      } finally {
+        _agentLock = false;
       }
     }
 
@@ -1024,6 +1091,57 @@ app = createApp({
       }
     });
 
+    // ── 模型切换 ──
+    async function onModelChange() {
+      const model = models.value.find(m => m.name === currentModel.value);
+      if (!model) return;
+      if (model.has_key) {
+        await switchToModel(model.name, '');
+      } else {
+        pendingModelProvider.value = model.provider;
+        pendingApiKey.value = '';
+        showApiKeyModal.value = true;
+      }
+    }
+
+    async function saveApiKey() {
+      const key = pendingApiKey.value.trim();
+      if (!key) return;
+      // 保存 Key
+      await fetch('/api/config/apikey', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({provider: pendingModelProvider.value, api_key: key}),
+      });
+      showApiKeyModal.value = false;
+      await switchToModel(currentModel.value, key);
+    }
+
+    async function switchToModel(modelName, apiKey) {
+      if (_chatWs) { _chatWs.close(); _chatWs = null; }
+      if (_agentLock) return; // 防止重复初始化
+      messages.value.push({type:'info', content:`🔄 切换到 ${modelName}`});
+      const res = await fetch('/api/init', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          workspace: _workspace || setupWorkspace.value,
+          model: modelName,
+          api_key: apiKey,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        await loadFileTree();
+        connectChatWS();
+        setTimeout(() => initTerminal(), 500);
+        statusText.value = '就绪';
+        messages.value.push({type:'info', content:`✅ 已切换至 ${modelName}`});
+      } else {
+        messages.value.push({type:'error', content:'❌ 切换失败: ' + (data.error || '未知错误')});
+      }
+    }
+
     return {
       showSetup, setupStep, setupWorkspace, setupModel, setupApiKey,
       setupError, setupLoading, models, selectedProvider,
@@ -1035,6 +1153,8 @@ app = createApp({
       browseWorkspace, setupNext, setupFinish, openFile, switchTab, closeTab,
       sendMessage, handleKeydown, resetChat, showCost, renderMarkdown,
       initTerminal, resetTerminal, toggleTerminal,
+      currentModel, currentModelHasKey, showApiKeyModal, pendingApiKey, pendingModelProvider,
+      onModelChange, saveApiKey,
     };
   }
 });
