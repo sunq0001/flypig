@@ -401,7 +401,7 @@ app = createApp({
     let _ptyWs = null;          // PTY WebSocket 连接
     let _xterm = null;
     let _xtermFit = null;
-    let _wsPort = 8322;         // PTY WebSocket 端口（从 /api/config 更新）
+    // PTY WebSocket 走同端口（由 waitress + simple-websocket 处理）
     let _vResizeStartY = 0;
     let _vResizeStartH = 200;
 
@@ -503,7 +503,6 @@ app = createApp({
         setupWorkspace.value = data.workspace || '';
         models.value = data.models || [];
         setupModel.value = data.default_model || '';
-        if (data.ws_port) _wsPort = data.ws_port;
         if (data.workspace) {
           showSetup.value = false;
           await initAgent(data.workspace, data.default_model, '');
@@ -513,26 +512,45 @@ app = createApp({
       }
     }
 
-    // ── SSE 连接 ──
-    let eventSource = null;
+    // ── WebSocket 连接 (/ws/chat) ──
+    let _chatWs = null;
 
-    function connectSSE() {
-      if (eventSource) eventSource.close();
-      eventSource = new EventSource('/api/events');
-      statusClass.value = 'online';
-      statusText.value = '已连接';
+    function connectChatWS() {
+      if (_chatWs) { _chatWs.close(); _chatWs = null; }
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const url = `${protocol}//${location.host}/ws/chat`;
+      console.log('[Chat WS] connecting to', url);
 
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          handleEvent(data);
-        } catch (e) {}
+      _chatWs = new WebSocket(url);
+      _chatWs.onopen = () => {
+        statusClass.value = 'online';
+        statusText.value = '已连接';
+        console.log('[Chat WS] connected');
       };
 
-      eventSource.onerror = () => {
+      _chatWs.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'connected') {
+            // 初始连接确认，忽略
+            return;
+          }
+          handleEvent(data);
+        } catch (e) {
+          console.error('[Chat WS] parse error:', e);
+        }
+      };
+
+      _chatWs.onclose = () => {
         statusClass.value = 'offline';
         statusText.value = '连接断开，正在重连...';
-        setTimeout(connectSSE, 2000);
+        console.log('[Chat WS] disconnected');
+        _chatWs = null;
+        setTimeout(connectChatWS, 2000);
+      };
+
+      _chatWs.onerror = (err) => {
+        console.error('[Chat WS] error:', err);
       };
     }
 
@@ -541,9 +559,9 @@ app = createApp({
         case 'thinking':
           messages.value.push({type:'thinking', content:'🧠 '+data.content});
           break;
-        case 'tool_start': {
+        case 'tool_call': {
           const name = data.name;
-          const args = data.arguments || {};
+          const args = data.args || {};
           let desc = '';
           if (name === 'bash') desc = '💻 '+ (args.command || '').slice(0,100);
           else if (name === 'read_file') desc = '📖 '+ (args.path || '');
@@ -555,7 +573,7 @@ app = createApp({
           messages.value.push({type:'tool', content: desc});
           break;
         }
-        case 'tool_end': {
+        case 'tool_result': {
           const result = (data.result || '').slice(0,300);
           if (result.trim()) {
             messages.value.push({type:'tool-end', content: result});
@@ -751,8 +769,8 @@ app = createApp({
         if (data.error) return false;
         // 加载文件树
         await loadFileTree();
-        // 连接 SSE
-        connectSSE();
+        // 连接 WebSocket Chat
+        connectChatWS();
         // 启动终端
         setTimeout(() => initTerminal(), 500);
         statusText.value = '就绪';
@@ -856,8 +874,9 @@ app = createApp({
 
     function _connectPtyWs() {
       const termId = 'term_' + Date.now();
-      const hostname = location.hostname;
-      const url = `ws://${hostname}:${_wsPort}/pty/${termId}`;
+      // 单端口：WS 连到页面同源（HTTP + WS 都在 8321）
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const url = `${protocol}//${location.host}/ws/pty/${termId}`;
       console.log('[PTY WS] connecting to', url);
 
       _ptyWs = new WebSocket(url);
@@ -931,17 +950,14 @@ app = createApp({
       agentRunning.value = true;
       statusText.value = 'AI 思考中...';
       statusClass.value = 'running';
-      try {
-        await fetch('/api/run', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({message: text}),
-        });
-      } catch(e) {
-        messages.value.push({type:'error', content: '❌ ' + e.message});
+
+      if (!_chatWs || _chatWs.readyState !== WebSocket.OPEN) {
+        messages.value.push({type:'error', content: '❌ WebSocket 未连接'});
         agentRunning.value = false;
-        statusText.value = '出错了';
+        statusText.value = '连接断开';
+        return;
       }
+      _chatWs.send(JSON.stringify({type: 'chat', msg: text}));
     }
 
     function renderMarkdown(text) {

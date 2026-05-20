@@ -1,8 +1,12 @@
-"""FlyPig Web Server — Flask + SSE 事件推流"""
+"""FlyPig Web Server — Quart + 原生 WebSocket
 
+HTTP API + WebSocket (/ws/chat + /ws/pty/<id>) 都在单端口 8321，
+由 Hypercorn (ASGI) 统一处理。
+"""
+
+import asyncio
 import json
 import os
-import queue
 import sys
 import threading
 import uuid
@@ -10,10 +14,12 @@ import webbrowser
 from pathlib import Path
 from typing import Optional
 
-from flask import Flask, Response, jsonify, request, send_from_directory
+from quart import (
+    Quart, copy_current_websocket_context,
+    jsonify, request, send_from_directory, websocket,
+)
 
-# ── Agent 模块导入（延迟加载避免循环依赖） ──
-from ..hooks import EventHook
+from ..hooks import WsEventHook
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -22,113 +28,41 @@ from ..hooks import EventHook
 
 _config = None
 _agent = None
-_hook: Optional["WebEventHook"] = None
-_event_queues: dict[str, queue.Queue] = {}
-_queue_lock = threading.Lock()
-_agent_lock = threading.Lock()  # 防止并发 agent 调用
+_hook: Optional[WsEventHook] = None
+_agent_lock = asyncio.Lock()
 _workspace = ""
-_ws_port = 8322  # PTY WebSocket 端口，由 start_server 设置
+
+# /ws/chat 的客户端集合（用于广播）
+_ws_clients: set = set()
+_ws_senders: dict[str, callable] = {}  # id -> async send(data: str)
 
 
 # ═══════════════════════════════════════════════════════════════
-# Web 事件钩子
-# ═══════════════════════════════════════════════════════════════
-
-class WebEventHook(EventHook):
-    """Web-specific event hook: 把 Agent 事件广播到所有 SSE 连接"""
-
-    def __init__(self):
-        self.session_tokens = 0
-        self.session_cost = 0.0
-        self.session_tools = 0
-        self.bash_history: list = []
-
-    def on_llm_end(self, usage: dict, cost_info: dict, iteration: int):
-        total = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
-        cost = cost_info.get("cost", 0)
-        self.session_tokens += total
-        self.session_cost += cost
-        self._broadcast({
-            "type": "llm_end",
-            "tokens": total,
-            "cost": cost,
-            "session_tokens": self.session_tokens,
-            "session_cost": self.session_cost,
-        })
-
-    def on_thinking(self, content: str):
-        self._broadcast({"type": "thinking", "content": content})
-
-    def on_tool_start(self, tool_name: str, arguments: dict):
-        self._broadcast({
-            "type": "tool_start",
-            "name": tool_name,
-            "arguments": arguments,
-        })
-
-    def on_tool_end(self, tool_name: str, result: str, arguments: dict = None):
-        truncated = result[:3000] if result else ""
-        self._broadcast({
-            "type": "tool_end",
-            "name": tool_name,
-            "result": truncated,
-            "arguments": arguments or {},
-        })
-        # 记录 bash 历史
-        if tool_name == "bash" and arguments:
-            cmd = arguments.get("command", "")
-            if cmd:
-                self.bash_history.append(cmd)
-
-    def on_tool_chain_end(self, tool_results: list, cost_info: dict, iteration: int):
-        self._broadcast({
-            "type": "tool_chain_end",
-            "tool_count": len(tool_results),
-            "tokens": cost_info.get("input_tokens", 0) + cost_info.get("output_tokens", 0),
-            "cost": cost_info.get("cost", 0),
-        })
-
-    def on_response(self, content: str, usage_line: str):
-        self._broadcast({"type": "response", "content": content})
-
-    def _broadcast(self, data: dict):
-        dead = []
-        with _queue_lock:
-            for qid, q in _event_queues.items():
-                try:
-                    q.put_nowait(data)
-                except queue.Full:
-                    dead.append(qid)
-            for qid in dead:
-                del _event_queues[qid]
-
-
-# ═══════════════════════════════════════════════════════════════
-# Flask 应用
+# Quart 应用
 # ═══════════════════════════════════════════════════════════════
 
 static_dir = Path(__file__).parent / "static"
-app = Flask(__name__, static_folder=str(static_dir), static_url_path="")
-# PTY 终端管理器（线程安全，Flask + asyncio WS 共享）
+app = Quart(__name__, static_folder=str(static_dir), static_url_path="")
 from .terminal import TerminalManager
 _terminal_manager = TerminalManager()
 
 
+# ── HTTP 路由 ──
+
 @app.route("/")
-def index():
-    return send_from_directory(str(static_dir), "index.html")
+async def index():
+    return await send_from_directory(str(static_dir), "index.html")
 
 
 # ── 文件浏览 API ──
 
 @app.route("/api/files")
-def api_list_files():
+async def api_list_files():
     """列出目录内容"""
     path = request.args.get("path", ".")
     base = Path(_workspace)
     target = (base / path).resolve() if path != "." else base
 
-    # 安全检查：不允许超出工作区
     try:
         target.relative_to(base)
     except ValueError:
@@ -166,7 +100,7 @@ def api_list_files():
 
 
 @app.route("/api/file")
-def api_read_file():
+async def api_read_file():
     """读取文件内容"""
     path = request.args.get("path", "")
     if not path:
@@ -197,7 +131,7 @@ def api_read_file():
 # ── Agent 配置 API ──
 
 @app.route("/api/config")
-def api_config():
+async def api_config():
     """返回当前配置摘要"""
     global _config
     if _config is None:
@@ -214,15 +148,14 @@ def api_config():
         "workspace": _workspace,
         "default_model": _config.default_model_name,
         "models": models,
-        "ws_port": _ws_port,
     })
 
 
 @app.route("/api/config/workspace", methods=["POST"])
-def api_set_workspace():
+async def api_set_workspace():
     """设置工作区"""
     global _workspace
-    data = request.get_json(force=True)
+    data = await request.get_json(force=True)
     path = data.get("path", "")
     if not path:
         return jsonify({"error": "no path"}), 400
@@ -236,12 +169,12 @@ def api_set_workspace():
 
 
 @app.route("/api/config/apikey", methods=["POST"])
-def api_save_apikey():
+async def api_save_apikey():
     """保存 API Key"""
     global _config
     if _config is None:
         return jsonify({"error": "not initialized"}), 400
-    data = request.get_json(force=True)
+    data = await request.get_json(force=True)
     provider = data.get("provider", "")
     key = data.get("api_key", "")
     if not provider or not key:
@@ -251,9 +184,9 @@ def api_save_apikey():
 
 
 @app.route("/api/config/select-model", methods=["POST"])
-def api_select_model():
+async def api_select_model():
     """选择模型（返回完整配置供后续初始化）"""
-    data = request.get_json(force=True)
+    data = await request.get_json(force=True)
     name = data.get("name", "")
     if not name:
         return jsonify({"error": "no model name"}), 400
@@ -263,10 +196,10 @@ def api_select_model():
     return jsonify(model_cfg)
 
 
-# ── Agent 执行 API ──
+# ── Agent 初始化 / 执行 API ──
 
 @app.route("/api/init", methods=["POST"])
-def api_init_agent():
+async def api_init_agent():
     """初始化 Agent（选择工作区、模型后调用）"""
     global _agent, _hook, _config, _workspace
     from ..config import Config
@@ -276,7 +209,7 @@ def api_init_agent():
     from ..agent import Agent
     from ..sandbox import create_sandbox_components, PathValidator
 
-    data = request.get_json(force=True) or {}
+    data = await request.get_json(force=True) or {}
 
     if _config is None:
         _config = Config()
@@ -328,7 +261,9 @@ def api_init_agent():
         f"All file paths in tool results are relative to this directory.\n"
     )
 
-    _hook = WebEventHook()
+    _hook = WsEventHook()
+    _hook.set_loop(asyncio.get_event_loop())
+    _hook.set_broadcaster(ws_broadcast)
     _agent = Agent(
         model=model,
         cost_tracker=cost_tracker,
@@ -337,43 +272,16 @@ def api_init_agent():
         hooks=[_hook],
     )
 
-    # 重新扫描工作区
     _scan_workspace_tree()
 
     return jsonify({"ok": True, "workspace": workspace, "model": model_name})
 
 
-@app.route("/api/run", methods=["POST"])
-def api_run_agent():
-    """运行 Agent（异步，事件通过 SSE 推送）"""
-    global _agent
-    if _agent is None:
-        return jsonify({"error": "agent not initialized"}), 400
-    data = request.get_json(force=True)
-    message = data.get("message", "")
-    if not message:
-        return jsonify({"error": "no message"}), 400
-
-    def _run():
-        with _agent_lock:
-            try:
-                _agent.run(message)
-                summary = _agent.get_session_summary()
-                _broadcast({"type": "summary", "content": summary})
-            except Exception as e:
-                _broadcast({"type": "error", "content": str(e)})
-            finally:
-                _broadcast({"type": "done"})
-
-    threading.Thread(target=_run, daemon=True).start()
-    return jsonify({"ok": True})
-
-
 @app.route("/api/agent/command", methods=["POST"])
-def api_agent_command():
+async def api_agent_command():
     """处理 / 命令（reset/cost 等）"""
     global _agent
-    data = request.get_json(force=True)
+    data = await request.get_json(force=True)
     cmd = data.get("command", "").lower()
 
     if cmd == "reset":
@@ -393,42 +301,6 @@ def api_agent_command():
         return jsonify({"error": f"unknown command: {cmd}"}), 400
 
 
-# ── SSE 事件推流 ──
-
-@app.route("/api/events")
-def api_events():
-    """SSE 端点 — 浏览器通过 EventSource 连接到这里接收实时事件"""
-    qid = str(uuid.uuid4())
-    q: queue.Queue = queue.Queue(maxsize=200)
-    with _queue_lock:
-        _event_queues[qid] = q
-
-    def generate():
-        try:
-            while True:
-                try:
-                    data = q.get(timeout=30)
-                    yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
-                except queue.Empty:
-                    # 发送心跳保持连接
-                    yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
-        except GeneratorExit:
-            pass
-        finally:
-            with _queue_lock:
-                _event_queues.pop(qid, None)
-
-    return Response(
-        generate(),
-        mimetype="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
-
-
 # ── 工作区文件树 ──
 
 _tree_cache: dict = {}
@@ -436,7 +308,7 @@ _tree_cache_lock = threading.Lock()
 
 
 def _scan_workspace_tree():
-    """扫描工作区生成完整目录树缓存"""
+    """扫描工作区生成完整目录树缓存（同步，线程安全）"""
     global _tree_cache
     base = Path(_workspace)
     if not base.exists():
@@ -450,7 +322,6 @@ def _scan_workspace_tree():
                   ".css", ".html", ".sh", ".bat", ".ps1", ".vue"}
 
     def _build_tree(path: Path):
-        """递归构建树"""
         children = []
         try:
             entries = sorted(path.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower()))
@@ -478,139 +349,256 @@ def _scan_workspace_tree():
 
 
 @app.route("/api/tree")
-def api_file_tree():
+async def api_file_tree():
     """返回完整目录树（JSON）"""
     with _tree_cache_lock:
         return jsonify(_tree_cache)
 
 
-# ── 辅助 ──
-
-def _broadcast(data: dict):
-    """广播事件（从非 SSE 线程调用）"""
-    dead = []
-    with _queue_lock:
-        for qid, q in _event_queues.items():
-            try:
-                q.put_nowait(data)
-            except queue.Full:
-                dead.append(qid)
-        for qid in dead:
-            del _event_queues[qid]
-
-
 # ═══════════════════════════════════════════════════════════════
-# PTY WebSocket 终端（asyncio 服务器，独立端口 8322）
+# WebSocket — AI 对话通道 /ws/chat
 # ═══════════════════════════════════════════════════════════════
 
+@app.websocket("/ws/chat")
+async def ws_chat():
+    """AI 对话 WebSocket 通道
 
-def _run_pty_server(host: str = "127.0.0.1", port: int = 8322):
-    """在新线程中启动 asyncio WebSocket PTY 服务器"""
-    import asyncio
-    import websockets
-    from concurrent.futures import ThreadPoolExecutor
+    接收:
+        {"type":"chat","msg":"..."}
+        {"type":"card_action","card_id":"x","action":"retry|stop|open_in_terminal"}
 
-    async def handle_pty(websocket):
-        """单个 PTY WebSocket 连接处理"""
-        # 获取 term_id（不同 websockets 版本 path 位置不同）
-        try:
-            path = websocket.path
-        except AttributeError:
-            path = getattr(getattr(websocket, 'request', None), 'path', '/pty/')
-        term_id = path.split("/pty/")[-1] if "/pty/" in path else f"term_{id(websocket)}"
-        print(f"  [PTY] 新连接 {term_id}")
+    发送:
+        {"type":"thinking","content":"..."}
+        {"type":"tool_call","name":"bash","args":{...}}
+        {"type":"tool_result","name":"bash","result":"...","status":"..."}
+        {"type":"response","content":"..."}
+        {"type":"summary","content":"..."}
+        {"type":"error","content":"..."}
+        {"type":"done"}
+    """
+    client_id = str(uuid.uuid4())
 
-        term = _terminal_manager.get(term_id)
-        if not term:
-            print(f"  [PTY] 创建终端 {term_id}, cwd={_workspace}")
-            term = _terminal_manager.create(term_id, cwd=_workspace)
-            print(f"  [PTY] 创建结果 alive={term.is_alive()}")
+    # 用 copy_current_websocket_context 包裹 send，保留 WS 上下文供广播使用
+    @copy_current_websocket_context
+    async def send_msg(data: str):
+        await websocket.send(data)
 
-        if not term.is_alive():
-            err_msg = f"[ERROR] 终端创建失败 (cwd={_workspace})\r\n"
-            print(f"  [PTY] {err_msg.strip()}")
-            await websocket.send(err_msg.encode())
-            return
-
-        loop = asyncio.get_event_loop()
-
-        async def pty_reader():
-            """后台：PTY 输出 → WebSocket"""
-            while term.is_alive():
-                try:
-                    data = await loop.run_in_executor(None, term.read, 4096)
-                except RuntimeError:
-                    break  # 解释器关闭中
-                if data is None:
-                    break
-                if data:  # 跳过空数据（暂无可读内容）
-                    try:
-                        await websocket.send(data)
-                    except Exception:
-                        break
-                else:
-                    # 无数据时等一会再试，避免 busy loop
-                    await asyncio.sleep(0.01)
-
-        async def ws_writer():
-            """前台：WebSocket 消息 → PTY stdin"""
-            try:
-                async for message in websocket:
-                    if isinstance(message, bytes):
-                        term.write(message)
-                    elif isinstance(message, str):
-                        # 先尝试解析为 JSON 控制消息（resize）
-                        try:
-                            cmd = json.loads(message)
-                            if cmd.get("type") == "resize":
-                                term.resize(cmd["cols"], cmd["rows"])
-                            continue
-                        except json.JSONDecodeError:
-                            pass
-                        # 不是 JSON → xterm.js 按键输入，写入 PTY
-                        term.write(message.encode("utf-8"))
-                    else:
-                        pass
-            except Exception:
-                pass
-
-        try:
-            await asyncio.gather(pty_reader(), ws_writer())
-        finally:
-            _terminal_manager.destroy(term_id)
-
-    # 手动管理事件循环 + executor（避免 asyncio.run() 在关闭时清理 executor）
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="pty")
-    loop.set_default_executor(executor)
-
-    async def ws_server():
-        async with websockets.serve(handle_pty, host, port, reuse_address=True):
-            print(f"  [PTY WebSocket] 服务器已启动 ws://{host}:{port}")
-            await asyncio.Future()  # 永远运行
-
+    _ws_senders[client_id] = send_msg
     try:
-        loop.run_until_complete(ws_server())
-    except KeyboardInterrupt:
+        # 发送连接确认
+        await websocket.send(json.dumps({"type": "connected"}))
+
+        # Quart 不支持 async for 迭代 websocket，必须用 receive()
+        while True:
+            message = await websocket.receive()
+            if message is None:
+                break
+
+            try:
+                data = json.loads(message)
+            except json.JSONDecodeError:
+                await websocket.send(json.dumps({"type": "error", "content": "invalid JSON"}))
+                continue
+
+            msg_type = data.get("type", "")
+
+            if msg_type == "chat":
+                text = data.get("msg", "").strip()
+                if not text:
+                    continue
+                if _agent is None:
+                    await websocket.send(json.dumps({"type": "error", "content": "agent not initialized"}))
+                    continue
+
+                # 在线程池中运行 Agent（阻塞的同步调用）
+                asyncio.get_event_loop().run_in_executor(None, _run_agent, text, client_id)
+
+            elif msg_type == "card_action":
+                await _handle_card_action(data)
+
+    except asyncio.CancelledError:
         pass
+    except Exception as e:
+        import traceback
+        print(f"  [CHAT WS] {client_id} error: {e}")
+        traceback.print_exc()
     finally:
-        executor.shutdown(wait=False)
+        _ws_senders.pop(client_id, None)
+
+
+# ── 卡片操作 ──
+
+_command_cards: dict[str, dict] = {}  # card_id -> {"command": str, "status": str}
+
+
+async def _handle_card_action(data: dict):
+    """处理卡片操作"""
+    card_id = data.get("card_id", "")
+    action = data.get("action", "")
+    card = _command_cards.get(card_id)
+
+    if action == "stop":
+        # 中止当前命令
+        _stop_current_command()
+
+    elif action == "retry":
+        # 重试命令
+        if card and card.get("command"):
+            cmd = card["command"]
+            asyncio.get_event_loop().run_in_executor(None, _run_bash_command, cmd, card_id)
+
+    elif action == "open_in_terminal":
+        # 在用户终端中打开
+        if card and card.get("command"):
+            cmd = card["command"]
+            _write_to_terminal(cmd)
+
+
+def _stop_current_command():
+    """中止当前正在运行的命令"""
+    global _agent
+    if _agent:
         try:
-            loop.run_until_complete(loop.shutdown_asyncgens())
+            _agent.stop()
         except Exception:
             pass
+
+
+def _run_bash_command(command: str, card_id: str):
+    """在后台执行 bash 命令"""
+    from ..tools import ToolExecutor
+    global _agent
+    if not _agent:
+        return
+    try:
+        tool = getattr(_agent, 'tools', None)
+        if tool and hasattr(tool, 'execute'):
+            result = tool.execute("bash", {"command": command})
+            if _hook:
+                _hook.on_tool_end("bash", result, {"command": command})
+    except Exception as e:
+        if _hook:
+            _hook.on_tool_end("bash", str(e), {"command": command})
+
+
+def _write_to_terminal(command: str):
+    """将命令写入用户终端"""
+    terms = _terminal_manager.list()
+    if terms:
+        term_id = terms[0]["term_id"]
+        term = _terminal_manager.get(term_id)
+        if term and term.is_alive():
+            term.write((command + "\r\n").encode("utf-8"))
+
+
+def _run_agent(message: str, client_id: str):
+    """在后台线程中运行 Agent（同步阻塞调用）"""
+    import asyncio
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    try:
+        _agent.run(message)
+        summary = _agent.get_session_summary()
+        if _hook:
+            _hook._broadcast({"type": "summary", "content": summary})
+    except Exception as e:
+        if _hook:
+            _hook._broadcast({"type": "error", "content": str(e)})
+    finally:
+        if _hook:
+            _hook._broadcast({"type": "done"})
         loop.close()
 
 
-def start_pty_server(host: str = "127.0.0.1", port: int = 8322):
-    """以守护线程启动 PTY WebSocket 服务器"""
-    t = threading.Thread(
-        target=_run_pty_server, args=(host, port),
-        daemon=True, name="pty-ws-server",
-    )
-    t.start()
-    return t
+# ═══════════════════════════════════════════════════════════════
+# WebSocket — PTY 终端通道 /ws/pty/<term_id>
+# ═══════════════════════════════════════════════════════════════
+
+@app.websocket("/ws/pty/<term_id>")
+async def ws_pty(term_id: str):
+    """PTY 终端 WebSocket 通道
+
+    架构：PTY 读用线程池独立运行，WS 收发在 async handler 中处理。
+    和旧 Flask 实现同样的双线程模型，只是 WS API 变成 Quart async。
+    """
+    import asyncio
+    import threading
+
+    term = _terminal_manager.get(term_id)
+    if not term:
+        term = _terminal_manager.create(term_id, cwd=_workspace)
+    if not term.is_alive():
+        return
+
+    loop = asyncio.get_event_loop()
+    stop_event = threading.Event()
+
+    # 用 @copy_current_websocket_context 持住 WS 发送上下文（供后台线程调用）
+    @copy_current_websocket_context
+    async def pty_send(data: bytes):
+        await websocket.send(data)
+
+    def pty_reader():
+        """后台线程：循环读 PTY 输出，通过 event loop 推送到 WS"""
+        while term.is_alive() and not stop_event.is_set():
+            data = term.read(4096)
+            if data is None:
+                break
+            if data:
+                try:
+                    fut = asyncio.run_coroutine_threadsafe(pty_send(data), loop)
+                    fut.result(timeout=10)
+                except Exception:
+                    break
+            else:
+                threading.Event().wait(0.01)
+
+    reader_thread = threading.Thread(target=pty_reader, daemon=True,
+                                     name=f"pty-read-{term_id}")
+    reader_thread.start()
+
+    try:
+        while True:
+            msg = await websocket.receive()
+            if msg is None:
+                break
+            if isinstance(msg, bytes):
+                term.write(msg)
+            elif isinstance(msg, str):
+                try:
+                    cmd = json.loads(msg)
+                    if cmd.get("type") == "resize":
+                        term.resize(cmd["cols"], cmd["rows"])
+                    continue
+                except json.JSONDecodeError:
+                    pass
+                term.write(msg.encode("utf-8"))
+    except Exception:
+        pass
+    finally:
+        stop_event.set()
+        _terminal_manager.destroy(term_id)
+
+
+# ═══════════════════════════════════════════════════════════════
+# 广播 — 从 WsEventHook 调用
+# ═══════════════════════════════════════════════════════════════
+
+async def ws_broadcast(data: dict):
+    """广播事件到所有 /ws/chat 客户端（由 WsEventHook 通过 call_soon_threadsafe 触发）"""
+    message = json.dumps(data, ensure_ascii=False)
+    dead = []
+    for cid, send in list(_ws_senders.items()):
+        try:
+            await send(message)
+        except Exception:
+            dead.append(cid)
+    for cid in dead:
+        _ws_senders.pop(cid, None)
+
+
+# _broadcast_sync 已弃用，改用 WsEventHook 直接调用 asyncio.run_coroutine_threadsafe
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -618,29 +606,33 @@ def start_pty_server(host: str = "127.0.0.1", port: int = 8322):
 # ═══════════════════════════════════════════════════════════════
 
 def start_server(config, host: str = "127.0.0.1", port: int = 8321,
-                  ws_port: int = 8322, open_browser: bool = True):
-    """启动 Web 服务器 + PTY WebSocket 服务器"""
-    global _config, _workspace, _tree_cache, _ws_port
+                  open_browser: bool = True):
+    """启动 Hypercorn ASGI 服务器（单端口：HTTP + WS）"""
+    global _config, _workspace, _tree_cache
 
     _config = config
     _workspace = config.workspace
-    _ws_port = ws_port
 
-    # 初始化扫描工作区
     _scan_workspace_tree()
-
-    # 启动 PTY WebSocket 服务器（守护线程）
-    start_pty_server(host, ws_port)
 
     url = f"http://{host}:{port}"
     print(f"\n  [FlyPig Web UI] 启动服务器...")
-    print(f"  [HTTP] {url}")
+    print(f"  [Quart + Hypercorn] {url}")
     print(f"  [工作区] {_workspace}")
-    print(f"  [PTY WebSocket] ws://{host}:{ws_port}")
     print()
 
     if open_browser:
         webbrowser.open(url)
 
-    # 启动 Flask（threading 模式，无 gevent）
-    app.run(host=host, port=port, threaded=True, debug=False)
+    # 启动 Hypercorn
+    import hypercorn.asyncio
+    import hypercorn.config as hcfg
+
+    hconfig = hcfg.Config()
+    hconfig.bind = [f"{host}:{port}"]
+    hconfig.use_reloader = False
+
+    try:
+        asyncio.run(hypercorn.asyncio.serve(app, hconfig))
+    except KeyboardInterrupt:
+        print("\n  [FlyPig] 服务器已停止")

@@ -11,6 +11,7 @@
             send_to_telemetry(usage)
 """
 
+import asyncio
 import os
 from pathlib import Path
 
@@ -155,6 +156,93 @@ class CostPrintHook(EventHook):
         """Agent 返回最终回复时打印会话累计"""
         from .cost import _format_cost
         print(f"[Done] Tools: {self.session_tools}, Total Tokens: {self.session_tokens:,}, Total Cost: {_format_cost(self.session_cost)}")
+
+
+class WsEventHook(EventHook):
+    """WebSocket 事件钩子：将 Agent 事件广播到所有 WS 客户端
+
+    用法：
+        hook = WsEventHook()
+        hook.set_loop(asyncio.get_event_loop())
+        hook.set_broadcaster(ws_broadcast_func)  # async function(data: dict)
+        agent = Agent(..., hooks=[hook])
+    """
+
+    def __init__(self):
+        self._loop = None
+        self._broadcast_func = None
+        self.session_tokens = 0
+        self.session_cost = 0.0
+        self.session_tools = 0
+        self.bash_history: list = []
+
+    def set_loop(self, loop):
+        self._loop = loop
+
+    def set_broadcaster(self, broadcast_func):
+        """注册 async broadcast 函数（由 server.py 提供）"""
+        self._broadcast_func = broadcast_func
+
+    def _broadcast(self, data: dict):
+        """线程安全地广播事件到所有 WS 客户端
+
+        使用 run_coroutine_threadsafe 将协程调度到主事件循环
+        """
+        if not self._broadcast_func or not self._loop or self._loop.is_closed():
+            return
+        try:
+            asyncio.run_coroutine_threadsafe(
+                self._broadcast_func(data), self._loop
+            )
+        except RuntimeError:
+            pass
+
+    def on_thinking(self, content: str):
+        self._broadcast({"type": "thinking", "content": content})
+
+    def on_tool_start(self, tool_name: str, arguments: dict):
+        self._broadcast({
+            "type": "tool_call",
+            "name": tool_name,
+            "args": arguments,
+        })
+
+    def on_tool_end(self, tool_name: str, result: str, arguments: dict = None):
+        truncated = result[:3000] if result else ""
+        self._broadcast({
+            "type": "tool_result",
+            "name": tool_name,
+            "result": truncated,
+            "args": arguments or {},
+        })
+        if tool_name == "bash" and arguments:
+            cmd = arguments.get("command", "")
+            if cmd:
+                self.bash_history.append(cmd)
+
+    def on_llm_end(self, usage: dict, cost_info: dict, iteration: int):
+        total = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
+        cost = cost_info.get("cost", 0)
+        self.session_tokens += total
+        self.session_cost += cost
+        self._broadcast({
+            "type": "llm_end",
+            "tokens": total,
+            "cost": cost,
+            "session_tokens": self.session_tokens,
+            "session_cost": self.session_cost,
+        })
+
+    def on_tool_chain_end(self, tool_results: list, cost_info: dict, iteration: int):
+        self._broadcast({
+            "type": "tool_chain_end",
+            "tool_count": len(tool_results),
+            "tokens": cost_info.get("input_tokens", 0) + cost_info.get("output_tokens", 0),
+            "cost": cost_info.get("cost", 0),
+        })
+
+    def on_response(self, content: str, usage_line: str):
+        self._broadcast({"type": "response", "content": content})
 
 
 # 未来扩展的钩子可以加在这里，或者单独文件
