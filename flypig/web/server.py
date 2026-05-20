@@ -29,7 +29,6 @@ from ..hooks import WsEventHook
 _config = None
 _agent = None
 _hook: Optional[WsEventHook] = None
-_agent_lock = asyncio.Lock()
 _workspace = ""
 
 # /ws/chat 的客户端集合（用于广播）
@@ -493,15 +492,24 @@ def _write_to_terminal(command: str):
 
 
 _agent_lock = threading.Lock()
+_AGENT_TIMEOUT = 120  # 单次 Agent 执行最大秒数
 
 
 def _run_agent_locked(message: str):
-    """带锁的 Agent 执行（防止并发调用）"""
+    """带锁的 Agent 执行（防止并发调用），含超时保护"""
     with _agent_lock:
-        _run_agent(message)
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            fut = pool.submit(_run_agent_inner, message)
+            try:
+                fut.result(timeout=_AGENT_TIMEOUT)
+            except concurrent.futures.TimeoutError:
+                if _hook:
+                    _hook._broadcast({"type": "error", "content": f"执行超时（{_AGENT_TIMEOUT}秒）"})
+                    _hook._broadcast({"type": "done"})
 
 
-def _run_agent(message: str):
+def _run_agent_inner(message: str):
     """在后台线程中运行 Agent（同步阻塞调用）"""
     import asyncio
     loop = asyncio.new_event_loop()
