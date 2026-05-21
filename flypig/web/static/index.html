@@ -655,6 +655,9 @@ app = createApp({
           break;
         case 'llm_end':
           costStr.value = formatCost(data.session_cost, data.session_tokens);
+          if (data.model) {
+            messages.value.push({type:'info', content:'🤖 ' + data.model});
+          }
           break;
         case 'response':
           messages.value.push({type:'agent', content: data.content || '[无回复]'});

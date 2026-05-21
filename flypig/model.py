@@ -43,6 +43,7 @@ class ModelAdapter:
         
         result = {
             "content": choice.message.content or "",
+            "model": response.model,  # DeepSeek API 返回的真实模型名
             "usage": {
                 "input_tokens": response.usage.prompt_tokens,
                 "output_tokens": response.usage.completion_tokens,

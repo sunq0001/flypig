@@ -78,7 +78,7 @@ Do NOT stop after just finding files - read them and complete the task."""
 
             # ── 后置钩子（含成本打印） ──
             for h in self.hooks:
-                h.on_llm_end(usage, cost_info, iteration)
+                h.on_llm_end(usage, cost_info, iteration, model=response.get("model", ""))
 
             assistant_content = response["content"]
             self.messages.append({"role": "assistant", "content": assistant_content})

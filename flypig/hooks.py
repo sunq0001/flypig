@@ -48,7 +48,7 @@ class EventHook:
     def on_llm_start(self, messages: list, iteration: int):
         """LLM 调用前触发"""
 
-    def on_llm_end(self, usage: dict, cost_info: dict, iteration: int):
+    def on_llm_end(self, usage: dict, cost_info: dict, iteration: int, model: str = ""):
         """LLM 调用后触发"""
 
     def on_tool_start(self, tool_name: str, arguments: dict):
@@ -78,13 +78,14 @@ class CostPrintHook(EventHook):
         self.workspace_dir = workspace_dir
         self.bash_history: list = []  # bash 命令历史（非阻塞记录）
 
-    def on_llm_end(self, usage: dict, cost_info: dict, iteration: int):
+    def on_llm_end(self, usage: dict, cost_info: dict, iteration: int, model: str = ""):
         total = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
         cost = cost_info.get("cost", 0)
         self.session_tokens += total
         self.session_cost += cost
         from .cost import _format_cost
-        print(f"[Tokens: {total:,}] [Cost: {_format_cost(cost)}]")
+        model_tag = f" [{model}]" if model else ""
+        print(f"[Tokens: {total:,}]{model_tag} [Cost: {_format_cost(cost)}]")
 
     def on_thinking(self, content: str):
         print(f"  [思考] {content}")
@@ -220,13 +221,14 @@ class WsEventHook(EventHook):
             if cmd:
                 self.bash_history.append(cmd)
 
-    def on_llm_end(self, usage: dict, cost_info: dict, iteration: int):
+    def on_llm_end(self, usage: dict, cost_info: dict, iteration: int, model: str = ""):
         total = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
         cost = cost_info.get("cost", 0)
         self.session_tokens += total
         self.session_cost += cost
         self._broadcast({
             "type": "llm_end",
+            "model": model,
             "tokens": total,
             "cost": cost,
             "session_tokens": self.session_tokens,
