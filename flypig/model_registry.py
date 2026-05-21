@@ -8,7 +8,7 @@ from typing import Optional
 REGISTRY = {
     # ── DeepSeek ──
     "deepseek-chat":       {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY", "model": "deepseek-chat"},
-    "deepseek-v4-flash":   {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY", "model": "deepseek-chat"},
+    "deepseek-v4-flash":   {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY", "model": "deepseek-v4-flash"},
     "deepseek-v4-pro":     {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY", "model": "deepseek-chat"},
     "deepseek-reasoner":   {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY", "model": "deepseek-reasoner"},
 
