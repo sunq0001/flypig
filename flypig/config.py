@@ -50,6 +50,7 @@ class Config:
                 "provider": meta["provider"],
                 "base_url": meta["base_url"],
                 "api_key": self._get_provider_key(meta["provider"]),
+                "model": meta.get("model", name),
             })
         return result
 

@@ -7,19 +7,19 @@ from typing import Optional
 # ============================================================
 REGISTRY = {
     # ── DeepSeek ──
-    "deepseek-chat":       {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY"},
-    "deepseek-v4-flash":   {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY"},
-    "deepseek-v4-pro":     {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY"},
-    "deepseek-reasoner":   {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY"},
+    "deepseek-chat":       {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY", "model": "deepseek-chat"},
+    "deepseek-v4-flash":   {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY", "model": "deepseek-chat"},
+    "deepseek-v4-pro":     {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY", "model": "deepseek-chat"},
+    "deepseek-reasoner":   {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY", "model": "deepseek-reasoner"},
 
     # ── OpenAI ──
-    "gpt-4o-mini":         {"provider": "OpenAI",    "base_url": "https://api.openai.com/v1",         "env_key": "OPENAI_API_KEY"},
-    "gpt-4o":              {"provider": "OpenAI",    "base_url": "https://api.openai.com/v1",         "env_key": "OPENAI_API_KEY"},
+    "gpt-4o-mini":         {"provider": "OpenAI",    "base_url": "https://api.openai.com/v1",         "env_key": "OPENAI_API_KEY",    "model": "gpt-4o-mini"},
+    "gpt-4o":              {"provider": "OpenAI",    "base_url": "https://api.openai.com/v1",         "env_key": "OPENAI_API_KEY",    "model": "gpt-4o"},
 
     # ── Anthropic ──
-    "claude-3-5-haiku":    {"provider": "Anthropic", "base_url": "https://api.anthropic.com",         "env_key": "ANTHROPIC_API_KEY"},
-    "claude-3-5-sonnet":   {"provider": "Anthropic", "base_url": "https://api.anthropic.com",         "env_key": "ANTHROPIC_API_KEY"},
-    "claude-4-opus":       {"provider": "Anthropic", "base_url": "https://api.anthropic.com",         "env_key": "ANTHROPIC_API_KEY"},
+    "claude-3-5-haiku":    {"provider": "Anthropic", "base_url": "https://api.anthropic.com",         "env_key": "ANTHROPIC_API_KEY", "model": "claude-3-5-haiku"},
+    "claude-3-5-sonnet":   {"provider": "Anthropic", "base_url": "https://api.anthropic.com",         "env_key": "ANTHROPIC_API_KEY", "model": "claude-3-5-sonnet"},
+    "claude-4-opus":       {"provider": "Anthropic", "base_url": "https://api.anthropic.com",         "env_key": "ANTHROPIC_API_KEY", "model": "claude-4-opus"},
 }
 
 # ============================================================
