@@ -365,7 +365,7 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
           <span>🤖</span>
           <select v-model="currentModel" @change="onModelChange">
             <option v-for="m in models" :key="m.name" :value="m.name">
-              {{ m.name }} ({{ m.provider }})
+              {{ formatModelName(m) }}
             </option>
           </select>
           <span class="model-status" :class="currentModelHasKey ? 'has-key' : 'no-key'"
@@ -449,6 +449,14 @@ app = createApp({
       const m = models.value.find(x => x.name === currentModel.value);
       return m ? m.has_key : false;
     });
+
+    function formatModelName(m) {
+      const labels = {
+        'deepseek-v4-flash': 'DeepSeek V4 Flash (快速/便宜)',
+        'deepseek-v4-pro': 'DeepSeek V4 Pro (完整能力)',
+      };
+      return labels[m.name] || `${m.name} (${m.provider})`;
+    }
     const messagesRef = ref(null);
     const layoutRef = ref(null);
     const editorContainer = ref(null);
@@ -1153,7 +1161,7 @@ app = createApp({
       sendMessage, handleKeydown, resetChat, showCost, renderMarkdown,
       initTerminal, resetTerminal, toggleTerminal,
       currentModel, currentModelHasKey, showApiKeyModal, pendingApiKey, pendingModelProvider,
-      onModelChange, saveApiKey,
+      onModelChange, saveApiKey, formatModelName,
     };
   }
 });

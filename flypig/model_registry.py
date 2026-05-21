@@ -7,10 +7,9 @@ from typing import Optional
 # ============================================================
 REGISTRY = {
     # ── DeepSeek ──
-    "deepseek-chat":       {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY", "model": "deepseek-chat"},
     "deepseek-v4-flash":   {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY", "model": "deepseek-v4-flash"},
-    "deepseek-v4-pro":     {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY", "model": "deepseek-chat"},
-    "deepseek-reasoner":   {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY", "model": "deepseek-reasoner"},
+    "deepseek-v4-pro":     {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY", "model": "deepseek-v4-pro"},
+    # deepseek-chat/reasoner 将于 2026/07/24 弃用，保留但不显示在列表中
 
     # ── OpenAI ──
     "gpt-4o-mini":         {"provider": "OpenAI",    "base_url": "https://api.openai.com/v1",         "env_key": "OPENAI_API_KEY",    "model": "gpt-4o-mini"},

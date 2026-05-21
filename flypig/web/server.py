@@ -220,7 +220,11 @@ async def api_init_agent():
     model_name = data.get("model", "deepseek-v4-flash")
     api_key = data.get("api_key", "")
 
-    model_config = _config.find_model(model_name) or {"name": model_name, "provider": "DeepSeek"}
+    model_config = _config.find_model(model_name) or {
+        "name": model_name,
+        "provider": "DeepSeek",
+        "model": model_name,
+    }
     if api_key:
         model_config["api_key"] = api_key
     elif not model_config.get("api_key"):
