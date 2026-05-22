@@ -416,6 +416,18 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
 
 <script>
 // ── Monaco Editor ──
+// 配置 Web Worker 路径（避免 UI 阻塞）
+window.MonacoEnvironment = {
+  getWorker: function(_, label) {
+    let url;
+    if (label === 'json') url = '/vs/assets/json.worker-DKiEKt88.js';
+    else if (label === 'css' || label === 'scss' || label === 'less') url = '/vs/assets/css.worker-HnVq6Ewq.js';
+    else if (label === 'html' || label === 'handlebars' || label === 'razor') url = '/vs/assets/html.worker-B51mlPHg.js';
+    else if (label === 'typescript' || label === 'javascript') url = '/vs/assets/ts.worker-CMbG-7ft.js';
+    else url = '/vs/assets/editor.worker-Be8ye1pW.js';
+    return new Worker(url);
+  }
+};
 // loader.js 已在 <head> 中加载，这里只需配置路径并加载主模块
 require.config({ paths: { vs: '/vs' }});
 const _monacoReady = new Promise(resolve => {
