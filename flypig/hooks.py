@@ -85,7 +85,14 @@ class CostPrintHook(EventHook):
         self.session_cost += cost
         from .cost import _format_cost
         model_tag = f" [{model}]" if model else ""
-        print(f"[Tokens: {total:,}]{model_tag} [Cost: {_format_cost(cost)}]")
+        # 缓存命中显示
+        hit = usage.get("cache_hit_tokens", 0)
+        inp = usage.get("input_tokens", 0)
+        cache_tag = ""
+        if hit and inp:
+            pct = 100 * hit / inp
+            cache_tag = f" [Cache: {pct:.0f}% hit]"
+        print(f"[Tokens: {total:,}]{model_tag}{cache_tag} [Cost: {_format_cost(cost)}]")
 
     def on_thinking(self, content: str):
         print(f"  [思考] {content}")
@@ -226,10 +233,16 @@ class WsEventHook(EventHook):
         cost = cost_info.get("cost", 0)
         self.session_tokens += total
         self.session_cost += cost
+        hit = usage.get("cache_hit_tokens", 0)
+        inp = usage.get("input_tokens", 0)
         self._broadcast({
             "type": "llm_end",
             "model": model,
             "tokens": total,
+            "input_tokens": inp,
+            "output_tokens": usage.get("output_tokens", 0),
+            "cache_hit_tokens": hit,
+            "cache_pct": round(100 * hit / inp, 0) if inp and hit else 0,
             "cost": cost,
             "session_tokens": self.session_tokens,
             "session_cost": self.session_cost,

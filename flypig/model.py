@@ -10,14 +10,16 @@ class ModelAdapter:
         self.config = config
         self.client = OpenAI(
             api_key=config["api_key"],
-            base_url=config.get("base_url", "https://api.deepseek.com")
+            base_url=config.get("base_url", "https://api.deepseek.com"),
+            timeout=120,     # HTTP 请求超时，防止第二次请求卡死
+            max_retries=2,   # 网络波动自动重试
         )
-        self.model = config.get("model", "deepseek-chat")
+        self.model = config.get("model", "deepseek-v4-flash")
     
     def chat(self, messages: List[Dict], tools: List[Dict] = None) -> Dict:
         """
-        发送聊天请求
-        
+        发送聊天请求，HTTP 异常/超时时返回空响应（不让 agent 循环卡死）
+
         Returns:
             {
                 "content": str,  # 回复内容
@@ -33,11 +35,20 @@ class ModelAdapter:
             "model": self.model,
             "messages": messages,
         }
-        
+
         if tools:
             params["tools"] = tools
-        
-        response = self.client.chat.completions.create(**params)
+
+        try:
+            response = self.client.chat.completions.create(**params)
+        except Exception as e:
+            # HTTP 超时/网络异常 → 返回空响应，agent 循环不会卡死
+            return {
+                "content": f"[API Error] {type(e).__name__}: {e}",
+                "model": self.model,
+                "usage": {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "cache_hit_tokens": 0},
+                "tool_calls": [],
+            }
         
         choice = response.choices[0]
         
@@ -47,7 +58,11 @@ class ModelAdapter:
             "usage": {
                 "input_tokens": response.usage.prompt_tokens,
                 "output_tokens": response.usage.completion_tokens,
-                "total_tokens": response.usage.total_tokens
+                "total_tokens": response.usage.total_tokens,
+                "cache_hit_tokens": getattr(
+                    getattr(response.usage, "prompt_tokens_details", None),
+                    "cached_tokens", 0
+                ) or 0,
             },
             "tool_calls": []
         }

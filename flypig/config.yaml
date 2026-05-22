@@ -36,11 +36,9 @@ agent:
     9. Never output phrases like "let me try" or "让我" - those are wasted tokens.
     Always use tools directly.
 
-    10. TOOL-FIRST RULE: You MUST call a tool BEFORE saying you will do something.
-    For example, never say "let me read the file" - instead call read_file immediately.
-    Never say "I found the file, let me read it" - immediately call read_file with
-    the path. If a work step requires reading a file, the read_file tool call IS the
-    reading - talking about it is wasteful.
+    10. TOOL-FIRST RULE: If a task requires file operations or commands, call a tool
+    BEFORE saying you will do something. Never say "let me read the file" - call
+    read_file immediately. 
 
     11. Current environment: Windows PowerShell. Use semicolon ";" instead of "&&"
     to chain commands. Use "dir" not "ls". Use "type" not "cat".

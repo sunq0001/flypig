@@ -135,10 +135,9 @@ def main():
             llm_config.get("provider", "")
         )
         if prices:
-            # ModelAdapter 发 API 时用 config.get("model", "deepseek-chat")
-            # 所以价格同时存显示名和 API 模型名两个 key
+            # 价格同时存显示名和 API 模型名两个 key
             cost_tracker.set_pricing(llm_config["name"], prices)
-            api_model = llm_config.get("model", "deepseek-chat")
+            api_model = llm_config.get("model", "deepseek-v4-flash")
             if api_model != llm_config["name"]:
                 cost_tracker.set_pricing(api_model, prices)
             if source == "online":

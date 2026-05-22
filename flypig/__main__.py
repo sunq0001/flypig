@@ -34,7 +34,7 @@ def _web_main(host: str = "127.0.0.1", port: int = 8321):
 
     from .web.server import start_server
     try:
-        start_server(config, host=host, port=port, ws_port=port + 1, open_browser=True)
+        start_server(config, host=host, port=port, open_browser=True)
     finally:
         # 服务器退出后清理沙箱
         from .tools import ToolExecutor
@@ -74,7 +74,7 @@ def _headless_main(task: str):
     prices, _ = fetch_pricing(default_cfg["name"], default_cfg.get("provider", ""))
     if prices:
         cost_tracker.set_pricing(default_cfg["name"], prices)
-        api_model = default_cfg.get("model", "deepseek-chat")
+        api_model = default_cfg.get("model", "deepseek-v4-flash")
         if api_model != default_cfg["name"]:
             cost_tracker.set_pricing(api_model, prices)
 

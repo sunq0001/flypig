@@ -68,12 +68,13 @@ Do NOT stop after just finding files - read them and complete the task."""
                 tools=self.tools.get_tools_schema()
             )
 
-            # 记录成本
+            # 记录成本（含缓存命中统计）
             usage = response["usage"]
             cost_info = self.cost_tracker.record(
                 model=self.model.model,
                 input_tokens=usage["input_tokens"],
-                output_tokens=usage["output_tokens"]
+                output_tokens=usage["output_tokens"],
+                cache_hit_tokens=usage.get("cache_hit_tokens", 0),
             )
 
             # ── 后置钩子（含成本打印） ──

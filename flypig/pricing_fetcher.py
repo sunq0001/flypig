@@ -11,10 +11,8 @@ from typing import Optional, Tuple
 # ============================================================
 BUILTIN_PRICES = {
     # ── DeepSeek ──
-    "deepseek-chat":       {"input": 0.14,   "output": 0.28},
     "deepseek-v4-flash":   {"input": 0.14,   "output": 0.28},
     "deepseek-v4-pro":     {"input": 0.435,  "output": 0.87},
-    "deepseek-reasoner":   {"input": 0.14,   "output": 0.28},
 
     # ── OpenAI ──
     "gpt-4o-mini":         {"input": 0.15,   "output": 0.60},

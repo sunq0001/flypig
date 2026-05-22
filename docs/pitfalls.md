@@ -150,85 +150,134 @@ v3: config.yaml 只写名字 + model_registry → 改 registry 一处
 
 ---
 
-## 11. Quart WebSocket：`async for` 不可用
+## PTY/SSE 架构重构 (2026-05)
 
-**问题**: 使用 `async for message in websocket:` 报错 `LocalProxy does not have __aiter__ method`。
+> WebSocket → SSE 迁移 + PTY 终端恢复 · 本次重构解决了 AI 对话和 PTY 终端共用 WebSocket 通道导致的一系列问题。
 
-**原因**: Quart 的 `websocket` 是 `LocalProxy`（context-local 代理），不支持 async 迭代协议。
+### 1. WebSocket 通道冲突
 
-**修复**: 改用 `while True: message = await websocket.receive()`。
+**问题**: AI 模型对话第二条消息卡死，终端也连不上。
 
-```python
-# 错误 ❌
-async for message in websocket:
-    ...
+**原因**: SocketIO 的多路复用机制下，AI 对话流和 PTY 字节流共用同一条 WS 通道，消息交织、顺序错乱。
 
-# 正确 ✅
-while True:
-    message = await websocket.receive()
-    if message is None:
-        break
-    ...
+**修复**: AI 对话完全迁移到 SSE（单向 HTTP 流），WS 仅用于 PTY 终端，物理上分离。
+
+```
+❌ 旧: Agent(POST) + SSE ← WebSocket ──┐
+                                        ├── 前端
+    PTY(WS) ──────────────────────────────┘
+✅ 新: Agent(POST) → SSE (text/event-stream)   (分离通道)
+    PTY(WS) → /ws/pty/<term_id>                (分离通道)
 ```
 
 ---
 
-## 12. Quart WebSocket：广播协程被丢弃
+### 2. `call_soon_threadsafe` 与 `run_coroutine_threadsafe` 的区别
 
-**问题**: Agent 事件（thinking、tool_call、response）客户端收不到，但服务端日志显示 Hook 调用了广播。
+**问题**: Agent 事件推不到前端。
 
-**原因**: `WsEventHook` 用 `call_soon_threadsafe` 调度广播函数，但广播是 `async def`。`call_soon_threadsafe` 只会调用函数拿到协程对象然后丢弃，**协程永远不会被执行**。
-
-**修复**: 改用 `asyncio.run_coroutine_threadsafe(coro, loop)` 直接调度协程。
+**原因**: `call_soon_threadsafe` 调度 `async def` 时，只调用函数拿到协程对象然后丢弃，协程不会被 await。
 
 ```python
-# 错误 ❌
+# ❌ call_soon_threadsafe → async def → 协程被丢弃
 self._loop.call_soon_threadsafe(self._broadcast_func, data)
-# → _broadcast_func(data) 创建协程对象，未 await，静默丢失
 
-# 正确 ✅
+# ✅ run_coroutine_threadsafe → 真正调度协程
 asyncio.run_coroutine_threadsafe(self._broadcast_func(data), self._loop)
 ```
 
 ---
 
-## 13. Quart WebSocket：`websocket` proxy 跨协程丢失上下文
+### 3. SSE 跨线程 EventEmitter 选择
 
-**问题**: 从 `asyncio.create_task` 或 `run_coroutine_threadsafe` 调度的协程中调用 `websocket.send()`，数据发不到正确的客户端。
+**问题**: Agent 线程安全桥接到 Quart 异步协程。
 
-**原因**: Quart 的 `websocket` 是 context-local proxy，依赖调用链中的 WS 上下文。跨协程调用时上下文丢失，send 的目标不确定。
+**尝试方案**: `call_soon_threadsafe` ❌ / `run_coroutine_threadsafe` 直接发 SSE ❌
 
-**修复**: 在 handler 内用 `@copy_current_websocket_context` 包裹发送函数。
+**最终方案**: `threading.Queue` + executor 轮询 ✅
 
 ```python
-@app.websocket("/ws/chat")
-async def ws_chat():
-    @copy_current_websocket_context
-    async def send_msg(data: str):
-        await websocket.send(data)
-    _ws_senders[client_id] = send_msg
+class _SseHook:
+    def push(self, event_type: str, **kw):
+        self._queue.put_nowait(json.dumps({"type": event_type, **kw}))
 ```
 
 ---
 
-## 14. PTY WebSocket：阻塞读堵住键盘输入
+### 4. PTY 启动失败 + 静默关闭 WebSocket
 
-**问题**: PTY 终端的键盘输入无响应，但 PTY 进程本身是活着的。
+**问题**: 终端面板空白无任何反馈。
 
-**原因**: 用单协程轮询方案交替检查 WS 消息和 PTY 输出时，`term.read()` 是阻塞调用，读 PTY 期间 WS 消息被堵住。
+**原因**: `pywinpty` 未安装时 `Terminal.create()` 返回 `False`，`ws_pty` 直接 `return` 关闭 WS，**不发任何错误消息**，前端陷入无限重连循环。
 
-**修复**: 后台线程读 PTY + async handler 收 WS 输入。
+**修复**: 先发 `{"type":"error","msg":"..."}` 再关闭。
+
+---
+
+### 5. 前端自动重连无限循环
+
+**问题**: WebSocket 断开后一直重试永不停。
+
+**修复**: 限制最多 3 次，超限后显示"重连失败，请点击 ↺ 重试"。
+
+---
+
+### 6. xterm.js FitAddon 在隐藏容器中失效
+
+**问题**: 终端折叠后展开，内容显示不全或空白。
+
+**原因**: CSS `display:none` 时 `clientWidth/clientHeight` 为 0，`FitAddon.fit()` 算出 0 行。
+
+**修复**: 折叠状态跳过初始化，展开时按需创建。
+
+---
+
+### 7. `@copy_current_websocket_context` 的必要性
+
+**问题**: `pty_reader` 线程向 WS 发送数据失败或发错客户端。
+
+**原因**: Quart 的 `websocket` 是 context-local proxy，独立线程调用时上下文丢失。
+
+**修复**: 用装饰器包裹发送函数。
 
 ```python
-def pty_reader():
-    """独立线程读 PTY"""
-    while term.is_alive() and not stop_event.is_set():
-        data = term.read(4096)
-        if data:
-            asyncio.run_coroutine_threadsafe(pty_send(data), loop)
-
-# async handler 专心处理 WS 输入
-while True:
-    msg = await websocket.receive()
-    term.write(msg)
+@copy_current_websocket_context
+async def pty_send(data: bytes):
+    await websocket.send(data)
 ```
+
+---
+
+### 8. pywinpty/winpty 包名不统一
+
+**问题**: pip 安装用 `pywinpty`，conda 安装用 `winpty`。
+
+**修复**: 循环尝试两种模块名。
+
+```python
+for mod_name in ("pywinpty", "winpty"):
+    try:
+        pty_mod = __import__(mod_name)
+        break
+    except ImportError:
+        continue
+```
+
+---
+
+### 9. SSE `data:` 行分片解析
+
+**问题**: SSE 流式数据可能一行被拆成多次 `reader.read()`。
+
+**修复**: 累计 buffer + `split('\n')` + 尾部残留处理。
+
+```javascript
+buffer += decoder.decode(value, {stream: true});
+const lines = buffer.split('\n');
+buffer = lines.pop() || '';
+for (const line of lines) {
+  if (line.startsWith('data: ')) JSON.parse(line.slice(6));
+}
+```
+
+---

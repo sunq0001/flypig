@@ -2,8 +2,11 @@
 
 > 设计文档 · 2026-05-17 · v6（Web UI + xterm.js 架构）
 
-> **注意**：FlyPig 已于 2026-05-17 从 Textual TUI 迁移至 Flask + Vue 3 + xterm.js Web UI。
-> 终端交互的核心架构（Docker Sandbox + Dual-Path）保持不变，前端渲染层由 Textual Widget 改为 xterm.js。
+> **注意**：FlyPig 已于 2026-05-17 从 Textual TUI 迁移至 Web UI。
+> **2026-05-22 更新**：Web 框架已从 Flask + SocketIO 迁移到 **Quart + SSE + WebSocket**。
+>   - AI 对话事件 → SSE（`/api/chat`），WS 仅用于 PTY 终端（`/ws/pty/<term_id>`）
+>   - 终端交互的核心架构（Docker Sandbox + Dual-Path + xterm.js）保持不变
+>   - 详见 `docs/pitfalls.md`「PTY/SSE 架构重构」章节
 
 ## 一、概述
 

@@ -1,4 +1,5 @@
 """工具执行器"""
+import asyncio
 import os
 import platform
 import subprocess
@@ -6,6 +7,7 @@ import time
 import re
 from pathlib import Path
 from typing import Dict, Any, Optional
+from .background import BackgroundTaskManager
 from .context_compressor import TreeSitterCompressor
 
 
@@ -57,6 +59,7 @@ class ToolExecutor:
         self.path_validator = path_validator
         self.sandbox_manager = sandbox_manager
         self._web_mode = False  # Web UI 模式下内联执行命令
+        self.bg_tasks = BackgroundTaskManager()  # 后台任务管理器
 
     def execute(self, tool_name: str, arguments: Dict[str, Any]) -> str:
         """执行工具"""
@@ -241,11 +244,8 @@ class ToolExecutor:
     def tool_bash(self, args: Dict) -> str:
         """执行 shell 命令
 
-        沙箱模式双模式执行：
-        - persist=True: spawn_command（非阻塞弹终端）
-        - persist=False/不传: run_command（阻塞 docker exec 返回输出）
-
-        Web UI 模式：始终内联执行，persist 仅表示更长超时（300s）
+        persist=False（默认）：通常命令，同步等待输出返回。
+        persist=True：后台命令，立即返回 task_id，AI 可用 task_status/task_list 工具追踪。
         """
         command = args.get("command", "")
         timeout_val = args.get("timeout", 60)
@@ -254,57 +254,50 @@ class ToolExecutor:
         if not command:
             return "Error: No command provided"
 
-        # ── Web/Headless 模式：始终内联执行，不弹外部窗口 ──
+        # ── persist=True：投递到后台任务管理器，立即返回 ──
+        if persist:
+            effective_timeout = max(timeout_val, 3600)
+            task_id = self.bg_tasks.launch(command, timeout=effective_timeout)
+            return (
+                f"[Background Task] task_id={task_id}\n"
+                f"  Command: {command}\n"
+                f"  Use task_status(task_id='{task_id}') to check status.\n"
+                f"  Use task_list() to see all background tasks."
+            )
+
+        # ── persist=False：同步等待输出 ──
+        # Web UI 模式：内联执行
         if self._web_mode:
-            return self._run_inline(command, timeout_val, persist)
+            return self._run_inline(command, timeout_val, persist=False)
 
-        # ── 沙箱模式：命令在 Docker 容器内执行 ──
+        # 沙箱模式：在 Docker 容器内执行
         if self.sandbox_manager:
-            workdir = "/workspace"  # 容器内固定挂载点
-            if persist:
-                return self.sandbox_manager.spawn_command(command, workdir)
-            else:
-                return self.sandbox_manager.run_command(command, timeout_val, workdir)
+            workdir = "/workspace"
+            return self.sandbox_manager.run_command(command, timeout_val, workdir)
 
-        # ── 非沙箱模式：保留原有行为 ──
+        # 非沙箱模式
         if self.is_windows:
             command = self._convert_windows_command(command)
 
         try:
-            # ── VS Code 终端：开新 IDE 标签页 ──
+            # VS Code 终端
             if self.is_vscode:
                 ok, msg = self._open_vscode_terminal(command)
                 if ok:
                     return msg
 
-            # ── Windows ──
+            # Windows
             if self.is_windows:
-                if not persist:
-                    output = self._run_inline_windows(command, timeout_val)
-                    if output is not None:
-                        return output
-                    return (
-                        f"[INLINE TIMEOUT] Command exceeded {timeout_val}s: {command}\n"
-                        f"  If this command needs an interactive terminal, "
-                        f"retry with persist=True."
-                    )
-
-                # persist=True → 弹新终端窗口
-                workdir = str(self.workspace_dir)
-                safe_cmd = command.replace("'", "''").replace("\n", " ")
-                start_cmd = (
-                    f'start "FlyPig" powershell -NoExit -Command '
-                    f'"cd ''{workdir}''; {safe_cmd}"'
+                output = self._run_inline_windows(command, timeout_val)
+                if output is not None:
+                    return output
+                return (
+                    f"[INLINE TIMEOUT] Command exceeded {timeout_val}s: {command}\n"
+                    f"  If this command needs an interactive terminal, "
+                    f"retry with persist=True."
                 )
-                subprocess.Popen(
-                    start_cmd,
-                    shell=True,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL
-                )
-                return f"[Started in new window] {command}"
 
-            # ── Linux/Mac：开新终端窗口或后台运行 ──
+            # Linux/Mac
             success, msg = self._open_new_terminal_linux(command)
             if success:
                 return msg
@@ -313,71 +306,81 @@ class ToolExecutor:
         except Exception as e:
             return f"[SYSTEM_ERROR] Tool internal exception ({type(e).__name__}): {e}"
 
+    @staticmethod
+    async def _run_subprocess_async_core(command: str, timeout_val: int) -> str:
+        """async 子进程执行核心 — 使用 asyncio.create_subprocess_shell
+
+        跨平台安全，Windows 上无管道死锁问题，支持 asyncio.wait_for 真实超时。
+
+        Raises:
+            asyncio.TimeoutError: 超时
+        """
+        proc = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(), timeout=timeout_val
+            )
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise
+
+        stdout_str = strip_ansi(stdout.decode("utf-8", errors="replace"))
+        stderr_str = strip_ansi(stderr.decode("utf-8", errors="replace"))
+
+        if proc.returncode == 0:
+            if stdout_str:
+                return stdout_str
+            if stderr_str:
+                return stderr_str
+            return f"[OK] Command completed (no output): {command[:100]}"
+
+        detail = stdout_str[:500] if stdout_str else ""
+        if stderr_str:
+            detail = (detail + "\n" + stderr_str[:500]).strip()
+        return f"[ERROR] Exit code {proc.returncode}\n{detail[:2000]}"
+
+    @staticmethod
+    def _run_subprocess_sync(command: str, timeout_val: int) -> str:
+        """同步包装层：用独立事件循环执行 async subprocess
+
+        与 Agent 线程中的已有事件循环不冲突。
+        """
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(
+                ToolExecutor._run_subprocess_async_core(command, timeout_val)
+            )
+        except asyncio.TimeoutError:
+            return (
+                f"[TIMEOUT] Command exceeded {timeout_val}s: {command[:100]}\n"
+                f"  If this command needs an interactive terminal, "
+                f"retry with persist=True."
+            )
+        except Exception as e:
+            return f"[SYSTEM_ERROR] {type(e).__name__}: {e}"
+        finally:
+            loop.close()
+
     def _run_inline(self, command: str, timeout_val: int, persist: bool) -> str:
         """内联执行命令（Web/Headless 模式专用）
 
-        简化的执行逻辑：使用 subprocess.run 执行并返回输出。
+        使用 asyncio.create_subprocess_shell 异步执行，返回干净文本输出。
         persist=True 时使用更长超时（300s）。
         """
         effective_timeout = max(timeout_val, 300) if persist else timeout_val
 
-        # ── 沙箱：走 docker exec，返回干净文本 ──
+        # ── 沙箱：走 docker exec ──
         if self.sandbox_manager:
             output = self.sandbox_manager.run_command(command, effective_timeout)
             return strip_ansi(output)
 
-        # ── 无沙箱：走本地 subprocess ──
-        effective_timeout = max(timeout_val, 300) if persist else timeout_val
-        max_wait = effective_timeout
-        check_interval = 3
-
-        import threading as _threading
-        result_holder = {"output": None, "exception": None}
-
-        def _run():
-            try:
-                result = subprocess.run(
-                    command,
-                    shell=True,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=max_wait,
-                )
-                raw_stdout = strip_ansi(result.stdout or "")
-                raw_stderr = strip_ansi(result.stderr or "")
-                if result.returncode == 0:
-                    output = raw_stdout if raw_stdout else (raw_stderr if raw_stderr else "[OK] (no output)")
-                else:
-                    detail = raw_stdout[:500] if raw_stdout else ""
-                    if raw_stderr:
-                        detail = (detail + "\n" + raw_stderr[:500]).strip()
-                    output = f"[ERROR] Exit code {result.returncode}\n{detail[:2000]}"
-                result_holder["output"] = output
-            except subprocess.TimeoutExpired:
-                result_holder["exception"] = f"[INLINE TIMEOUT] {effective_timeout}s exceeded"
-            except Exception as e:
-                result_holder["exception"] = f"[SYSTEM_ERROR] {type(e).__name__}: {e}"
-
-        t = _threading.Thread(target=_run, daemon=True)
-        t.start()
-
-        import time as time_module
-        elapsed = 0
-        while t.is_alive() and elapsed < effective_timeout:
-            time_module.sleep(min(check_interval, effective_timeout - elapsed))
-            elapsed += check_interval
-
-        if result_holder["output"] is not None:
-            return result_holder["output"]
-        if result_holder["exception"]:
-            return result_holder["exception"]
-
-        return (
-            f"[TIMEOUT] Command still running after {effective_timeout}s: {command[:100]}\n"
-            f"  The command may be running in background. Check output manually."
-        )
+        # ── 无沙箱：走 asyncio subprocess ──
+        return self._run_subprocess_sync(command, effective_timeout)
 
     
     @staticmethod
@@ -397,42 +400,17 @@ class ToolExecutor:
     def _run_inline_windows(self, command: str, timeout_val: int) -> Optional[str]:
         """在当前进程内直接执行命令，捕获 stdout/stderr
 
+        使用 asyncio.create_subprocess_shell，避免 Windows 管道死锁。
         输出已 strip ANSI escape sequences。
 
         Returns:
             str: 输出内容
-            None: 执行失败，应由调用方回退到弹窗
+            None: 执行失败（超时/系统错误），应由调用方回退到弹窗
         """
-        try:
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=timeout_val,
-            )
-
-            stdout = strip_ansi(result.stdout or "").strip()
-            stderr = strip_ansi(result.stderr or "").strip()
-
-            if result.returncode == 0:
-                if stdout:
-                    return stdout
-                if stderr:
-                    return stderr
-                return f"[OK] Command completed (no output): {command[:100]}"
-
-            detail = stdout[:200] if stdout else ""
-            if stderr:
-                detail = (detail + "\n" + stderr[:500]).strip()
-            return f"[ERROR] Exit code {result.returncode}: {command[:100]}\n{detail[:1000]}"
-
-        except subprocess.TimeoutExpired:
+        output = self._run_subprocess_sync(command, timeout_val)
+        if output.startswith("[TIMEOUT]") or output.startswith("[SYSTEM_ERROR]"):
             return None
-        except Exception:
-            return None
+        return output
 
     def _convert_windows_command(self, command: str) -> str:
         """转换 Linux 命令到 Windows（保持原格式，仅转换命令本身）"""
@@ -568,6 +546,58 @@ class ToolExecutor:
                 pass
         return f"Cleared {count} __pycache__ directories"
 
+    def tool_task_status(self, args: Dict) -> str:
+        """查询后台任务的状态和输出"""
+        task_id = args.get("task_id", "")
+        if not task_id:
+            tasks = self.bg_tasks.list_tasks()
+            if not tasks:
+                return "[Background Tasks] No active tasks."
+            lines = ["[Background Tasks]"]
+            for t in tasks:
+                lines.append(
+                    f"  [{t['status']}] {t['id']}  "
+                    f"{t['command'][:80]}  "
+                    f"({t['elapsed']:.1f}s)"
+                )
+            return "\n".join(lines)
+
+        info = self.bg_tasks.status(task_id)
+        if info is None:
+            return f"[Error] Task not found: {task_id}"
+
+        status_icon = {"running": ">", "completed": "OK",
+                       "failed": "ERR", "timeout": "TO", "cancelled": "X"}
+        icon = status_icon.get(info["status"], "?")
+
+        lines = [
+            f"[Background Task {info['id']}]",
+            f"  Status: {icon} {info['status']}",
+            f"  Command: {info['command']}",
+            f"  Elapsed: {info['elapsed']}s",
+        ]
+        if info["exit_code"] is not None:
+            lines.append(f"  Exit code: {info['exit_code']}")
+        if info["output"]:
+            lines.append(f"  Output:\n{info['output']}")
+        return "\n".join(lines)
+
+    def tool_task_list(self, args: Dict) -> str:
+        """列出所有后台任务"""
+        tasks = self.bg_tasks.list_tasks()
+        if not tasks:
+            return "[Background Tasks] No tasks."
+
+        lines = ["[Background Tasks]"]
+        for t in tasks:
+            lines.append(
+                f"  [{t['status']}] {t['id']}  "
+                f"{t['command'][:80]}  "
+                f"({t['elapsed']:.1f}s)"
+            )
+        lines.append(f"  ---\n  Total: {len(tasks)} task(s)")
+        return "\n".join(lines)
+
     def _validate_path(self, path: Path, mode: str = "read") -> tuple:
         """验证路径是否允许访问（沙箱集成）
 
@@ -671,13 +701,16 @@ class ToolExecutor:
                     "name": "bash",
                     "description": "Execute a shell command. "
                                    "Short commands (compile, git, pip) return stdout directly. "
-                                   "Long-running commands (npm run dev, python server) need persist=true.",
+                                   "Long-running commands (npm run dev, python server) MUST use persist=true "
+                                   "to run in the background without blocking your progress. "
+                                   "You can then use task_status() to check output later.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "command": {"type": "string", "description": "Shell command to execute"},
                             "timeout": {"type": "integer", "description": "Timeout in seconds", "default": 60},
-                            "persist": {"type": "boolean", "description": "Keep terminal open (long-running commands like dev servers)", "default": False}
+                            "persist": {"type": "boolean", "description": "Run in background (default: False). "
+                                                                         "Use true for long-running commands like dev servers, npm install, docker builds.", "default": False}
                         },
                         "required": ["command"]
                     }
@@ -712,5 +745,32 @@ class ToolExecutor:
                         "required": ["pattern"]
                     }
                 }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "task_status",
+                    "description": "Check the status and output of a background task. "
+                                   "Leave task_id empty to list all tasks.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "task_id": {"type": "string", "description": "Task ID to check, or empty to list all"}
+                        },
+                        "required": []
+                    }
+                }
+            },
+            {
+                "type": "function",
+                "function": {
+                    "name": "task_list",
+                    "description": "List all background tasks with their status",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {}
+                    }
+                }
             }
         ]
+    
