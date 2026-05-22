@@ -5,12 +5,22 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>FlyPig Agent</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
-<!-- Monaco Editor (VS Code 引擎) — 通过 EditorAdapter 解耦使用 -->
-<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/loader.js"></script>
+<!-- Monaco Editor AMD loader（本地托管） -->
+<script src="/vs/loader.js"></script>
+<script>
+// 临时禁用 AMD define，以防 xterm UMD 被 Monaco AMD 拦截
+window.__monacoDefine = window.define;
+window.define = undefined;
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
+<!-- xterm 终端（此时 define 已禁用，UMD 不会进入 AMD 模式） -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<script>
+// 恢复 Monaco AMD define
+window.define = window.__monacoDefine;
+</script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{
@@ -289,7 +299,7 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
             :key="node.path"
             :node="node"
             :depth="0"
-            :selected-path="activeTabIndex >= 0 ? openTabs[activeTabIndex].path : ''"
+            :selected-path="activeTabIndex >= 0 && activeTabIndex < openTabs.length ? openTabs[activeTabIndex].path : ''"
             @select="openFile"
           />
         </template>
@@ -405,10 +415,12 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
 </div>
 
 <script>
-// ── Monaco Editor 初始化 ──
-// AMD loader 已通过 CDN 加载，require 全局可用
-require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs' }});
-const _monacoReady = new Promise(resolve => require(['vs/editor/editor.main'], () => resolve()));
+// ── Monaco Editor ──
+// loader.js 已在 <head> 中加载，这里只需配置路径并加载主模块
+require.config({ paths: { vs: '/vs' }});
+const _monacoReady = new Promise(resolve => {
+  require(['vs/editor/editor.main'], () => resolve());
+});
 
 // ── EditorAdapter — 统一的编辑器接口 ──
 // 后续切换到 OpenSumi 只需替换此 Adapter 的实现
@@ -893,6 +905,10 @@ app = createApp({
           if (node.children) node.children.forEach(collect);
         })(fileTree.value);
         openTabs.value = openTabs.value.filter(t => paths.has(t.path));
+        // 调整 activeTabIndex 防止越界
+        if (activeTabIndex.value >= openTabs.value.length) {
+          activeTabIndex.value = openTabs.value.length - 1;
+        }
         // 自动打开新写入的文件
         if (_pendingOpenFile) {
           openFile(_pendingOpenFile);
