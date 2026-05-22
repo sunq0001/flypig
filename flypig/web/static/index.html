@@ -216,7 +216,10 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
 .bubble th,.bubble td{border:1px solid var(--border);padding:4px 8px;text-align:left}
 .bubble th{background:var(--bg3);font-weight:600}
 
-/* 加载动画 */
+.term-status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin:0 4px}
+.term-status-dot.connected{background:var(--green);box-shadow:0 0 4px var(--green)}
+.term-status-dot.connecting{background:var(--yellow);animation:pulse 1s infinite}
+.term-status-dot.error{background:var(--red)}
 .loading-dots::after{content:'';animation:dots 1.5s infinite}
 @keyframes dots{0%{content:'.'}33%{content:'..'}66%{content:'...'}}
 
@@ -335,6 +338,9 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
       <div id="terminal-area" :style="{height: termHeight + 'px'}">
         <div class="term-header">
           <span class="term-title">⬢ 终端</span>
+          <span class="term-status-dot" :class="termStatus"></span>
+          <span class="term-status-text">{{ termStatusText }}</span>
+          <span style="flex:1"></span>
           <button class="term-btn" @click="resetTerminal" title="重启终端">↺</button>
           <button class="term-btn" @click="toggleTerminal" title="折叠终端">{{ termCollapsed ? '⬆' : '⬇' }}</button>
         </div>
@@ -450,6 +456,11 @@ app = createApp({
       return m ? m.has_key : false;
     });
 
+    const termStatusText = computed(() => {
+      const map = {disconnected:'', connecting:'连接中...', connected:'已连接', error:'连接失败'};
+      return map[termStatus.value] || '';
+    });
+
     function formatModelName(m) {
       const labels = {
         'deepseek-v4-flash': 'DeepSeek V4 Flash (快速/便宜)',
@@ -467,8 +478,11 @@ app = createApp({
     const terminalXterm = ref(null);
     const termHeight = ref(200);
     const termCollapsed = ref(false);
+    const termStatus = ref('disconnected');
     const vResizing = ref(false);
     let _ptyWs = null;          // PTY WebSocket 连接
+    let _ptyReconnectCount = 0; // 重连计数器
+    let _ptyTermId = '';        // 当前终端 ID
     let _xterm = null;
     let _xtermFit = null;
     // PTY WebSocket 走同端口（由 waitress + simple-websocket 处理）
@@ -528,6 +542,7 @@ app = createApp({
       vResizing.value = null;
       document.removeEventListener('mousemove', onVResize);
       document.removeEventListener('mouseup', stopVResize);
+      if (_xtermFit) _xtermFit.fit();
     }
 
     // ── CodeMirror mode 映射 ──
@@ -583,46 +598,7 @@ app = createApp({
     }
 
     // ── WebSocket 连接 (/ws/chat) ──
-    let _chatWs = null;
-
-    function connectChatWS() {
-      if (_chatWs) { _chatWs.close(); _chatWs = null; }
-      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const url = `${protocol}//${location.host}/ws/chat`;
-      console.log('[Chat WS] connecting to', url);
-
-      _chatWs = new WebSocket(url);
-      _chatWs.onopen = () => {
-        statusClass.value = 'online';
-        statusText.value = '已连接';
-        console.log('[Chat WS] connected');
-      };
-
-      _chatWs.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'connected') {
-            // 初始连接确认，忽略
-            return;
-          }
-          handleEvent(data);
-        } catch (e) {
-          console.error('[Chat WS] parse error:', e);
-        }
-      };
-
-      _chatWs.onclose = () => {
-        statusClass.value = 'offline';
-        statusText.value = '连接断开，正在重连...';
-        console.log('[Chat WS] disconnected');
-        _chatWs = null;
-        setTimeout(connectChatWS, 2000);
-      };
-
-      _chatWs.onerror = (err) => {
-        console.error('[Chat WS] error:', err);
-      };
-    }
+    let _abortChat = null;  // 用于取消正在进行的 SSE 请求
 
     function handleEvent(data) {
       switch (data.type) {
@@ -654,9 +630,15 @@ app = createApp({
           statusText.value = `工具链: ${data.tool_count} 个工具 | ${data.tokens?.toLocaleString()} tokens`;
           break;
         case 'llm_end':
-          costStr.value = formatCost(data.session_cost, data.session_tokens);
           if (data.model) {
-            messages.value.push({type:'info', content:'🤖 ' + data.model});
+            let cacheInfo = '';
+            if (data.cache_hit_tokens && data.cache_hit_tokens > 0) {
+              cacheInfo = ` | 🗄️ ${data.cache_pct}% cached`;
+            }
+            messages.value.push({
+              type:'info',
+              content:`🤖 ${data.model} | ${(data.tokens || 0).toLocaleString()} tokens${cacheInfo} | $${(data.cost || 0).toFixed(4)}`
+            });
           }
           break;
         case 'response':
@@ -845,8 +827,7 @@ app = createApp({
         if (model) currentModel.value = model;
         // 加载文件树
         await loadFileTree();
-        // 连接 WebSocket Chat
-        connectChatWS();
+        // 使用 SSE 发送消息（无需提前连接）
         // 启动终端
         setTimeout(() => initTerminal(), 500);
         statusText.value = '就绪';
@@ -899,112 +880,141 @@ app = createApp({
       _initEditor(tab.content, getMode(ext));
     }
 
-    // ── 终端（原生 WebSocket ↔ PTY） ──
+    // ── 终端（WebSocket ↔ PTY） ──
     function initTerminal() {
-      const container = terminalXterm.value;
-      if (!container || _xterm) return;
+      if (termCollapsed.value) return;
+      if (_ptyWs) { _ptyWs.close(); _ptyWs = null; }
+      if (_xterm) { _xterm.dispose(); _xterm = null; _xtermFit = null; }
 
+      const container = terminalXterm.value;
+      if (!container) return;
+
+      _ptyReconnectCount = 0;
+      _ptyTermId = 't-' + Date.now();
+      termStatus.value = 'connecting';
+
+      _xtermFit = new FitAddon.FitAddon();
       _xterm = new Terminal({
         cursorBlink: true,
-        cursorStyle: 'bar',
+        cursorStyle: 'block',
         fontSize: 13,
-        fontFamily: "'JetBrains Mono','Cascadia Code','Fira Code',Consolas,'Courier New',monospace",
+        fontFamily: "'JetBrains Mono','Cascadia Code','Fira Code',Consolas,monospace",
         theme: {
-          background: '#1e1e2e', foreground: '#cdd6f4',
-          cursor: '#89b4fa', selectionBackground: '#45475a',
-          black: '#45475a', red: '#f38ba8', green: '#a6e3a1',
-          yellow: '#f9e2af', blue: '#89b4fa', magenta: '#f5c2e7',
-          cyan: '#94e2d5', white: '#bac2de',
-          brightBlack: '#585b70', brightRed: '#f38ba8',
-          brightGreen: '#a6e3a1', brightYellow: '#f9e2af',
-          brightBlue: '#89b4fa', brightMagenta: '#f5c2e7',
-          brightCyan: '#94e2d5', brightWhite: '#a6adc8',
+          background: '#1e1e2e', foreground: '#cdd6f4', cursor: '#89b4fa',
+          selectionBackground: '#585b70',
+          black:'#45475a', red:'#f38ba8', green:'#a6e3a1',
+          yellow:'#f9e2af', blue:'#89b4fa', magenta:'#b4befe',
+          cyan:'#94e2d5', white:'#cdd6f4',
+          brightBlack:'#585b70', brightRed:'#f38ba8', brightGreen:'#a6e3a1',
+          brightYellow:'#f9e2af', brightBlue:'#89b4fa', brightMagenta:'#b4befe',
+          brightCyan:'#94e2d5', brightWhite:'#cdd6f4',
         },
-        allowProposedApi: true,
       });
-      _xtermFit = new FitAddon.FitAddon();
       _xterm.loadAddon(_xtermFit);
       _xterm.open(container);
       _xtermFit.fit();
+      _xterm.focus();
 
-      // 连接原生 WebSocket → PTY
-      _connectPtyWs();
-
-      // 键盘输入 → WebSocket 发送原始字节
+      // 用户输入 → WS
       _xterm.onData((data) => {
         if (_ptyWs && _ptyWs.readyState === WebSocket.OPEN) {
           _ptyWs.send(data);
         }
       });
 
-      // resize → 文本帧 JSON
-      _xterm.onResize(({ cols, rows }) => {
+      // 终端 resize（窗口缩放、面板拖拽等）→ WS
+      _xterm.onResize(({cols, rows}) => {
         if (_ptyWs && _ptyWs.readyState === WebSocket.OPEN) {
-          _ptyWs.send(JSON.stringify({ type: 'resize', cols, rows }));
+          _ptyWs.send(JSON.stringify({type:'resize', cols, rows}));
         }
       });
 
-      // 窗口大小变化时自适应
-      window.addEventListener('resize', () => {
-        if (_xtermFit) setTimeout(() => _xtermFit.fit(), 50);
-      });
+      _connectPtyWs(_ptyTermId);
     }
 
-    function _connectPtyWs() {
-      const termId = 'term_' + Date.now();
-      // 单端口：WS 连到页面同源（HTTP + WS 都在 8321）
+    function _connectPtyWs(termId) {
+      if (!_xterm) return;
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const url = `${protocol}//${location.host}/ws/pty/${termId}`;
-      console.log('[PTY WS] connecting to', url);
+      const url = protocol + '//' + location.host + '/ws/pty/' + termId;
+      const ws = new WebSocket(url);
+      ws.binaryType = 'arraybuffer';
 
-      _ptyWs = new WebSocket(url);
-      _ptyWs.binaryType = 'arraybuffer';
-
-      _ptyWs.onopen = () => {
-        console.log('[PTY WS] connected');
+      ws.onopen = () => {
+        _ptyReconnectCount = 0;
+        termStatus.value = 'connected';
         if (_xterm) {
-          _xterm.write('\r\n\x1b[32m[终端已连接]\x1b[0m\r\n');
-          _xterm.focus();
+          _xterm.writeln('\x1b[32m[终端已连接]\x1b[0m');
+          if (setupWorkspace.value) {
+            _xterm.writeln('  工作区: \x1b[36m' + setupWorkspace.value + '\x1b[0m');
+          }
+          _xterm.write('');
+        }
+        if (_xtermFit) setTimeout(() => _xtermFit.fit(), 50);
+      };
+
+      ws.onmessage = (e) => {
+        if (!_xterm) return;
+        // 检查是否为服务端错误消息（纯文本 JSON）
+        if (typeof e.data === 'string') {
+          try {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'error') {
+              _xterm.writeln('\r\n\x1b[31m[错误] ' + (msg.msg || '终端启动失败') + '\x1b[0m');
+              termStatus.value = 'error';
+              return;
+            }
+          } catch (_) {}
+        }
+        if (e.data instanceof ArrayBuffer) {
+          _xterm.write(new Uint8Array(e.data));
+        } else {
+          _xterm.write(e.data);
         }
       };
 
-      _ptyWs.onmessage = (e) => {
-        if (_xterm) {
-          if (e.data instanceof ArrayBuffer) {
-            _xterm.write(new Uint8Array(e.data));
-          } else if (typeof e.data === 'string') {
-            _xterm.write(e.data);
+      ws.onclose = () => {
+        if (_ptyWs === ws) _ptyWs = null;
+        // 限制自动重连：最多 3 次
+        if (_xterm && _ptyReconnectCount < 3 && termStatus.value !== 'error') {
+          _ptyReconnectCount++;
+          termStatus.value = 'connecting';
+          setTimeout(() => {
+            if (!_ptyWs && _xterm && _ptyReconnectCount <= 3) {
+              _connectPtyWs(termId);
+            }
+          }, 2000);
+        } else if (_ptyReconnectCount >= 3 && termStatus.value !== 'error') {
+          termStatus.value = 'error';
+          if (_xterm) {
+            _xterm.writeln('\r\n\x1b[31m[终端] 重连失败，请点击 ↺ 重试\x1b[0m');
           }
         }
       };
 
-      _ptyWs.onclose = () => {
-        console.log('[PTY WS] disconnected');
-        if (_xterm) {
-          _xterm.write('\r\n\x1b[31m[连接断开，2秒后重连]\x1b[0m\r\n');
-        }
-        _ptyWs = null;
-        // 自动重连
-        setTimeout(() => {
-          if (_xterm && !_ptyWs) _connectPtyWs();
-        }, 2000);
-      };
-
-      _ptyWs.onerror = (err) => {
-        console.error('[PTY WS] error:', err);
-      };
+      ws.onerror = () => { ws.close(); };
+      _ptyWs = ws;
     }
 
     function resetTerminal() {
       if (_ptyWs) { _ptyWs.close(); _ptyWs = null; }
-      if (_xterm) { _xterm.dispose(); _xterm = null; }
+      if (_xterm) { _xterm.dispose(); _xterm = null; _xtermFit = null; }
+      const container = terminalXterm.value;
+      if (container) container.innerHTML = '';
+      termStatus.value = 'disconnected';
       setTimeout(() => initTerminal(), 100);
     }
 
     function toggleTerminal() {
       termCollapsed.value = !termCollapsed.value;
-      if (!termCollapsed.value && _xtermFit) {
-        setTimeout(() => _xtermFit.fit(), 100);
+      if (!termCollapsed.value) {
+        setTimeout(() => {
+          if (!_xterm) {
+            initTerminal();
+          } else {
+            if (_xtermFit) _xtermFit.fit();
+            if (_xterm) _xterm.focus();
+          }
+        }, 50);
       }
     }
 
@@ -1029,13 +1039,44 @@ app = createApp({
       statusText.value = 'AI 思考中...';
       statusClass.value = 'running';
 
-      if (!_chatWs || _chatWs.readyState !== WebSocket.OPEN) {
-        messages.value.push({type:'error', content: '❌ WebSocket 未连接'});
+      try {
+        // 通过 SSE 发送消息并流式接收事件
+        const res = await fetch('/api/chat', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({message: text}),
+        });
+        if (!res.ok) {
+          messages.value.push({type:'error', content:'❌ ' + (await res.text())});
+          agentRunning.value = false;
+          statusText.value = '出错了';
+          return;
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, {stream: true});
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                handleEvent(data);
+              } catch (e) {
+                console.error('[SSE] parse error:', e);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        messages.value.push({type:'error', content:'❌ ' + e.message});
         agentRunning.value = false;
-        statusText.value = '连接断开';
-        return;
+        statusText.value = '出错了';
       }
-      _chatWs.send(JSON.stringify({type: 'chat', msg: text}));
     }
 
     function renderMarkdown(text) {
@@ -1129,8 +1170,6 @@ app = createApp({
     }
 
     async function switchToModel(modelName, apiKey) {
-      if (_chatWs) { _chatWs.close(); _chatWs = null; }
-      messages.value.push({type:'info', content:`🔄 切换到 ${modelName}`});
       const res = await fetch('/api/init', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -1143,10 +1182,9 @@ app = createApp({
       const data = await res.json();
       if (data.ok) {
         await loadFileTree();
-        connectChatWS();
         setTimeout(() => initTerminal(), 500);
         statusText.value = '就绪';
-        messages.value.push({type:'info', content:`✅ 已切换至 ${modelName}`});
+        messages.value.push({type:'info', content:`✅ 后端已切换：${modelName}`});
       } else {
         messages.value.push({type:'error', content:'❌ 切换失败: ' + (data.error || '未知错误')});
       }
@@ -1159,7 +1197,7 @@ app = createApp({
       messages, userInput, agentRunning, statusText, statusClass, costStr,
       messagesRef, layoutRef, editorContainer,
       leftWidth, rightWidth, resizing, vResizing, startResize, startVResize,
-      terminalXterm, termHeight, termCollapsed,
+      terminalXterm, termHeight, termCollapsed, termStatus, termStatusText,
       browseWorkspace, setupNext, setupFinish, openFile, switchTab, closeTab,
       sendMessage, handleKeydown, resetChat, showCost, renderMarkdown,
       initTerminal, resetTerminal, toggleTerminal,

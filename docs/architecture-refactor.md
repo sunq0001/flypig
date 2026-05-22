@@ -1,334 +1,398 @@
-# FlyPig 架构重构设计文档
+# FlyPig Agent 架构文档
 
-> 基于原生 WebSocket(asyncio) + PTY 的终端系统（AI 事件保持 SSE）
+> 最后更新: 2026-05-22 · 架构版本: v3 (Quart + SSE + WebSocket)
 
-## 一、架构总览
+---
 
-### 现状问题
-
-当前 Flask-SocketIO + SSE 双通道架构存在两个根本问题：
-
-1. **SocketIO 不适合终端**：终端交互本质是字节流（PTY 原始输出含 ANSI 码、二进制帧），SocketIO 只能传字符串/JSON，需要额外序列化
-2. **gevent 污染**：`monkey_patch_all()` 影响 subprocess/threading 行为，导致不可预期的问题
-
-注意：**当前 SSE 用于 AI 事件推送是合理且隔离的**，不在改造范围内。
-
-### 新架构：双服务器，三通道
+## 一、架构演进
 
 ```
-┌──────────────────────────────────────────────────────────────┐
-│                         浏览器                                    │
+v1: Textual TUI (终端界面)          → 纯 CLI，功能有限
+v2: Flask + Vue 3 + SocketIO       → Web UI，双端口 (HTTP:8321 + WS:8322)
+v3: Quart + SSE + WebSocket (当前)  → 单端口统一，原生 WebSocket 支持
+```
+
+### 各版本关键变化
+
+| 版本 | Web 框架 | 终端通道 | Agent 事件 | 端口 |
+|------|---------|---------|-----------|------|
+| v1 | 无 | OS 原生 PTY | N/A | CLI |
+| v2 | Flask | Flask-SocketIO (WS:8322) | SocketIO | 8321(HTTP) + 8322(WS) |
+| v3 | Quart | 原生 WebSocket (同端口) | SSE | 8321 (单端口) |
+
+---
+
+## 二、整体架构图
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                    flypig/__main__.py                             │
+│          --web (默认)  /  --task /  -t  /  --no-web               │
+└─────────────────────────┬────────────────────────────────────────┘
+                          │
+┌─────────────────────────▼────────────────────────────────────────┐
+│                    Quart 服务器 (hypercorn)                        │
+│                        127.0.0.1:8321                            │
 │                                                                   │
-│  ┌── 终端面板 ──────────────────────────────────────┐          │
-│  │  Tab 1 (人: 可交互)         Tab N (AI: 只读)       │          │
-│  │  ┌────────────────────┐    ┌──────────────────┐   │          │
-│  │  │ xterm.js ↔ PTY    │    │ xterm.js (只读)  │   │          │
-│  │  │ 双向实时字节流     │    │ 展示卡片命令结果  │   │          │
-│  │  └────────┬───────────┘    └──────────────────┘   │          │
-│  └───────────┼───────────────────────────────────────┘          │
-│              │                                                   │
-│  ┌── 对话区 ─┼──────────────────────────────────────────────┐   │
-│  │           │                                                   │   │
-│  │  💬 用户发消息 ──→ POST /api/run ──→ Agent 线程              │   │
-│  │           │  Agent 执行 subprocess  ↔ LLM                    │   │
-│  │           │  输出 → WebEventHook → SSE → 卡片               │   │
-│  │           │                                                    │   │
-│  │  ┌── 命令卡片 ──────────────────────────────┐               │   │
-│  │  │  💻 npm install                           │               │   │
-│  │  │  added 152 packages...                    │               │   │
-│  │  │  [📋复制] [▶在终端打开] [↺重试]          │               │   │
-│  │  └───────────────────────────────────────────┘               │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-└──────────────────────────────────────────────────────────────────┘
-  |  WS(字节)    |      SSE推送          |      HTTP REST
-  |  port 8322   |      port 8321        |      port 8321
-  ▼              ▼                       ▼
-┌──────────────────────────────────────────────────────────────┐
-│                    服务器 (双进程并行)                             │
-│                                                                   │
-│  Port 8321: Flask HTTP (threading, 无 gevent, 无 monkey_patch)    │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │  /api/config    /api/run    /api/files    /api/tree         │  │
-│  │  SSE: /api/events (WebEventHook → Queue)                    │  │
-│  │  Agent 线程: agent.run() → tool_bash → subprocess           │  │
-│  │  └─ 结果推 SSE → 前端卡片 + 返回 AI 决策                     │  │
-│  └────────────────────────────────────────────────────────────┘  │
-│                                                                   │
-│  Port 8322: asyncio WebSocket 服务器 (纯 PTY 管道)                │
-│  ┌────────────────────────────────────────────────────────────┐  │
-│  │  /pty/:id        双向字节 ↔ PTY（新, 替换 SocketIO）        │  │
-│  │  TerminalManager (线程安全, asyncio 层)                     │  │
-│  │  └─ PTY-1: {proc, fd, alive}                               │  │
-│  │  └─ PTY-2: {proc, fd, alive}                               │  │
-│  └────────────────────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────────────────┘
+│  ┌─────────────┐   ┌──────────────┐   ┌───────────────────────┐ │
+│  │  HTTP API   │   │  SSE 端点     │   │  WebSocket 端点        │ │
+│  │  /api/*     │   │  /api/chat   │   │  /ws/pty/<term_id>    │ │
+│  │             │   │              │   │                       │ │
+│  │ - 配置/初始化│   │ Agent 事件流  │   │ PTY 字节管道           │ │
+│  │ - 文件操作   │   │ Queue桥接     │   │ 读线程 + WS 写        │ │
+│  │ - 文件树     │   │ SSE 格式     │   │ binary/JSON 消息      │ │
+│  │ - Agent命令  │   │              │   │                       │ │
+│  └──────┬──────┘   └──────┬───────┘   └──────────┬────────────┘ │
+│         │                │                       │               │
+│         └──────┬─────────┘                       │               │
+│                │                                 │               │
+└────────────────┼─────────────────────────────────┼───────────────┘
+                 │                                 │
+    ┌────────────▼────────┐           ┌────────────▼───────────┐
+    │   Agent 线程池        │           │   PTY 读取线程          │
+    │   (executor)         │           │   (threading.Thread)   │
+    │                      │           │                        │
+    │  Agent.run()         │           │  term.read() → WS.send │
+    │  → EventHook → Queue │           │  (10ms polling loop)   │
+    └──────────────────────┘           └────────────────────────┘
+                          │
+    ┌─────────────────────▼─────────────────────────────────────┐
+    │                     前端 (Vue 3 SPA)                       │
+    │                                                           │
+    │  ┌─────────┬─────────────────────────┬──────────────────┐ │
+    │  │ Sidebar │      Center              │     Chat         │ │
+    │  │ 260px   │  (flex:1)               │     360px        │ │
+    │  │         │                         │                  │ │
+    │  │ 文件树   │  标签页 + CodeMirror     │  消息列表         │ │
+    │  │ (递归)  │  (语法高亮, 只读)        │  (Markdown渲染)  │ │
+    │  │         ├─────────────────────────┤  输入框           │ │
+    │  │         │  xterm.js 终端面板       │  模型选择         │ │
+    │  │         │  WebSocket ↔ PTY        │  SSE 事件流       │ │
+    │  └─────────┴─────────────────────────┴──────────────────┘ │
+    └───────────────────────────────────────────────────────────┘
 ```
 
-### 关键原则
+---
 
-- **服务器不解析、不记账、不检测标记** — 仅仅是字节管道
-- **PTY 和 AI 事件完全隔离** — 不同协议、不同端口、不同进程
-- **AI 命令走 subprocess，不走 PTY** — 结果推卡片给人看 + 返回给 AI
-- **两个服务器共享最少状态** — 仅一个线程安全的终端列表做管理用
+## 三、模块详解
 
-## 二、三通道详细设计
+### 3.1 入口 (`__main__.py`)
 
-### 通道 1：PTY 终端（WebSocket，原始字节）
-
-**用途**：人操作交互式终端
-
-**端口**：8322
-
-**路径**：`ws://host:8322/pty/{term_id}`
-
-**方向**：双向
-
-**格式**：原始二进制帧（`Uint8Array`）
-
-| 方向 | 内容 | 说明 |
-|:----:|------|------|
-| 客户端→服务器 | 键盘按键字节 | 每次按键（含 Ctrl+C = `\x03`） |
-| 服务器→客户端 | PTY stdout 输出 | Shell 输出（含 ANSI 颜色码） |
-| 服务器→客户端 | 调整大小通知 | `{type:"resize", cols, rows}` 以文本帧发送 |
-
-**服务器逻辑**（极简管道）：
-
-```
-ws.onmessage → os.write(ptm_fd, data)          # 按键 → PTY
-pty 输出 → asyncio 事件循环轮询                 # PTY → xterm.js
-         → ws.send(output_bytes)
+```python
+python -m flypig [--web | --task <msg> | --no-web]
 ```
 
-**生命周期**：
-```
-WS 连接建立 → 创建 PTY + Shell → 双向转发字节
-WS 断开 → 杀死 Shell 进程 → 清理 PTY
-```
+- **`--web`** (默认): 启动 Quart Web 服务器，打开浏览器
+- **`--task / -t`**: Headless 模式，执行一次性任务后退出
+- **`--no-web`**: 经典 CLI 模式（Textual TUI）
 
-### 通道 2：AI 事件推送（SSE）
+### 3.2 Web 服务器 (`flypig/web/server.py`)
 
-**用途**：Agent 思考/工具执行/结果的单向推送（服务器 → 客户端）
+#### 技术栈
 
-**端口**：8321
+- **框架**: Quart (Flask 的 ASGI 版本)
+- **ASGI 服务器**: Hypercorn
+- **WebSocket**: 原生 `@app.websocket` (无需 Flask-SocketIO)
+- **静态文件**: Quart 原生 `send_from_directory`
+- **SSE**: `text/event-stream` + `Response(headers={"Content-Type": "text/event-stream"})`
 
-**路径**：`/api/events`
+#### API 路由一览
 
-**格式**：SSE (Server-Sent Events)
-
-**状态**：**保留不动**。当前 `WebEventHook` + `Queue` + SSE 工作正常。
-
-### 通道 3：HTTP REST API
-
-**用途**：配置、初始化、文件操作、用户发消息
-
-**端口**：8321
-
-**路径**：`/api/*`
-
-**状态**：**保留不动**。现有路由正常。
-
-| 方法 | 路径 | 说明 |
+| 路由 | 方法 | 说明 |
 |------|------|------|
-| GET | `/` | 静态页面 |
-| GET | `/api/config` | 配置信息 |
-| POST | `/api/init` | 初始化 Agent |
-| POST | `/api/run` | 运行 Agent（发送消息） |
-| POST | `/api/config/workspace` | 设置工作区 |
-| POST | `/api/config/apikey` | 设置 API Key |
-| POST | `/api/config/select-model` | 选择模型 |
-| GET | `/api/files?path=...` | 文件列表 |
-| GET | `/api/file?path=...` | 文件内容 |
-| GET | `/api/tree` | 目录树 |
+| `/` | GET | 返回 SPA (index.html) |
+| `/api/config` | GET | 获取配置、模型列表 |
+| `/api/config/workspace` | POST | 设置/验证工作区路径 |
+| `/api/config/apikey` | POST | 保存 API Key |
+| `/api/init` | POST | 初始化 Agent 实例 |
+| `/api/tree` | GET | 获取工作区文件树 |
+| `/api/file` | GET | 读取文件内容 |
+| `/api/files` | GET | 浏览目录 (带.gitignore排除) |
+| `/api/agent/command` | POST | 发送 Agent 命令 (reset/cost) |
+| `/api/chat` | POST | SSE 端点 - AI 对话流 |
+| `/ws/pty/<term_id>` | WS | PTY 终端 WebSocket |
 
-## 三、WebSocket 服务器设计（asyncio）
+### 3.3 SSE 事件系统
 
-### 技术选型
+**背景**: 最初使用 WebSocket 传输 Agent 事件，遇到 Windows 跨线程广播问题后重构为 SSE。
 
-| 组件 | 选择 | 理由 |
-|:----|:----|:----|
-| WebSocket 库 | `websockets` | 成熟稳定，纯 asyncio |
-| 事件循环 | `asyncio` | 天然适合 PTY I/O |
-| PTY (Unix) | `pty` 标准库 | 内置，无依赖 |
-| PTY (Windows) | `pywinpty` | 唯一的 Win PTY 方案 |
-| 并行启动 | `threading` | 与 Flask 同时在 tread 中启动 asyncio 事件循环 |
-
-### 启动方式
-
-```python
-# server.py
-import asyncio, threading
-import websockets
-
-async def ws_handler(websocket):
-    path = websocket.path  # /pty/{term_id}
-    await handle_pty(websocket, path)
-
-def start_ws_server(host, port):
-    """在新线程中启动 asyncio WebSocket 服务器"""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(
-        websockets.serve(ws_handler, host, port)
-    )
-    loop.run_forever()
-
-# 同时启动
-threading.Thread(target=start_ws_server, args=(host, 8322), daemon=True).start()
-socketio.run(app, host=host, port=8321)  # 或直接 app.run()
-```
-
-### PTY Handler
-
-```python
-async def handle_pty(websocket):
-    term_id = websocket.path.split("/pty/")[1]
-    term = terminal_manager.create(term_id)
-    
-    async def read_pty():
-        """异步轮询 PTY 输出 → WS"""
-        loop = asyncio.get_event_loop()
-        while True:
-            data = await loop.run_in_executor(
-                None, os.read, term.pty_fd, 4096
-            )
-            if not data:
-                break
-            await websocket.send(data)
-    
-    async def write_pty():
-        """WS 消息 → PTY stdin"""
-        async for message in websocket:
-            if isinstance(message, bytes):
-                os.write(term.pty_fd, message)
-            else:
-                cmd = json.loads(message)
-                if cmd.get("type") == "resize":
-                    term.resize(cmd["cols"], cmd["rows"])
-    
-    try:
-        await asyncio.gather(read_pty(), write_pty())
-    finally:
-        terminal_manager.destroy(term_id)
-```
-
-### TerminalManager
-
-```python
-class TerminalManager:
-    _lock: threading.Lock
-    _terminals: dict[str, Terminal]
-    
-    def create(term_id) -> Terminal    # 创建 PTY + Shell
-    def destroy(term_id)               # 关闭 PTY
-    def get(term_id) -> Terminal       # 获取终端
-    def list() -> list[dict]           # 列出所有终端
-```
-
-### Terminal 对象
-
-```python
-class Terminal:
-    term_id: str
-    pty_fd: int                  # PTY master fd
-    process: subprocess.Popen    # Shell 进程
-    shell_name: str              # "PowerShell" | "bash"
-    created_at: float
-    ws: WebSocket | None         # 绑定的 WebSocket 连接
-```
-
-## 四、AI 命令执行（保留不动）
-
-AI 不经过 PTY。当前流程不变：
+**架构**：
 
 ```
-用户消息 → POST /api/run → agent.run()
-  → tool_bash → subprocess.Popen(shell=True)     [原有 _run_inline]
-  → 逐行读取 → WebEventHook._broadcast() → SSE
-  → 前端渲染卡片（命令、实时输出、结果）
-  → 完整输出返回 AI 做下一步决策
+Agent 线程 (executor)
+  │
+  │  Agent 执行过程中产生事件 (thinking, tool_call, ...)
+  ▼
+_SseHook (EventHook 子类)
+  │
+  │  hook.push(event_type, **data) — 线程安全
+  ▼
+threading.Queue
+  │
+  │  asyncio.get_event_loop().run_in_executor(None, _sse_reader, queue)
+  ▼
+_sse_reader 协程
+  │
+  │  从 Queue 取出事件 → 写入 SSE Response body
+  ▼
+客户端 (fetch ReadableStream → SSE 解析)
 ```
 
-### "在终端打开"功能
+**事件类型**:
+
+| 事件 | 触发时机 | 前端显示 |
+|------|---------|---------|
+| `thinking` | AI 开始思考 | 省略号 |
+| `tool_call` | AI 调用工具 | 工具名+参数摘要 |
+| `tool_result` | 工具执行完毕 | 结果(截断300字) |
+| `tool_chain_end` | 工具链结束 | tokens 统计 |
+| `response` | AI 最终回复 | Markdown 渲染 |
+| `summary` | 对话摘要 | 摘要内容 |
+| `llm_end` | LLM API 调用结束 | tokens/费用/缓存命中 |
+| `error` | 执行出错 | 红色错误提示 |
+| `done` | 执行完毕 | 状态恢复 |
+
+### 3.4 PTY 终端系统
+
+**架构：独立 WebSocket 通道，仅用于 PTY，与 Agent 事件完全分离。**
 
 ```
-点击卡片 ▶ 按钮
-  → 前端创建新 Tab（本地 xterm.js，只读模式，不连 WS/PTY）
-  → 把卡片命令 + 输出写入 xterm 显示
-  → 不可输入，仅查看
+xterm.js (浏览器)
+  │  WebSocket 连接
+  │  /ws/pty/t-1716358800123
+  ▼
+Quart @app.websocket("/ws/pty/<term_id>")
+  │
+  │  term = TerminalManager.get_or_create(term_id, cwd)
+  │  启动 pty_reader 线程
+  │
+  ├── 接收方向: 浏览器键盘输入 → WS → term.write()
+  │
+  └── 发送方向: term.read() → pty_reader 线程 → asyncio.run_coroutine_threadsafe() → WS → xterm
 ```
 
-## 五、前端改动
+#### 线程模型
 
-### WebSocket 连接
+```
+┌─────────────────────────────────────────────────┐
+│ async ws_pty(term_id)  (Quart 协程)              │
+│                                                  │
+│  while True:                                     │
+│    msg = await websocket.receive()               │
+│    if msg is bytes: term.write(msg)              │
+│    if msg is str:                                │
+│      if json → {type:"resize"}: term.resize()    │
+│      else: term.write(msg.encode())              │
+│                                                  │
+│  ┌───────────── pty_reader (daemon thread) ────┐ │
+│  │  while term.is_alive():                      │ │
+│  │    data = term.read(4096)                    │ │
+│  │    if data:                                  │ │
+│  │      run_coroutine_threadsafe(send, loop)    │ │
+│  │    else: wait 10ms                           │ │
+│  └──────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────┘
+```
+
+#### 重连策略
+
+- 自动重连最多 3 次，间隔 2 秒
+- 超限后显示 "重连失败，请点击 ↺ 重试"
+- 终端状态显示在标题栏：`● 已连接` / `○ 连接中...` / `● 连接失败`
+
+### 3.5 终端管理器 (`flypig/web/terminal.py`)
+
+**Terminal 类** — 单个 PTY 终端封装
+
+| 方法 | 说明 |
+|------|------|
+| `create()` | 启动 PTY shell 进程 |
+| `read(size)` | 从 PTY 读取输出 (bytes / None / b"") |
+| `write(data)` | 写入 PTY stdin |
+| `resize(cols, rows)` | 调整终端尺寸 |
+| `destroy()` | 终止进程、清理资源 |
+| `is_alive()` | 进程是否存活 |
+
+**跨平台实现**:
+
+| 平台 | 库/方法 | Shell |
+|------|--------|-------|
+| Windows | `pywinpty` / `winpty` (自动检测) | `powershell.exe -NoProfile -NoLogo` |
+| Linux/macOS | `pty.fork()` + `os.read/write` | `$SHELL` 或 `/bin/bash` |
+
+**TerminalManager 类** — 线程安全的管理器
+
+- 内部使用 `threading.Lock` 保护 `dict[str, Terminal]`
+- 提供 `create/get/destroy/list/count/cleanup_all` 方法
+- 所有终端在 WebSocket 断开时自动销毁
+
+---
+
+## 四、前端架构
+
+### 4.1 技术栈
+
+| 组件 | 用途 | 加载方式 |
+|------|------|---------|
+| Vue 3 (CDN) | 响应式 UI 框架 | `<script src="cdn">` |
+| CodeMirror 5 | 代码编辑器 (只读) | CDN + 多 mode |
+| xterm.js 5.3 | 终端模拟器 | CDN |
+| xterm-addon-fit | 终端自适应 | CDN |
+| marked.js | Markdown 渲染 | CDN |
+
+### 4.2 终端前端实现
+
+核心函数位于 `index.html`：
 
 ```javascript
-// PTY 终端：ws://host:8322/pty/{termId}
-const ptyWs = new WebSocket(`ws://${host}:8322/pty/${termId}`);
-ptyWs.binaryType = 'arraybuffer';
+// 终端状态变量
+let _ptyWs = null;              // WebSocket 连接
+let _ptyReconnectCount = 0;     // 重连计数器(上限3)
+let _ptyTermId = '';            // 当前终端ID
+let _xterm = null;              // xterm.js 实例
+let _xtermFit = null;           // FitAddon 实例
 
-ptyWs.onopen = () => { /* 终端就绪 */ };
-ptyWs.onmessage = (e) => term.write(new Uint8Array(e.data));
-ptyWs.onclose = () => setTimeout(reconnect, 2000);
-
-// xterm.js 按键 → WS
-term.onData(data => ptyWs.send(data));
-term.onResize(({ cols, rows }) =>
-    ptyWs.send(JSON.stringify({ type: 'resize', cols, rows }))
-);
+// 关键函数
+initTerminal()      // 创建 xterm + 建立 WS 连接
+_connectPtyWs(id)   // WS 生命周期管理 + 重连
+resetTerminal()     // 销毁重建
+toggleTerminal()    // 折叠/展开
 ```
 
-### SSE 保留不动
+### 4.3 SSE 前端处理
 
 ```javascript
-// 现有 EventSource 代码，不需要改
-const evtSource = new EventSource('/api/events');
-evtSource.addEventListener('tool_start', ...);
-evtSource.addEventListener('tool_output', ...);
+// 使用 fetch ReadableStream 解析 SSE
+const res = await fetch('/api/chat', { method:'POST', body:{message} });
+const reader = res.body.getReader();
+while (true) {
+  const {done, value} = await reader.read();
+  if (done) break;
+  // 解析 data: {json} 行
+  for (const line of lines) {
+    if (line.startsWith('data: ')) {
+      const data = JSON.parse(line.slice(6));
+      handleEvent(data);
+    }
+  }
+}
 ```
 
-## 六、改动文件清单
+---
 
-| 文件 | 操作 | 说明 |
-|------|:----:|------|
-| `flypig/web/server.py` | 修改 | 移除 SocketIO，加 asyncio WS 启动，加 `start_pty_server` |
-| `flypig/web/terminal.py` | 重写 | 移除 TerminalSession/TerminalManager（旧），新增 asyncio PTY Terminal + TerminalManager |
-| `flypig/web/static/index.html` | 修改 | 替换 SocketIO 客户端代码为原生 WebSocket |
-| `flypig/tools.py` | **不动** | _run_inline 已有回调机制 |
-| `flypig/hooks.py` | **不动** | WebEventHook 推 SSE 正常 |
-| `requirements.txt` | 更新 | 移除 flask-socketio, gevent；新增 websockets, pywinpty |
+## 五、关键设计决策
 
-**不改的文件**：`config.py`, `agent.py`, `model.py`, `model_registry.py`, `cli.py`, `context_compressor.py`, `cost.py`, `sandbox.py`, `pricing_fetcher.py`
+### 5.1 Quart 替代 Flask
 
-## 七、实施计划
+**理由**:
+- Flask 不支持原生 WebSocket，需要 Flask-SocketIO 或 gevent-websocket
+- Quart 是 Flask 的 ASGI 版本，API 兼容，原生支持 WebSocket
+- ASGI 服务器 (Hypercorn/Uvicorn) 比 WSGI 更适合长连接场景
 
-### Phase 1: 环境准备
-- [ ] 安装依赖（`pip install websockets pywinpty`）
-- [ ] 移除依赖（`pip uninstall flask-socketio gevent`）
-- [ ] 验证当前代码在干净分支（refactor-websocket）上可运行
+**代价**:
+- 部分 Flask 扩展不兼容 Quart (如 Flask-CORS)
+- Quart 文档不如 Flask 完善
 
-### Phase 2: WebSocket PTY 服务器
-- [ ] 实现 `Terminal` 类（PTY 创建/销毁）
-- [ ] 实现 `TerminalManager`（线程安全列表）
-- [ ] 实现 Windows PTY（pywinpty）
-- [ ] 实现 Unix PTY（标准库 pty）
-- [ ] 实现 asyncio WS handler（bytes ↔ PTY）
-- [ ] 与 Flask 并行启动
+### 5.2 SSE 替代 WebSocket (for Agent)
 
-### Phase 3: 删除 SocketIO
-- [ ] 删除 server.py 中的 SocketIO 初始化
-- [ ] 删除 terminal:start/input/output/resize 事件处理器
-- [ ] 删除 socketio.run() 改用 app.run()
-- [ ] 确认 SSE 不受影响
+**理由**:
+- Windows 下 `call_soon_threadsafe` + `async def` 广播导致协程被静默丢弃 (pitfall #12)
+- SSE 是单向 HTTP 流，天然适合 server→client 事件推送
+- 使用 `threading.Queue` 桥接线程和异步，数据流清晰
+- 前端用标准 `fetch` API，不需额外库
 
-### Phase 4: 前端重构
-- [ ] 移除 index.html 中的 SocketIO 客户端
-- [ ] 实现原生 WebSocket 连接 + 重连
-- [ ] xterm.js PTY 集成（字节通道）
-- [ ] 多终端标签管理
-- [ ] "在终端打开"只读 Tab 功能
+**代价**:
+- 单向通道，客户端不能通过同一连接发消息（但 Agent 通过 POST 发消息，不冲突）
+- 长连接在代理服务器可能超时
 
-### Phase 5: 清理与验证
-- [ ] 删除无用 import 和代码
-- [ ] 端到端功能测试（终端创建、输入、输出、Ctrl+C、多标签）
-- [ ] AI 命令执行 + 卡片展示测试
-- [ ] SSE 事件推送测试（thinking, tool_start/output/end）
+### 5.3 Dual-Path 终端
+
+**理由**: Docker Sandbox (Agent 命令) 和 PTY (用户交互) 分离，避免编码/控制序列兼容性问题。
+
+详见 `docs/terminal-interaction.md`。
+
+---
+
+## 六、数据流
+
+### 6.1 AI 对话流程
+
+```
+用户输入 → POST /api/chat → SSE stream
+                                  │
+                                  ▼
+                      _agent.run(user_input)
+                                  │
+            ┌─────────────────────┼─────────────────────┐
+            ▼                     ▼                     ▼
+      LLM API 调用          工具执行             事件分发
+      (ModelAdapter)    (ToolExecutor)       (_SseHook → Queue)
+            │                     │                     │
+            ▼                     ▼                     ▼
+      提 token/费用         bash/file操作         → SSE 响应体
+      更新 CostTracker      subprocess/code
+                                  │
+                                  ▼
+                           对话结束 → SSE "done" 事件
+```
+
+### 6.2 终端 I/O 流程
+
+```
+键盘输入 → xterm.onData → WS.send(text) → Quart WS handler → term.write() → PTY stdin
+PTY stdout → term.read() → pty_reader 线程 → run_coroutine_threadsafe → WS.send(binary) → xterm.write()
+```
+
+---
+
+## 七、文件结构
+
+```
+flypig/
+├── __init__.py
+├── __main__.py          # 入口点
+├── agent.py             # Agent 核心 (自愈机制)
+├── background.py        # 后台任务
+├── cli.py               # CLI 界面
+├── config.py            # 配置管理
+├── config.yaml          # 配置文件
+├── cost.py              # 费用统计
+├── hooks.py             # 事件钩子系统
+├── model.py             # 模型适配器
+├── model_registry.py    # 模型注册表
+├── pricing_cache.json   # 定价缓存
+├── pricing_fetcher.py   # 定价抓取
+├── tools.py             # 工具执行器
+└── web/
+    ├── __init__.py
+    ├── server.py         # Web 服务器 (Quart)
+    ├── terminal.py       # PTY 终端管理
+    └── static/
+        └── index.html    # 前端 SPA (Vue 3)
+docs/
+├── architecture-refactor.md   # ← 本文档
+├── hooks.md                   # Hook 系统设计
+├── peer-reference.md          # 友商分析
+├── pitfall.md                 # PTY/SSE 踩坑记录
+├── pitfalls.md                # 历史踩坑记录
+├── prd.md                     # PRD
+├── README.md                  # 项目 README
+├── requirement.md             # 需求清单
+├── roadmap.md                 # 路线图
+├── sandbox_plan.md            # Docker 沙箱方案
+├── terminal-interaction.md    # 终端交互设计
+└── toolchain-self-heal.md     # 工具链自愈
+```
+
+---
+
+## 八、运行时要求
+
+| 依赖 | 用途 | 安装方式 |
+|------|------|---------|
+| Quart | ASGI Web 框架 | `pip install quart` |
+| Hypercorn | ASGI 服务器 | `pip install hypercorn` |
+| pywinpty (Windows) | PTY 终端 | `pip install pywinpty` |
+| Vue 3 | 前端框架 | CDN |
+| xterm.js | 终端模拟 | CDN |
+| CodeMirror | 代码编辑器 | CDN |
