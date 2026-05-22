@@ -5,19 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>FlyPig Agent</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/theme/material-darker.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/mode/simple.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/javascript/javascript.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/xml/xml.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/css/css.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/htmlmixed/htmlmixed.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/python/python.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/markdown/markdown.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/yaml/yaml.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/shell/shell.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/json/json.min.js"></script>
+<!-- Monaco Editor (VS Code 引擎) — 通过 EditorAdapter 解耦使用 -->
+<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs/loader.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
@@ -105,11 +94,9 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
 .file-tab:hover .close,.file-tab.active .close{opacity:.6}
 .file-tab .close:hover{opacity:1;background:var(--border);color:var(--red)}
 
-/* CodeMirror 编辑器区域 */
+/* 编辑器区域（Monaco Editor） */
 #editor-container{flex:1;overflow:hidden}
-#editor-container .CodeMirror{height:100%;font-family:'JetBrains Mono','Cascadia Code','Fira Code',Consolas,monospace;font-size:13px;line-height:1.6}
-#editor-container .CodeMirror-gutters{background:var(--bg2);border-right:1px solid var(--border)}
-#editor-container .CodeMirror-linenumber{color:var(--fg3);padding:0 8px}
+#editor-container .monaco-editor .margin{background:var(--bg2)}
 
 /* 右侧面板 */
 #chat{width:var(--chat-w);min-width:280px;display:flex;flex-direction:column;background:var(--bg2)}
@@ -418,6 +405,48 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
 </div>
 
 <script>
+// ── Monaco Editor 初始化 ──
+// AMD loader 已通过 CDN 加载，require 全局可用
+require.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs' }});
+const _monacoReady = new Promise(resolve => require(['vs/editor/editor.main'], () => resolve()));
+
+// ── EditorAdapter — 统一的编辑器接口 ──
+// 后续切换到 OpenSumi 只需替换此 Adapter 的实现
+const EditorAdapter = {
+  _editor: null,
+  async init(container, content, language) {
+    this.destroy();
+    if (!container) return;
+    await _monacoReady;
+    this._editor = monaco.editor.create(container, {
+      value: content || '',
+      language: language || 'plaintext',
+      theme: 'vs-dark',
+      fontSize: 13,
+      fontFamily: "'JetBrains Mono','Cascadia Code','Fira Code',Consolas,monospace",
+      lineNumbers: 'on',
+      minimap: { enabled: false },
+      readOnly: true,
+      scrollBeyondLastLine: false,
+      automaticLayout: true,   // 自动适配容器大小变化
+    });
+  },
+  setContent(content) {
+    if (this._editor) this._editor.setValue(content || '');
+  },
+  setLanguage(language) {
+    if (this._editor) {
+      monaco.editor.setModelLanguage(this._editor.getModel(), language || 'plaintext');
+    }
+  },
+  resize() {
+    if (this._editor) this._editor.layout();
+  },
+  destroy() {
+    if (this._editor) { this._editor.dispose(); this._editor = null; }
+  },
+};
+
 const { createApp, ref, computed, watch, nextTick, onMounted } = Vue;
 
 // ── 文件树组件（递归） ──
@@ -471,7 +500,7 @@ app = createApp({
     const messagesRef = ref(null);
     const layoutRef = ref(null);
     const editorContainer = ref(null);
-    let _editor = null;             // CodeMirror 实例
+    let _editor = null;             // EditorAdapter 实例（可替换底层引擎）
     let _agentLock = false;         // 防止重复初始化
 
     // ── 终端状态（原生 WebSocket） ──
@@ -547,34 +576,20 @@ app = createApp({
       if (_xtermFit) _xtermFit.fit();
     }
 
-    // ── CodeMirror mode 映射 ──
+    // ── 语言映射（遵循 Monaco Editor 的 language ID） ──
     function getMode(ext) {
-      const map = {py:'python',js:'javascript',ts:'javascript',jsx:'javascript',tsx:'javascript',
+      const map = {py:'python',js:'javascript',ts:'typescript',jsx:'javascript',tsx:'typescript',
                    go:'go',rs:'rust',md:'markdown',json:'json',yaml:'yaml',yml:'yaml',
-                   html:'htmlmixed',css:'css',vue:'htmlmixed',sh:'shell',bat:'powershell',
+                   html:'html',css:'css',vue:'html',sh:'shell',bat:'powershell',
                    ps1:'powershell',toml:'yaml',xml:'xml',sql:'sql'};
-      return map[ext] || 'text/plain';
+      return map[ext] || 'plaintext';
     }
 
-    function _initEditor(content, mode) {
-      const container = editorContainer.value;
-      if (!container) return;
-      if (_editor) _editor.toTextArea();
-      const ta = document.createElement('textarea');
-      ta.value = content || '';
-      container.innerHTML = '';
-      container.appendChild(ta);
-      _editor = CodeMirror.fromTextArea(ta, {
-        mode: mode,
-        theme: 'material-darker',
-        lineNumbers: true,
-        readOnly: true,
-        lineWrapping: false,
-        tabSize: 2,
-        indentUnit: 2,
-        viewportMargin: Infinity,
-      });
-      _editor.setSize('100%', '100%');
+    // 初始化/切换编辑器 — 通过 EditorAdapter 间接调用 Monaco
+    function _initEditor(content, language) {
+      _editor?.destroy();
+      _editor = Object.create(EditorAdapter);
+      _editor.init(editorContainer.value, content, language);
     }
 
     // ── 初始化 ──
@@ -1079,7 +1094,7 @@ app = createApp({
       openTabs.value.splice(index, 1);
       if (openTabs.value.length === 0) {
         activeTabIndex.value = -1;
-        if (_editor) { _editor.toTextArea(); _editor = null; }
+        if (_editor) { _editor.destroy(); _editor = null; }
       } else if (index <= activeTabIndex.value) {
         switchTab(Math.max(0, activeTabIndex.value - 1));
       }
