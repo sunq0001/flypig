@@ -483,6 +483,8 @@ app = createApp({
     let _ptyWs = null;          // PTY WebSocket 连接
     let _ptyReconnectCount = 0; // 重连计数器
     let _ptyTermId = '';        // 当前终端 ID
+    let _fileOpsDebounce = 0;   // 文件树刷新防抖计时器
+    let _pendingOpenFile = '';  // write_file 完成后待打开的新文件路径
     let _xterm = null;
     let _xtermFit = null;
     // PTY WebSocket 走同端口（由 waitress + simple-websocket 处理）
@@ -611,7 +613,7 @@ app = createApp({
           let desc = '';
           if (name === 'bash') desc = '💻 '+ (args.command || '').slice(0,100);
           else if (name === 'read_file') desc = '📖 '+ (args.path || '');
-          else if (name === 'write_file') desc = '✏️ 写入 '+ (args.path || '');
+          else if (name === 'write_file') { desc = '✏️ 写入 '+ (args.path || ''); _pendingOpenFile = args.path || ''; }
           else if (name === 'edit_file') desc = '🔧 编辑 '+ (args.path || '');
           else if (name === 'find_files') desc = '🔍 '+ (args.pattern || '');
           else if (name === 'grep') desc = '🔎 '+ (args.pattern || '');
@@ -623,6 +625,18 @@ app = createApp({
           const result = (data.result || '').slice(0,300);
           if (result.trim()) {
             messages.value.push({type:'tool-end', content: result});
+          }
+          // 工具执行后刷新文件树（防抖 500ms）+ 同步打开的标签页
+          const toolName = data.name || '';
+          const toolArgs = data.args || {};
+          const filePath = toolArgs.path || '';
+          if (filePath && openTabs.value.some(t => t.path === filePath)) {
+            // 如果此文件有打开的标签，异步重载内容
+            _refreshFileTab(filePath);
+          }
+          // bash 工具也可能创建/删除/修改文件（rm, mv, touch 等）
+          if (['write_file', 'edit_file', 'bash'].includes(toolName)) {
+            _debounceRefreshTree();
           }
           break;
         }
@@ -637,7 +651,7 @@ app = createApp({
             }
             messages.value.push({
               type:'info',
-              content:`🤖 ${data.model} | ${(data.tokens || 0).toLocaleString()} tokens${cacheInfo} | $${(data.cost || 0).toFixed(4)}`
+              content:`🤖 ${data.model} | ${(data.tokens || 0).toLocaleString()} tokens${cacheInfo} | $${_formatCostVal(data.cost || 0)}`
             });
           }
           break;
@@ -657,6 +671,8 @@ app = createApp({
         case 'done':
           agentRunning.value = false;
           statusText.value = '就绪';
+          // Agent 全部完成后保底刷新一次文件树
+          _debounceRefreshTree();
           break;
       }
       scrollMessages();
@@ -846,6 +862,46 @@ app = createApp({
         fileTree.value = await res.json();
       } catch(e) {
         console.error('load tree error:', e);
+      }
+    }
+
+    // 防抖刷新文件树：工具链中多次 tool_result 只刷新一次
+    function _debounceRefreshTree() {
+      clearTimeout(_fileOpsDebounce);
+      _fileOpsDebounce = setTimeout(async () => {
+        await loadFileTree();
+        // 刷新后关闭已不存在文件的标签
+        const paths = new Set();
+        (function collect(node) {
+          if (!node) return;
+          if (!node.is_dir) paths.add(node.path);
+          if (node.children) node.children.forEach(collect);
+        })(fileTree.value);
+        openTabs.value = openTabs.value.filter(t => paths.has(t.path));
+        // 自动打开新写入的文件
+        if (_pendingOpenFile) {
+          openFile(_pendingOpenFile);
+          _pendingOpenFile = '';
+        }
+      }, 500);
+    }
+
+    // 异步重载已打开的标签内容
+    async function _refreshFileTab(path) {
+      try {
+        const res = await fetch('/api/file?path=' + encodeURIComponent(path));
+        const data = await res.json();
+        if (data.content != null) {
+          const idx = openTabs.value.findIndex(t => t.path === path);
+          if (idx >= 0) {
+            openTabs.value[idx].content = data.content;
+            if (idx === activeTabIndex.value) {
+              switchTab(idx);  // 刷新编辑器内容
+            }
+          }
+        }
+      } catch (e) {
+        console.error('refresh file tab error:', e);
       }
     }
 
@@ -1095,19 +1151,17 @@ app = createApp({
       }
     }
 
+    // 小金额格式化：>=0.01 → 4位小数，>=0.0001 → 6位，再小 → 科学计数法
+    function _formatCostVal(cost) {
+      if (cost >= 0.01) return cost.toFixed(4);
+      if (cost >= 0.0001) return cost.toFixed(6);
+      if (cost > 0) return cost.toExponential(2).replace('e', '×10^');
+      return '0.00';
+    }
+
     function formatCost(cost, tokens) {
       if (cost == null) return '';
-      let costStr;
-      if (cost >= 0.01) {
-        costStr = '$' + cost.toFixed(4);
-      } else if (cost >= 0.0001) {
-        costStr = '$' + cost.toFixed(6);
-      } else if (cost > 0) {
-        costStr = cost.toExponential(2).replace('e', '×10^');
-      } else {
-        costStr = '$0.00';
-      }
-      return `💵 ${costStr} | ${(tokens || 0).toLocaleString()} tokens`;
+      return `💵 $${_formatCostVal(cost)} | ${(tokens || 0).toLocaleString()} tokens`;
     }
 
     async function resetChat() {

@@ -2,12 +2,14 @@
 
 agent 事件通过 SSE 的 threading.Queue 传递，避免 Windows 跨线程广播问题。
 WS 仅用于 PTY 终端，不受影响。
+实时文件监控：watchfiles 检测工作区变化时自动刷新文件树缓存。
 """
 import asyncio
 import json
 import os
 import sys
 import threading
+import time
 import uuid
 import webbrowser
 import queue as queue_mod
@@ -334,7 +336,7 @@ class _SseHook:
 # ── 工作区文件树 ──
 
 _tree_cache: dict = {}
-_tree_cache_lock = threading.Lock()
+_tree_cache_lock = threading.RLock()
 
 def _scan_workspace_tree():
     global _tree_cache
@@ -369,8 +371,40 @@ def _scan_workspace_tree():
 
 @app.route("/api/tree")
 async def api_file_tree():
+    # 每次请求直接重新扫描，避免缓存时序问题
+    _scan_workspace_tree()
     with _tree_cache_lock:
         return jsonify(_tree_cache)
+
+
+# ── 实时文件监控 ──
+
+_file_watcher_started = False
+
+def _start_file_watcher(workspace: str):
+    """启动 watchfiles 后台线程，文件变化时自动刷新文件树缓存（防抖 1s）"""
+    global _file_watcher_started
+    if _file_watcher_started:
+        return
+    _file_watcher_started = True
+    try:
+        from watchfiles import watch
+    except ImportError:
+        return
+
+    def _watcher_loop():
+        last_scan = 0
+        try:
+            for _ in watch(workspace, recursive=True):
+                now = time.time()
+                if now - last_scan > 1.0:  # 防抖 1 秒
+                    last_scan = now
+                    _scan_workspace_tree()
+        except Exception:
+            pass
+
+    t = threading.Thread(target=_watcher_loop, daemon=True)
+    t.start()
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -446,6 +480,7 @@ def start_server(config, host: str = "127.0.0.1", port: int = 8321,
     _config = config
     _workspace = config.workspace
     _scan_workspace_tree()
+    _start_file_watcher(_workspace)
     url = f"http://{host}:{port}"
     print(f"\n  [FlyPig Web UI] 启动服务器...")
     print(f"  [SSE + PTY WS] {url}")
