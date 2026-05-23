@@ -765,7 +765,7 @@ app = createApp({
                 :node="child"
                 :depth="depth + 1"
                 :selected-path="selectedPath"
-                @select="(p) => emit('select', p)"
+                @select="(p) => $emit('select', p)"
               />
             </template>
             <div v-else style="padding:2px 0 2px 20px;color:var(--fg3);font-size:11px">（空）</div>
