@@ -1758,15 +1758,6 @@ app = createApp({
       ws.onerror = () => { ws.close(); };
       return ws;
     }
-          const t = termTabs.value.find(t2 => t2.id === tabId);
-          if (t) t.status = 'error';
-          xterm.writeln('\r\n\x1b[31m[终端] 重连失败，请点击 ↺ 重试\x1b[0m');
-        }
-      };
-
-      ws.onerror = () => { ws.close(); };
-      return ws;
-    }
 
     function resetTerminal() {
       const tabId = activeTermTabId.value;
