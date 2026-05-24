@@ -1957,7 +1957,16 @@ app = createApp({
         const inst = _termInstances[tabId];
         if (inst && inst.ptyWs && inst.ptyWs.readyState === WebSocket.OPEN) {
           clearInterval(checkReady);
-          inst.ptyWs.send(cmd + '\n');
+          // 等待终端完全就绪后再发送命令
+          setTimeout(() => {
+            const inst2 = _termInstances[tabId];
+            if (inst2 && inst2.ptyWs && inst2.ptyWs.readyState === WebSocket.OPEN) {
+              console.log('[CMD] 在新终端中执行:', cmd.slice(0,80));
+              inst2.ptyWs.send(cmd + '\n');
+            } else {
+              console.warn('[CMD] 终端已断开，无法执行');
+            }
+          }, 800);
         }
       }, 200);
     }
