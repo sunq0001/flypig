@@ -703,7 +703,9 @@ class ToolExecutor:
                                    "Short commands (compile, git, pip) return stdout directly. "
                                    "Long-running commands (npm run dev, python server) MUST use persist=true "
                                    "to run in the background without blocking your progress. "
-                                   "You can then use task_status() to check output later.",
+                                   "You can then use task_status() to check output later. "
+                                   "NOTE: The command appears as a card in the UI. "
+                                   "The user can click '在新终端中执行' to run it in an interactive terminal.",
                     "parameters": {
                         "type": "object",
                         "properties": {
