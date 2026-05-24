@@ -608,7 +608,12 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
                 <span v-html="svgIcon(termTheme === 'cyber' ? 'palette' : 'sparkles')"></span>
               </button>
             </div>
-            <div id="terminal-xterm" ref="terminalXterm" v-show="!termCollapsed" style="flex:1;overflow:hidden"></div>
+            <div id="terminal-xterm" v-show="!termCollapsed" style="flex:1;overflow:hidden;position:relative">
+              <div v-for="tab in termTabs" :key="tab.id"
+                   :ref="(el) => registerTermContainer(tab.id, el)"
+                   style="position:absolute;inset:0;display:none">
+              </div>
+            </div>
           </div>
 
           <!-- 右侧标签栏（v-show 控制：仅多终端时显示） -->
@@ -812,8 +817,9 @@ app = createApp({
     const messagesRef = ref(null);
     const layoutRef = ref(null);
     const editorContainer = ref(null);
-    let _editor = null;             // EditorAdapter 实例（可替换底层引擎）
-    let _agentLock = false;         // 防止重复初始化
+    const terminalArea = ref(null);
+    let _editor = null;
+    let _agentLock = false;
 
     // ── 终端状态（原生 WebSocket） ──
     const terminalXterm = ref(null);
@@ -871,13 +877,12 @@ app = createApp({
       availableShells.value = obj;
     }).catch(() => {});
 
-    let _ptyWs = null;          // PTY WebSocket 连接
     let _ptyReconnectCount = 0; // 重连计数器
-    let _ptyTermId = '';        // 当前终端 ID
     let _fileOpsDebounce = 0;   // 文件树刷新防抖计时器
     let _pendingOpenFile = '';  // write_file 完成后待打开的新文件路径
-    let _xterm = null;
-    let _xtermFit = null;
+    // 每个终端标签独立存储
+    const _termContainers = {};        // { tabId: HTMLElement }
+    const _termInstances = {};         // { tabId: { xterm, xtermFit, ptyWs, ptyTermId } }
     // PTY WebSocket 走同端口（由 waitress + simple-websocket 处理）
     let _vResizeStartY = 0;
     let _vResizeStartH = 200;
@@ -1441,6 +1446,15 @@ app = createApp({
       termTheme.value = termTheme.value === 'cyber' ? 'plain' : 'cyber';
     }
 
+    // 注册终端容器 DOM 元素（由 Vue ref 回调调用）
+    function registerTermContainer(tabId, el) {
+      if (el) {
+        _termContainers[tabId] = el;
+      } else {
+        delete _termContainers[tabId];
+      }
+    }
+
     // 创建新终端标签页
     function newTerminalTab(shellType = selectedTermType.value) {
       console.log('newTerminalTab:', shellType);
@@ -1459,8 +1473,8 @@ app = createApp({
       termTabs.value.push(tab);
       // 设置为活动标签页
       activeTermTabId.value = tabId;
-      // 初始化终端（这会替换当前终端）
-      initTerminal();
+      // 延迟初始化终端，等待容器DOM就绪
+      setTimeout(() => initTerminal(tabId), 50);
       return tabId;
     }
 
@@ -1468,13 +1482,31 @@ app = createApp({
     function switchTermTab(tabId) {
       console.log('switchTermTab:', tabId);
       if (activeTermTabId.value === tabId) return;
+      const prevId = activeTermTabId.value;
       activeTermTabId.value = tabId;
-      // TODO: 实际切换终端会话（目前单终端，仅更新UI）
+
+      // 切换容器显示：隐藏所有，只显示目标
+      Object.keys(_termContainers).forEach(id => {
+        const el = _termContainers[id];
+        if (el) el.style.display = (id === tabId) ? 'block' : 'none';
+      });
+
       // 更新状态显示
       const tab = termTabs.value.find(t => t.id === tabId);
       if (tab) {
         termStatus.value = tab.status;
-        // 可以在这里重新连接对应终端的WebSocket
+      }
+
+      // 如果目标标签还没有 xterm 实例，初始化它
+      if (!_termInstances[tabId]) {
+        setTimeout(() => initTerminal(tabId), 50);
+      } else {
+        // 已有实例，让 xterm fit 适应容器
+        const inst = _termInstances[tabId];
+        if (inst.xtermFit) {
+          setTimeout(() => inst.xtermFit.fit(), 50);
+        }
+        if (inst.xterm) inst.xterm.focus();
       }
     }
 
@@ -1483,20 +1515,39 @@ app = createApp({
       console.log('closeTermTab:', tabId);
       const index = termTabs.value.findIndex(t => t.id === tabId);
       if (index === -1) return;
+
+      // 清理终端实例：先发送 destroy 消息，再关闭连接
+      const inst = _termInstances[tabId];
+      if (inst) {
+        if (inst.ptyWs && inst.ptyWs.readyState === WebSocket.OPEN) {
+          // 发送销毁指令让后端清理 PTY 进程
+          inst.ptyWs.send(JSON.stringify({type: 'destroy'}));
+          inst.ptyWs.close();
+        }
+        if (inst.xterm) { inst.xterm.dispose(); inst.xterm = null; }
+        if (inst.xtermFit) inst.xtermFit = null;
+        delete _termInstances[tabId];
+      }
+      // 清理容器DOM
+      const container = _termContainers[tabId];
+      if (container) {
+        container.innerHTML = '';
+        delete _termContainers[tabId];
+      }
+
       // 如果关闭的是活动标签页，需要切换到其他标签页
       if (activeTermTabId.value === tabId) {
         if (termTabs.value.length > 1) {
-          // 切换到前一个或后一个标签页
           const newIndex = index === 0 ? 1 : index - 1;
-          activeTermTabId.value = termTabs.value[newIndex].id;
+          switchTermTab(termTabs.value[newIndex].id);
         } else {
           activeTermTabId.value = null;
-          // 如果没有标签页了，可以隐藏终端或显示占位符
+          termStatus.value = 'disconnected';
         }
       }
+
       // 从数组中移除
       termTabs.value.splice(index, 1);
-      // TODO: 实际关闭终端会话（目前单终端，仅移除UI）
     }
 
     function toggleTermDropdown(e) {
@@ -1509,13 +1560,14 @@ app = createApp({
     function selectTermType(type) {
       console.log('selectTermType:', type, 'available:', availableShells.value[type]);
       showTermDropdown.value = false;
-      // 检查 shell 是否明确标记为不可用（undefined=未知，当做可用）
       if (availableShells.value[type] === false) {
         const hints = {bash:'安装 Git Bash (https://git-scm.com)', zsh:'安装 zsh', wsl:'启用 WSL'};
         const hint = hints[type] || '安装对应终端';
-        if (_xterm && !termCollapsed.value) {
-          _xterm.writeln('\r\n\x1b[33m[提示] ' + type + ' 未安装，' + hint + '\u001b[0m');
-          _xterm.writeln('\x1b[33m  已自动使用默认 PowerShell\u001b[0m');
+        const tabId = activeTermTabId.value;
+        const inst = tabId ? _termInstances[tabId] : null;
+        if (inst && inst.xterm && !termCollapsed.value) {
+          inst.xterm.writeln('\r\n\x1b[33m[提示] ' + type + ' 未安装，' + hint + '\u001b[0m');
+          inst.xterm.writeln('\x1b[33m  已自动使用默认 PowerShell\u001b[0m');
         }
         if (type !== 'ps') {
           selectedTermType.value = 'ps';
@@ -1529,24 +1581,35 @@ app = createApp({
 
     // 侧边栏尺寸变化时通知 xterm 重新适配
     function notifyTermResize() {
-      if (_xtermFit) setTimeout(() => _xtermFit.fit(), 50);
+      const tabId = activeTermTabId.value;
+      const inst = tabId ? _termInstances[tabId] : null;
+      if (inst && inst.xtermFit) setTimeout(() => inst.xtermFit.fit(), 50);
     }
 
     // ── 终端（WebSocket ↔ PTY） ──
-    function initTerminal() {
+    function initTerminal(tabId) {
       if (termCollapsed.value) return;
-      if (_ptyWs) { _ptyWs.close(); _ptyWs = null; }
-      if (_xterm) { _xterm.dispose(); _xterm = null; _xtermFit = null; }
 
-      const container = terminalXterm.value;
+      // 如果没传 tabId，使用当前活动标签
+      if (!tabId) tabId = activeTermTabId.value;
+      if (!tabId) return;
+
+      // 如果该标签已有实例，跳过
+      if (_termInstances[tabId]) return;
+
+      const container = _termContainers[tabId];
       if (!container) return;
 
+      const tab = termTabs.value.find(t => t.id === tabId);
+      const shellType = tab ? tab.shellType : selectedTermType.value;
+
       _ptyReconnectCount = 0;
-      _ptyTermId = 't-' + Date.now();
+      const ptyTermId = 't-' + Date.now();
+      if (tab) tab.status = 'connecting';
       termStatus.value = 'connecting';
 
-      _xtermFit = new FitAddon.FitAddon();
-      _xterm = new Terminal({
+      const xtermFit = new FitAddon.FitAddon();
+      const xterm = new Terminal({
         cursorBlink: true,
         cursorStyle: 'block',
         fontSize: 13,
@@ -1562,33 +1625,44 @@ app = createApp({
           brightCyan:'#94e2d5', brightWhite:'#cdd6f4',
         },
       });
-      _xterm.loadAddon(_xtermFit);
-      _xterm.open(container);
-      _xtermFit.fit();
-      _xterm.focus();
+      xterm.loadAddon(xtermFit);
+      xterm.open(container);
+      container.style.display = 'block';
+      xtermFit.fit();
+      xterm.focus();
+
+      // 创建 WebSocket 连接（带独立变量）
+      const ws = _connectPtyWs(tabId, ptyTermId, shellType, xterm, xtermFit);
 
       // 用户输入 → WS
-      _xterm.onData((data) => {
-        if (_ptyWs && _ptyWs.readyState === WebSocket.OPEN) {
-          _ptyWs.send(data);
+      xterm.onData((data) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(data);
+        } else {
+          // 尝试从实例获取最新的 ws
+          const inst = _termInstances[tabId];
+          if (inst && inst.ptyWs && inst.ptyWs.readyState === WebSocket.OPEN) {
+            inst.ptyWs.send(data);
+          }
         }
       });
 
-      // 终端 resize（窗口缩放、面板拖拽等）→ WS
-      _xterm.onResize(({cols, rows}) => {
-        if (_ptyWs && _ptyWs.readyState === WebSocket.OPEN) {
-          _ptyWs.send(JSON.stringify({type:'resize', cols, rows}));
+      // 终端 resize → WS
+      xterm.onResize(({cols, rows}) => {
+        const inst = _termInstances[tabId];
+        if (inst && inst.ptyWs && inst.ptyWs.readyState === WebSocket.OPEN) {
+          inst.ptyWs.send(JSON.stringify({type:'resize', cols, rows}));
         }
       });
 
-      _connectPtyWs(_ptyTermId, selectedTermType.value);
+      // 存储实例
+      _termInstances[tabId] = { xterm, xtermFit, ptyWs: ws, ptyTermId };
     }
 
-    function _connectPtyWs(termId, shellType) {
-      if (!_xterm) return;
+    function _connectPtyWs(tabId, ptyTermId, shellType, xterm, xtermFit) {
+      if (!xterm) return null;
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      let url = protocol + '//' + location.host + '/ws/pty/' + termId;
-      // 添加 shell 类型参数
+      let url = protocol + '//' + location.host + '/ws/pty/' + ptyTermId;
       if (shellType) {
         url += '?shell=' + encodeURIComponent(shellType);
       }
@@ -1599,66 +1673,85 @@ app = createApp({
       ws.onopen = () => {
         _ptyReconnectCount = 0;
         termStatus.value = 'connected';
-        if (_xterm) {
-          _xterm.writeln('\x1b[32m[终端已连接]\x1b[0m');
-          if (setupWorkspace.value) {
-            _xterm.writeln('  工作区: \x1b[36m' + setupWorkspace.value + '\x1b[0m');
-          }
-          _xterm.write('');
+        // 更新标签状态
+        const tab = termTabs.value.find(t => t.id === tabId);
+        if (tab) tab.status = 'connected';
+        xterm.writeln('\x1b[32m[终端已连接]\x1b[0m');
+        if (setupWorkspace.value) {
+          xterm.writeln('  工作区: \x1b[36m' + setupWorkspace.value + '\x1b[0m');
         }
-        if (_xtermFit) setTimeout(() => _xtermFit.fit(), 50);
+        xterm.write('');
+        if (xtermFit) setTimeout(() => xtermFit.fit(), 50);
       };
 
       ws.onmessage = (e) => {
-        if (!_xterm) return;
-        // 检查是否为服务端错误消息（纯文本 JSON）
+        if (!xterm) return;
         if (typeof e.data === 'string') {
           try {
             const msg = JSON.parse(e.data);
             if (msg.type === 'error') {
-              _xterm.writeln('\r\n\x1b[31m[错误] ' + (msg.msg || '终端启动失败') + '\x1b[0m');
+              xterm.writeln('\r\n\x1b[31m[错误] ' + (msg.msg || '终端启动失败') + '\x1b[0m');
               termStatus.value = 'error';
               return;
             }
           } catch (_) {}
         }
         if (e.data instanceof ArrayBuffer) {
-          _xterm.write(new Uint8Array(e.data));
+          xterm.write(new Uint8Array(e.data));
         } else {
-          _xterm.write(e.data);
+          xterm.write(e.data);
         }
       };
 
       ws.onclose = () => {
-        if (_ptyWs === ws) _ptyWs = null;
+        // 更新实例引用
+        const inst = _termInstances[tabId];
+        if (inst && inst.ptyWs === ws) inst.ptyWs = null;
         // 限制自动重连：最多 3 次
-        if (_xterm && _ptyReconnectCount < 3 && termStatus.value !== 'error') {
+        if (xterm && _ptyReconnectCount < 3 && termStatus.value !== 'error') {
           _ptyReconnectCount++;
+          const tab = termTabs.value.find(t => t.id === tabId);
+          if (tab) tab.status = 'connecting';
           termStatus.value = 'connecting';
           setTimeout(() => {
-            if (!_ptyWs && _xterm && _ptyReconnectCount <= 3) {
-              _connectPtyWs(termId);
+            const inst2 = _termInstances[tabId];
+            if (!inst2 || !inst2.ptyWs) {
+              const newWs = _connectPtyWs(tabId, ptyTermId, shellType, xterm, xtermFit);
+              if (inst2) inst2.ptyWs = newWs;
             }
           }, 2000);
         } else if (_ptyReconnectCount >= 3 && termStatus.value !== 'error') {
           termStatus.value = 'error';
-          if (_xterm) {
-            _xterm.writeln('\r\n\x1b[31m[终端] 重连失败，请点击 ↺ 重试\x1b[0m');
+          if (tab) {
+            const tab = termTabs.value.find(t => t.id === tabId);
+            if (tab) tab.status = 'error';
           }
+          xterm.writeln('\r\n\x1b[31m[终端] 重连失败，请点击 ↺ 重试\x1b[0m');
         }
       };
 
       ws.onerror = () => { ws.close(); };
-      _ptyWs = ws;
+      return ws;
     }
 
     function resetTerminal() {
-      if (_ptyWs) { _ptyWs.close(); _ptyWs = null; }
-      if (_xterm) { _xterm.dispose(); _xterm = null; _xtermFit = null; }
-      const container = terminalXterm.value;
+      const tabId = activeTermTabId.value;
+      if (!tabId) { initTerminal(); return; }
+
+      // 清理当前活动标签的终端实例
+      const inst = _termInstances[tabId];
+      if (inst) {
+        if (inst.ptyWs) { inst.ptyWs.close(); inst.ptyWs = null; }
+        if (inst.xterm) { inst.xterm.dispose(); inst.xterm = null; }
+        if (inst.xtermFit) inst.xtermFit = null;
+        delete _termInstances[tabId];
+      }
+      const container = _termContainers[tabId];
       if (container) container.innerHTML = '';
       termStatus.value = 'disconnected';
-      setTimeout(() => initTerminal(), 100);
+      const tab = termTabs.value.find(t => t.id === tabId);
+      if (tab) tab.status = 'disconnected';
+      setTimeout(() => initTerminal(tabId), 100);
     }
 
     let _savedTermHeight = 200;
@@ -1673,11 +1766,13 @@ app = createApp({
         termHeight.value = Math.max(60, _savedTermHeight);
         document.getElementById('terminal-area').classList.remove('collapsed');
         setTimeout(() => {
-          if (!_xterm) {
-            initTerminal();
+          const tabId = activeTermTabId.value;
+          const inst = tabId ? _termInstances[tabId] : null;
+          if (!inst || !inst.xterm) {
+            initTerminal(tabId);
           } else {
-            if (_xtermFit) _xtermFit.fit();
-            if (_xterm) _xterm.focus();
+            if (inst.xtermFit) inst.xtermFit.fit();
+            if (inst.xterm) inst.xterm.focus();
           }
         }, 50);
       }
@@ -1860,7 +1955,7 @@ app = createApp({
       messages, userInput, agentRunning, statusText, statusClass, costStr,
       messagesRef, layoutRef, editorContainer,
       leftWidth, rightWidth, resizing, vResizing, startResize, startVResize,
-      terminalXterm, termHeight, termCollapsed, termStatus, termStatusText, termTheme,
+      termHeight, termCollapsed, termStatus, termStatusText, termTheme,
       showTermDropdown, selectedTermType,
       termTabs, activeTermTabId, availableShells,
       browseWorkspace, setupNext, setupFinish, openFile, switchTab, closeTab,
@@ -1868,6 +1963,7 @@ app = createApp({
       initTerminal, resetTerminal, toggleTerminal,
       svgIcon, cycleTermTheme, toggleTermDropdown, selectTermType,
       switchTermTab, closeTermTab, newTerminalTab, notifyTermResize,
+      registerTermContainer,
       currentModel, currentModelHasKey, showApiKeyModal, pendingApiKey, pendingModelProvider,
       onModelChange, saveApiKey, formatModelName,
     };

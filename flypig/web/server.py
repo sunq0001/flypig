@@ -510,6 +510,10 @@ async def ws_pty(term_id: str):
                         cmd = json.loads(msg)
                         if cmd.get("type") == "resize":
                             term.resize(cmd["cols"], cmd["rows"])
+                        elif cmd.get("type") == "destroy":
+                            print(f"  [PTY] 收到销毁指令，清理终端 {term_id}")
+                            _terminal_manager.destroy(term_id)
+                            break
                         continue
                     except json.JSONDecodeError:
                         pass
@@ -517,9 +521,10 @@ async def ws_pty(term_id: str):
         except Exception as e:
             print(f"  [PTY] WebSocket 通信异常: {e}")
         finally:
-            print(f"  [PTY] 清理终端 {term_id}")
+            print(f"  [PTY] 关闭连接 {term_id}")
             stop_event.set()
-            _terminal_manager.destroy(term_id)
+            # 注意：不再自动销毁终端，由前端发送 type:"destroy" 消息控制
+            # 这样终端切换标签时 WS 断开后会话保持，关闭标签时才销毁
     except Exception as e:
         print(f"  [PTY] WebSocket 处理异常: {e}")
         import traceback
