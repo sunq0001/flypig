@@ -47,7 +47,11 @@ _terminal_manager = TerminalManager()
 
 @app.route("/")
 async def index():
-    return await send_from_directory(str(static_dir), "index.html")
+    resp = await send_from_directory(str(static_dir), "index.html")
+    resp.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    resp.headers["Pragma"] = "no-cache"
+    resp.headers["Expires"] = "0"
+    return resp
 
 
 # ── 文件浏览 API ──
