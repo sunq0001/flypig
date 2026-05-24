@@ -347,6 +347,18 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
 .msg-chain .bubble{background:rgba(180,190,254,.08);color:var(--accent2);padding:4px 10px;border-radius:6px;font-size:11px;text-align:center}
 .msg-summary .bubble{background:rgba(166,227,161,.06);color:var(--green);padding:6px 12px;border-radius:8px;font-size:11px;font-family:monospace}
 
+/* 命令卡片 */
+.msg-command-card{margin-bottom:8px;animation:fadeIn .15s ease}
+.command-card{background:rgba(30,30,46,.6);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.command-card .cmd-text{padding:8px 12px;font-family:'JetBrains Mono','Fira Code',Consolas,monospace;font-size:12px;color:var(--green);line-height:1.5;white-space:pre-wrap;word-break:break-all;border-bottom:1px solid var(--border)}
+.command-card .cmd-text .prompt{color:var(--fg3);margin-right:6px}
+.command-card .cmd-actions{display:flex;gap:2px;padding:4px 8px;justify-content:flex-end;background:rgba(0,0,0,.1)}
+.command-card .cmd-btn{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:none;background:transparent;color:var(--fg3);border-radius:4px;cursor:pointer;transition:all .12s;position:relative}
+.command-card .cmd-btn:hover{color:var(--fg);background:var(--bg3)}
+.command-card .cmd-btn svg{width:14px;height:14px}
+.command-card .cmd-btn .cmd-tt{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--bg2);color:var(--fg);padding:3px 8px;border-radius:4px;font-size:10px;white-space:nowrap;pointer-events:none;border:1px solid var(--border)}
+.command-card .cmd-btn:hover .cmd-tt{display:block}
+
 /* 输入区域 */
 #input-area{padding:8px 10px 10px;border-top:1px solid var(--border)}
 #input-row{display:flex;gap:6px;align-items:flex-end}
@@ -653,6 +665,25 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
       <div id="messages" ref="messagesRef">
         <div v-for="(m, i) in messages" :key="i" :class="'msg msg-' + m.type">
           <div class="bubble" v-if="m.type==='agent'||m.type==='summary'" v-html="renderMarkdown(m.content)"></div>
+          <div class="bubble" v-else-if="m.type==='command-card'" style="padding:0;background:transparent">
+            <div class="command-card">
+              <div class="cmd-text"><span class="prompt">$</span>{{ m.command }}</div>
+              <div class="cmd-actions">
+                <button class="cmd-btn" @click.stop="copyCommand(m.command)" title="复制命令">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                  <span class="cmd-tt">复制命令</span>
+                </button>
+                <button class="cmd-btn" @click.stop="runInNewTerminal(m.command)" title="在新终端中执行">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                  <span class="cmd-tt">在新终端中执行</span>
+                </button>
+                <button class="cmd-btn" @click.stop="retryCommand(m.command)" title="重新执行">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                  <span class="cmd-tt">重新执行</span>
+                </button>
+              </div>
+            </div>
+          </div>
           <div class="bubble" v-else>{{ m.content }}</div>
         </div>
       </div>
@@ -1027,15 +1058,24 @@ app = createApp({
         case 'tool_call': {
           const name = data.name;
           const args = data.args || {};
-          let desc = '';
-          if (name === 'bash') desc = '💻 '+ (args.command || '').slice(0,100);
-          else if (name === 'read_file') desc = '📖 '+ (args.path || '');
-          else if (name === 'write_file') { desc = '✏️ 写入 '+ (args.path || ''); _pendingOpenFile = args.path || ''; }
-          else if (name === 'edit_file') desc = '🔧 编辑 '+ (args.path || '');
-          else if (name === 'find_files') desc = '🔍 '+ (args.pattern || '');
-          else if (name === 'grep') desc = '🔎 '+ (args.pattern || '');
-          else desc = `🔧 ${name}`;
-          messages.value.push({type:'tool', content: desc});
+          if (name === 'bash') {
+            const cmd = args.command || '';
+            messages.value.push({
+              type: 'command-card',
+              id: 'cmd-' + Date.now() + '-' + Math.random().toString(36).slice(2,6),
+              command: cmd,
+              content: cmd.slice(0,500),
+            });
+          } else {
+            let desc = '';
+            if (name === 'read_file') desc = '📖 '+ (args.path || '');
+            else if (name === 'write_file') { desc = '✏️ 写入 '+ (args.path || ''); _pendingOpenFile = args.path || ''; }
+            else if (name === 'edit_file') desc = '🔧 编辑 '+ (args.path || '');
+            else if (name === 'find_files') desc = '🔍 '+ (args.pattern || '');
+            else if (name === 'grep') desc = '🔎 '+ (args.pattern || '');
+            else desc = `🔧 ${name}`;
+            messages.value.push({type:'tool', content: desc});
+          }
           break;
         }
         case 'tool_result': {
@@ -1893,6 +1933,43 @@ app = createApp({
       return `💵 $${_formatCostVal(cost)} | ${(tokens || 0).toLocaleString()} tokens`;
     }
 
+    // 复制命令到剪贴板
+    async function copyCommand(cmd) {
+      try {
+        await navigator.clipboard.writeText(cmd);
+        console.log('[CMD] 已复制到剪贴板:', cmd.slice(0,50));
+      } catch(e) {
+        // fallback
+        const ta = document.createElement('textarea');
+        ta.value = cmd;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+    }
+
+    // 在新终端中执行命令
+    function runInNewTerminal(cmd) {
+      // 用当前选择的 shell 类型创建新终端
+      const tabId = newTerminalTab(selectedTermType.value);
+      const checkReady = setInterval(() => {
+        const inst = _termInstances[tabId];
+        if (inst && inst.ptyWs && inst.ptyWs.readyState === WebSocket.OPEN) {
+          clearInterval(checkReady);
+          inst.ptyWs.send(cmd + '\n');
+        }
+      }, 200);
+    }
+
+    // 重试命令：重新发送给 AI 执行
+    async function retryCommand(cmd) {
+      if (agentRunning.value) return;
+      // 直接把命令作为用户消息发送
+      userInput.value = cmd;
+      await sendMessage();
+    }
+
     async function resetChat() {
       if (agentRunning.value) return;
       await fetch('/api/agent/command', {
@@ -1988,7 +2065,7 @@ app = createApp({
       initTerminal, resetTerminal, toggleTerminal,
       svgIcon, cycleTermTheme, toggleTermDropdown, selectTermType,
       switchTermTab, closeTermTab, newTerminalTab, notifyTermResize,
-      registerTermContainer,
+      registerTermContainer, copyCommand, runInNewTerminal, retryCommand,
       currentModel, currentModelHasKey, showApiKeyModal, pendingApiKey, pendingModelProvider,
       onModelChange, saveApiKey, formatModelName,
     };
