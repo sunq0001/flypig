@@ -407,6 +407,20 @@ def _start_file_watcher(workspace: str):
     t.start()
 
 
+
+# ═══════════════════════════════════════════════════════════════
+# API — 查询可用 shell 类型
+# ═══════════════════════════════════════════════════════════════
+
+@app.route("/api/shells")
+async def api_available_shells():
+    from .terminal import detect_available_shells, SHELL_LABELS
+    available = detect_available_shells()
+    shells = []
+    for key, label in SHELL_LABELS.items():
+        shells.append({"key": key, "label": label, "available": available.get(key, False)})
+    return jsonify(shells)
+
 # ═══════════════════════════════════════════════════════════════
 # WebSocket — PTY 终端通道 /ws/pty/<term_id> (仅 PTY)
 # ═══════════════════════════════════════════════════════════════
@@ -415,59 +429,101 @@ def _start_file_watcher(workspace: str):
 async def ws_pty(term_id: str):
     import asyncio
     import threading
-    term = _terminal_manager.get(term_id)
-    if not term:
-        term = _terminal_manager.create(term_id, cwd=_workspace)
-    if not term.is_alive():
-        try:
-            await websocket.send(json.dumps({
-                "type": "error",
-                "msg": f"终端启动失败，请确保已安装 pywinpty/winpty（pip install pywinpty）"
-            }))
-        except Exception:
-            pass
-        return
-    loop = asyncio.get_event_loop()
-    stop_event = threading.Event()
-    @copy_current_websocket_context
-    async def pty_send(data: bytes):
-        await websocket.send(data)
-    def pty_reader():
-        while term.is_alive() and not stop_event.is_set():
-            data = term.read(4096)
-            if data is None:
-                break
-            if data:
-                try:
-                    fut = asyncio.run_coroutine_threadsafe(pty_send(data), loop)
-                    fut.result(timeout=10)
-                except Exception:
-                    break
-            else:
-                threading.Event().wait(0.01)
-    reader_thread = threading.Thread(target=pty_reader, daemon=True, name=f"pty-read-{term_id}")
-    reader_thread.start()
+    from urllib.parse import urlparse, parse_qs
     try:
-        while True:
-            msg = await websocket.receive()
-            if msg is None:
-                break
-            if isinstance(msg, bytes):
-                term.write(msg)
-            elif isinstance(msg, str):
+        # 从WebSocket URL中解析查询参数（shell类型）
+        query_params = parse_qs(urlparse(websocket.url).query)
+        shell = query_params.get('shell', ['ps'])[0]
+        print(f"  [PTY] WebSocket 连接请求: term_id={term_id}, shell={shell}, workspace={_workspace}")
+        # 检查工作区是否设置
+        if not _workspace:
+            print(f"  [PTY] 错误: 工作区未初始化")
+            try:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "msg": "工作区未初始化，请先完成初始化设置"
+                }))
+            except Exception:
+                pass
+            return
+        
+        term = _terminal_manager.get(term_id)
+        if not term:
+            print(f"  [PTY] 创建终端 {term_id}, shell={shell}")
+            try:
+                term = _terminal_manager.create(term_id, cwd=_workspace, shell=shell)
+                print(f"  [PTY] 终端创建成功: alive={term.is_alive()}")
+            except Exception as e:
+                print(f"  [PTY] 终端创建失败: {e}")
+                import traceback
+                traceback.print_exc()
                 try:
-                    cmd = json.loads(msg)
-                    if cmd.get("type") == "resize":
-                        term.resize(cmd["cols"], cmd["rows"])
-                    continue
-                except json.JSONDecodeError:
+                    await websocket.send(json.dumps({
+                        "type": "error",
+                        "msg": f"终端创建失败: {str(e)}"
+                    }))
+                except Exception:
                     pass
-                term.write(msg.encode("utf-8"))
-    except Exception:
-        pass
-    finally:
-        stop_event.set()
-        _terminal_manager.destroy(term_id)
+                return
+        
+        if not term.is_alive():
+            print(f"  [PTY] 终端未激活")
+            try:
+                await websocket.send(json.dumps({
+                    "type": "error",
+                    "msg": f"终端启动失败，请确保已安装 pywinpty/winpty（pip install pywinpty）"
+                }))
+            except Exception:
+                pass
+            return
+        
+        print(f"  [PTY] 终端已激活，开始数据流传输")
+        loop = asyncio.get_event_loop()
+        stop_event = threading.Event()
+        @copy_current_websocket_context
+        async def pty_send(data: bytes):
+            await websocket.send(data)
+        def pty_reader():
+            while term.is_alive() and not stop_event.is_set():
+                data = term.read(4096)
+                if data is None:
+                    break
+                if data:
+                    try:
+                        fut = asyncio.run_coroutine_threadsafe(pty_send(data), loop)
+                        fut.result(timeout=10)
+                    except Exception:
+                        break
+                else:
+                    threading.Event().wait(0.01)
+        reader_thread = threading.Thread(target=pty_reader, daemon=True, name=f"pty-read-{term_id}")
+        reader_thread.start()
+        try:
+            while True:
+                msg = await websocket.receive()
+                if msg is None:
+                    break
+                if isinstance(msg, bytes):
+                    term.write(msg)
+                elif isinstance(msg, str):
+                    try:
+                        cmd = json.loads(msg)
+                        if cmd.get("type") == "resize":
+                            term.resize(cmd["cols"], cmd["rows"])
+                        continue
+                    except json.JSONDecodeError:
+                        pass
+                    term.write(msg.encode("utf-8"))
+        except Exception as e:
+            print(f"  [PTY] WebSocket 通信异常: {e}")
+        finally:
+            print(f"  [PTY] 清理终端 {term_id}")
+            stop_event.set()
+            _terminal_manager.destroy(term_id)
+    except Exception as e:
+        print(f"  [PTY] WebSocket 处理异常: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 # ═══════════════════════════════════════════════════════════════

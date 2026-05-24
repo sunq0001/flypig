@@ -1,5 +1,8 @@
 """Web 终端 — asyncio PTY 终端管理 (WebSocket 字节管道)
 
+自动检测系统可用 shell，不可用时优雅降级到默认 shell。
+用户无需手动安装任何额外软件。
+
 架构：
   ┌─ xterm.js ─┬── WS(字节) ──┬─ asyncio server ──┬─ PTY ──┬─ Shell
   │            │              │  port 8322         │        │
@@ -8,27 +11,101 @@
 
 import os
 import platform
+import shutil
 import threading
 from typing import Optional
+
+# ─── Shell 配置 ────────────────────────────────────────────────
+
+# Windows: shell 类型 → 可执行文件（按优先级列出多个可能路径）
+SHELL_MAP_WIN = {
+    'ps':   ['powershell.exe', 'pwsh.exe', 'pwsh'],
+    'bash': ['bash.exe', 'C:\\Program Files\\Git\\bin\\bash.exe',
+             'C:\\Program Files\\Git\\usr\\bin\\bash.exe'],
+    'zsh':  ['zsh.exe'],
+    'wsl':  ['wsl.exe'],
+}
+# Unix: shell 类型 → 可执行路径
+SHELL_MAP_UNIX = {
+    'ps':   ['pwsh', 'powershell'],
+    'bash': ['/bin/bash', '/usr/bin/bash'],
+    'zsh':  ['/bin/zsh', '/usr/bin/zsh'],
+    'wsl':  ['/bin/bash'],
+}
+SHELL_LABELS = {
+    'ps': 'PowerShell', 'bash': 'Bash', 'zsh': 'Zsh', 'wsl': 'WSL',
+}
+# 各 shell 启动参数
+SHELL_ARGS = {
+    'ps':   '-NoProfile -NoLogo',
+    'bash': '--login',
+    'zsh':  '',
+    'wsl':  '',
+}
+# 默认 fallback
+_DEFAULT_SHELL = 'ps'
+_WIN_DEFAULT_CMD = 'powershell.exe -NoProfile -NoLogo'
+
+
+def detect_available_shells() -> dict:
+    """检测系统上哪些 shell 可用，返回 { 'ps': True, 'bash': False, ... }"""
+    shell_map = SHELL_MAP_WIN if platform.system() == "Windows" else SHELL_MAP_UNIX
+    result = {}
+    for shell_type, candidates in shell_map.items():
+        found = False
+        for exe in candidates:
+            # 如果是绝对路径，检查文件存在；否则用 which 搜索 PATH
+            if os.path.isabs(exe):
+                found = os.path.isfile(exe)
+            else:
+                found = shutil.which(exe) is not None
+            if found:
+                break
+        result[shell_type] = found
+    return result
+
+
+def resolve_shell_cmd(shell_type: str) -> str:
+    """解析 shell 类型为可执行命令字符串，找不到则降级到默认"""
+    shell_map = SHELL_MAP_WIN if platform.system() == "Windows" else SHELL_MAP_UNIX
+    candidates = shell_map.get(shell_type, [])
+    for exe in candidates:
+        if os.path.isabs(exe):
+            if os.path.isfile(exe):
+                cmd = exe
+                break
+        else:
+            found = shutil.which(exe)
+            if found:
+                cmd = found
+                break
+    else:
+        # 全部找不到，降级到 PowerShell
+        print(f"  [PTY] shell '{shell_type}' 不可用，降级到 PowerShell")
+        if platform.system() == "Windows":
+            return _WIN_DEFAULT_CMD
+        return '/bin/bash'
+
+    # 追加启动参数
+    args = SHELL_ARGS.get(shell_type, '')
+    if args:
+        cmd = f'{cmd} {args}'
+    print(f"  [PTY] 使用 shell: {shell_type} → {cmd}")
+    return cmd
 
 
 class Terminal:
     """单个 PTY 终端 — 与 Shell 进程的字节管道"""
 
-    def __init__(self, term_id: str, cwd: Optional[str] = None):
+    def __init__(self, term_id: str, cwd: Optional[str] = None, shell: str = 'ps'):
         self.term_id = term_id
-        # 验证 cwd 存在，不存在则使用 CWD
         raw_cwd = cwd or os.getcwd()
         self.cwd = raw_cwd if os.path.isdir(raw_cwd) else os.getcwd()
+        self.shell = shell  # 'ps' | 'bash' | 'zsh' | 'wsl'
         self._process = None
         self._alive = False
         self._lock = threading.Lock()
-        self.shell_name = self._detect_shell()
-
-    def _detect_shell(self) -> str:
-        if platform.system() == "Windows":
-            return "PowerShell"
-        return os.environ.get("SHELL", "bash")
+        self.shell_name = SHELL_LABELS.get(shell, 'PowerShell')
 
     def create(self) -> bool:
         """启动 PTY shell 进程"""
@@ -47,7 +124,6 @@ class Terminal:
 
     def _start_windows(self) -> bool:
         """Windows: 使用 pywinpty"""
-        # pywinpty 兼容两种模块名：pip 版(pywinpty / 3.0.3+) / conda 版(winpty / 3.0.2)
         pty_mod = None
         for mod_name in ("pywinpty", "winpty"):
             try:
@@ -59,9 +135,8 @@ class Terminal:
             print("  [PTY] pywinpty/winpty 未安装")
             return False
         try:
-            shell = "powershell.exe -NoProfile -NoLogo"
-            print(f"  [PTY] 启动 PowerShell (via {pty_mod.__name__}): cwd={self.cwd}")
-            # 兼容不同版本的 spawn 参数
+            shell = resolve_shell_cmd(self.shell)
+            print(f"  [PTY] 启动 {self.shell_name} (via {pty_mod.__name__}): cwd={self.cwd}")
             spawn_kwargs = {"cwd": self.cwd}
             import inspect
             sig = inspect.signature(pty_mod.PtyProcess.spawn)
@@ -71,7 +146,7 @@ class Terminal:
                 spawn_kwargs["cols"] = 80
                 spawn_kwargs["rows"] = 24
             self._process = pty_mod.PtyProcess.spawn(shell, **spawn_kwargs)
-            print(f"  [PTY] PowerShell 已启动")
+            print(f"  [PTY] {self.shell_name} 已启动")
             return True
         except Exception as e:
             print(f"  [PTY] 启动失败: {e}")
@@ -89,11 +164,10 @@ class Terminal:
         try:
             pid, fd = pty_mod.fork()
             if pid == 0:
-                # 子进程
-                shell = os.environ.get("SHELL", "/bin/bash")
+                shell = resolve_shell_cmd(self.shell)
                 if self.cwd:
                     os.chdir(self.cwd)
-                os.execvp(shell, [shell])
+                os.execvp(shell.split()[0], [shell])
                 os._exit(1)
             self._pid = pid
             self._fd = fd
@@ -102,13 +176,6 @@ class Terminal:
             return False
 
     def read(self, size: int = 4096) -> Optional[bytes]:
-        """从 PTY 读取输出（阻塞调用，应在 executor 中执行）
-
-        Returns:
-            bytes: 输出数据
-            b"": 暂时无数据，可重试
-            None: PTY 已关闭（不可恢复）
-        """
         if not self._alive:
             return None
         try:
@@ -122,17 +189,15 @@ class Terminal:
             else:
                 if hasattr(self, '_fd') and self._fd >= 0:
                     data = os.read(self._fd, size)
-                    return data if data else None  # EOF
+                    return data if data else None
                 return None
         except RuntimeError:
-            # pywinpty: 暂时无数据可读，不是终端挂了
             return b""
         except (EOFError, OSError):
             self._alive = False
             return None
 
     def write(self, data: bytes):
-        """写入 PTY stdin"""
         if not self._alive:
             return
         with self._lock:
@@ -146,7 +211,6 @@ class Terminal:
                 self._alive = False
 
     def resize(self, cols: int, rows: int):
-        """调整终端大小"""
         if platform.system() == "Windows":
             if self._process:
                 try:
@@ -165,7 +229,6 @@ class Terminal:
                     pass
 
     def destroy(self):
-        """停止并清理 PTY 进程"""
         with self._lock:
             self._alive = False
             if platform.system() == "Windows":
@@ -216,9 +279,9 @@ class TerminalManager:
         self._terminals: dict[str, Terminal] = {}
         self._lock = threading.Lock()
 
-    def create(self, term_id: str, cwd: Optional[str] = None) -> Terminal:
+    def create(self, term_id: str, cwd: Optional[str] = None, shell: str = 'ps') -> Terminal:
         """创建并注册一个新终端"""
-        term = Terminal(term_id, cwd)
+        term = Terminal(term_id, cwd, shell)
         term.create()
         with self._lock:
             self._terminals[term_id] = term
@@ -229,7 +292,6 @@ class TerminalManager:
             return self._terminals.get(term_id)
 
     def destroy(self, term_id: str):
-        """销毁终端"""
         with self._lock:
             term = self._terminals.pop(term_id, None)
         if term:
@@ -244,7 +306,6 @@ class TerminalManager:
             return len(self._terminals)
 
     def cleanup_all(self):
-        """销毁所有终端"""
         with self._lock:
             terms = list(self._terminals.values())
             self._terminals.clear()

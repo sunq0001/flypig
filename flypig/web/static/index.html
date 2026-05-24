@@ -17,9 +17,16 @@ window.define = undefined;
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
 <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<!-- Lucide 图标库（本地托管，避免 CDN 加载失败） -->
+<script src="/lucide.min.js" onload="console.log('Lucide loaded', typeof lucide, lucide); window.LUCIDE_LOADED = true;"></script>
 <script>
 // 恢复 Monaco AMD define
 window.define = window.__monacoDefine;
+// 如果lucide已经加载（例如从缓存），也设置标志
+if (typeof lucide !== 'undefined') {
+  console.log('Lucide already available');
+  window.LUCIDE_LOADED = true;
+}
 </script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -80,17 +87,225 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
 .v-divider:hover,.v-divider.active{background:var(--accent)}
 .v-divider::after{content:'';position:absolute;left:0;right:0;top:-4px;bottom:-4px}
 
-/* 终端区域 (下半) */
-#terminal-area{height:200px;min-height:60px;display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
-#terminal-area .term-header{display:flex;align-items:center;padding:2px 10px;height:28px;background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border);flex-shrink:0;gap:8px;font-size:11px;color:var(--fg3)}
-#terminal-area .term-header .term-title{flex:1;font-weight:500}
-#terminal-area .term-header .term-btn{background:none;border:none;color:var(--fg3);cursor:pointer;padding:2px 6px;border-radius:3px;font-size:11px}
-#terminal-area .term-header .term-btn:hover{color:var(--fg);background:var(--bg3)}
+/* ════════════════════════════════════════════════
+   终端区域 + 主题系统
+   通过 [data-theme="cyber"|"plain"] 切换主题
+   新增主题只需添加新的 [data-theme="xxx"] CSS 块
+   ════════════════════════════════════════════════ */
+
+/* ── 终端 CSS 变量（基础值，被 theme 覆盖） ── */
+:root {
+  --t-bg:#1e1e2e;
+  --t-header-bg:var(--bg2);
+  --t-border:var(--border);
+  --t-text:var(--fg3);
+  --t-text-bright:var(--fg);
+  --t-btn-hover-bg:var(--bg3);
+  --t-btn-hover-color:var(--fg);
+  --t-accent:var(--accent);
+  --t-green:var(--green);
+  --t-rail-h:0px;
+  --t-grid-bg:transparent;
+  --t-grid-size:0px;
+  --t-glass-blur:0px;
+  --t-shadow:0 2px 8px rgba(0,0,0,.2);
+  --t-btn-glow:none;
+  --t-dot-glow:0 0 4px var(--green);
+  --t-dropdown-bg:var(--bg2);
+  --t-dropdown-border:var(--border);
+}
+
+/* ── 朴素风 (plain) ── 简洁干净，与现有 UI 融合 */
+#terminal-area[data-theme="plain"] {
+  --t-bg:#1e1e2e;
+  --t-header-bg:var(--bg2);
+  --t-border:var(--border);
+  --t-text:var(--fg3);
+  --t-text-bright:var(--fg);
+  --t-btn-hover-bg:var(--bg3);
+  --t-btn-hover-color:var(--fg);
+  --t-accent:var(--accent);
+  --t-green:var(--green);
+  --t-rail-h:0px;
+  --t-grid-bg:transparent;
+  --t-grid-size:0px;
+  --t-glass-blur:0px;
+  --t-shadow:0 2px 8px rgba(0,0,0,.2);
+  --t-btn-glow:none;
+  --t-dot-glow:0 0 4px var(--green);
+  --t-dropdown-bg:var(--bg2);
+  --t-dropdown-border:var(--border);
+}
+
+/* ── 赛博风 (cyber) ── 霓虹发光、跑马灯、赛博配色 */
+#terminal-area[data-theme="cyber"] {
+  --t-bg:#111122;
+  --t-header-bg:linear-gradient(90deg,rgba(30,30,50,.95),rgba(20,20,40,.9));
+  --t-border:rgba(137,180,250,.15);
+  --t-text:rgba(205,214,244,.5);
+  --t-text-bright:#cdd6f4;
+  --t-btn-hover-bg:rgba(137,180,250,.08);
+  --t-btn-hover-color:#fff;
+  --t-accent:#89b4fa;
+  --t-green:#a6e3a1;
+  --t-rail-h:2px;
+  --t-grid-bg:
+    linear-gradient(rgba(137,180,250,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(137,180,250,.03) 1px, transparent 1px),
+    radial-gradient(ellipse at 30% 20%, rgba(137,180,250,.06) 0%, transparent 60%);
+  --t-grid-size:40px 40px;
+  --t-glass-blur:12px;
+  --t-shadow:0 0 20px rgba(137,180,250,.08), inset 0 0 20px rgba(137,180,250,.03);
+  --t-btn-glow:drop-shadow(0 0 4px rgba(137,180,250,.4));
+  --t-dot-glow:0 0 6px rgba(166,227,161,.6), 0 0 12px rgba(166,227,161,.2);
+  --t-dropdown-bg:rgba(15,15,30,.95);
+  --t-dropdown-border:rgba(137,180,250,.15);
+}
+
+/* ── 应用变量 ── */
+#terminal-area{
+  height:200px;min-height:34px;
+  display:flex;flex-direction:column;overflow:hidden;
+  background:var(--t-bg);
+  background-image:var(--t-grid-bg);
+  background-size:var(--t-grid-size);
+  box-shadow:var(--t-shadow);
+  transition:height .2s ease, background .3s, box-shadow .3s;
+  position:relative;
+}
+
+/* 跑马灯装饰条 */
+.cyber-rail{
+  height:var(--t-rail-h);flex-shrink:0;
+  background:linear-gradient(90deg,transparent 0%,#89b4fa 20%,#f5c2e7 40%,#a6e3a1 60%,#89b4fa 80%,transparent 100%);
+  background-size:200% 100%;
+  animation:rail-scan 3s linear infinite;
+  transition:height .3s;
+}
+@keyframes rail-scan{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+#terminal-area .term-header{
+  display:flex;align-items:center;padding:2px 10px;height:28px;
+  background:var(--t-header-bg);
+  border-top:1px solid var(--t-border);
+  border-bottom:1px solid var(--t-border);
+  flex-shrink:0;gap:6px;font-size:11px;
+  color:var(--t-text);
+  transition:all .3s;
+}
+#terminal-area .term-header .term-title{
+  display:flex;align-items:center;gap:4px;font-weight:500;
+}
+#terminal-area .term-header .term-title svg{width:15px;height:15px;filter:var(--t-btn-glow)}
+
+/* 状态点 ── 主题感知 */
+.term-status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin:0 4px;flex-shrink:0}
+.term-status-dot.connected{background:var(--t-green);box-shadow:var(--t-dot-glow);animation:pulse-glow 2s ease-in-out infinite}
+.term-status-dot.connecting{background:#f9e2af;animation:pulse 1s infinite}
+.term-status-dot.error{background:#f38ba8}
+@keyframes pulse-glow{0%,100%{box-shadow:var(--t-dot-glow)}50%{box-shadow:0 0 10px rgba(166,227,161,.8),0 0 20px rgba(166,227,161,.3)}}
+.term-status-text{color:var(--t-text);flex-shrink:0}
+
+/* 终端按钮 ── 主题感知 */
+#terminal-area .term-header .term-btn{
+  position:relative;display:inline-flex;align-items:center;justify-content:center;
+  background:none;border:none;
+  color:var(--t-text);cursor:pointer;
+  width:24px;height:24px;border-radius:4px;
+  font-size:11px;transition:all .15s;
+  padding:0;
+}
+#terminal-area .term-header .term-btn svg{width:16px;height:16px;transition:all .2s;color:inherit}
+#terminal-area .term-header .term-btn:hover{color:var(--t-btn-hover-color);background:var(--t-btn-hover-bg)}
+#terminal-area .term-header .term-btn:hover svg{filter:var(--t-btn-glow)}
+
+/* 赛博特有霓虹色 hover */
+#terminal-area[data-theme="cyber"] .term-btn:hover[data-btn="plus"] svg{color:#a6e3a1;filter:drop-shadow(0 0 6px rgba(166,227,161,.6))}
+#terminal-area[data-theme="cyber"] .term-btn:hover[data-btn="refresh"] svg{color:#89b4fa;filter:drop-shadow(0 0 6px rgba(137,180,250,.6))}
+#terminal-area[data-theme="cyber"] .term-btn:hover[data-btn="collapse"] svg{color:#f5c2e7;filter:drop-shadow(0 0 6px rgba(245,194,231,.6))}
+#terminal-area[data-theme="cyber"] .term-btn:hover[data-btn="theme"] svg{color:#cba6f7;filter:drop-shadow(0 0 6px rgba(203,166,247,.6))}
+
+/* 分隔线 */
+.term-sep{width:1px;height:14px;background:var(--t-border);margin:0 4px;flex-shrink:0}
+
+/* Tooltip ── 主题感知 */
+.term-btn .term-tt{
+  display:none;position:absolute;
+  top:calc(100% + 6px);left:50%;transform:translateX(-50%);
+  background:var(--t-dropdown-bg);
+  color:var(--t-text-bright);padding:4px 10px;border-radius:4px;
+  font-size:10px;white-space:nowrap;z-index:50;
+  border:1px solid var(--t-dropdown-border);
+  box-shadow:0 0 12px rgba(0,0,0,.3);
+  pointer-events:none;letter-spacing:.3px;
+}
+.term-btn .term-tt::after{content:'';position:absolute;bottom:100%;left:50%;
+  transform:translateX(-50%);border:4px solid transparent;
+  border-bottom-color:var(--t-dropdown-border)}
+.term-btn:hover .term-tt{display:block}
+
+/* ── 下拉菜单 ── */
+.term-dropdown-wrapper{position:relative;display:inline-flex}
+.term-dropdown{
+  position:absolute;top:calc(100% + 4px);left:50%;transform:translateX(-50%);
+  background:var(--t-dropdown-bg);
+  backdrop-filter:blur(var(--t-glass-blur));
+  border:1px solid var(--t-dropdown-border);
+  border-radius:8px;min-width:190px;padding:4px;
+  z-index:200;
+  box-shadow:0 8px 32px rgba(0,0,0,.5);
+}
+.term-dropdown-item{
+  display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;
+  cursor:pointer;font-size:12px;color:var(--t-text);transition:all .08s;
+}
+.term-dropdown-item:hover{background:rgba(137,180,250,.1);color:var(--t-text-bright)}
+.term-dropdown-item svg{width:15px;height:15px;color:#a6adc8;flex-shrink:0}
+.term-dropdown-item .d-label{flex:1}
+.term-dropdown-item .d-check{margin-left:auto;color:var(--t-accent);display:none}
+.term-dropdown-item.active .d-check{display:inline-flex}
+.term-dropdown-item.active{color:var(--t-text-bright);background:rgba(137,180,250,.1)}
+.term-dropdown-divider{height:1px;background:var(--t-border);margin:3px 0}
+
+/* xterm 容器 */
 #terminal-xterm{flex:1;overflow:hidden;padding:2px}
 #terminal-xterm .xterm{height:100%;padding:4px}
 #terminal-xterm .xterm-viewport{scrollbar-width:thin}
 #terminal-xterm .xterm-viewport::-webkit-scrollbar{width:5px}
 #terminal-xterm .xterm-viewport::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* 终端标签页系统 */
+#terminal-demo{display:flex;flex-direction:row;height:100%}
+.term-sidebar-wrapper{display:flex;flex-shrink:0;position:relative}
+.resize-handle{width:4px;background:transparent;cursor:col-resize;z-index:5;transition:all .1s}
+#terminal-area[data-theme="cyber"] .resize-handle:hover{background:var(--t-accent);box-shadow:0 0 8px rgba(137,180,250,.4)}
+#terminal-area[data-theme="plain"] .resize-handle:hover{background:var(--t-accent)}
+.term-tab-bar{width:90px;min-width:36px;max-width:200px;display:flex;flex-direction:column;background:var(--t-header-bg);border-left:1px solid var(--t-border);overflow:hidden;transition:width .15s}
+.term-tab-bar-inner{flex:1;display:flex;flex-direction:column;overflow-y:auto;gap:0;align-content:flex-start}
+.term-tab-bar-inner::-webkit-scrollbar{width:2px}
+.term-tab-bar-inner::-webkit-scrollbar-thumb{background:var(--t-border);border-radius:2px}
+/* 标签项 */
+.term-vtab{display:flex;align-items:center;gap:6px;height:36px;padding:0 10px;cursor:pointer;color:var(--t-text);font-size:11px;position:relative;user-select:none;transition:all .12s;flex-shrink:0;border-bottom:1px solid var(--t-border);white-space:nowrap;overflow:hidden}
+.term-vtab:hover{color:var(--t-text-bright);background:rgba(137,180,250,.04)}
+.term-vtab.active{color:var(--t-text-bright);background:rgba(137,180,250,.06)}
+#terminal-area[data-theme="cyber"] .term-vtab.active{border-right:2px solid var(--t-accent);box-shadow:inset 2px 0 8px rgba(137,180,250,.05)}
+#terminal-area[data-theme="plain"] .term-vtab.active{border-right:2px solid var(--t-accent)}
+.term-vtab .vtab-icon{opacity:.7;flex-shrink:0;display:flex;align-items:center;width:16px;justify-content:center}
+.term-vtab .vtab-icon svg{width:14px;height:14px}
+.term-vtab.active .vtab-icon svg{filter:var(--t-glow)}
+.term-vtab .vtab-text{overflow:hidden;text-overflow:ellipsis}
+/* 垃圾桶关闭按钮（始终可见） */
+.term-vtab .vtab-close{position:absolute;top:50%;right:4px;transform:translateY(-50%);padding:3px;border-radius:4px;opacity:.6;line-height:1;display:flex;align-items:center;color:var(--t-text-dim);transition:all .15s;border:none;background:none;cursor:pointer}
+.term-vtab .vtab-close:hover{opacity:1;color:#f38ba8;background:rgba(243,139,168,.12);transform:translateY(-50%) scale(1.1)}
+.term-vtab .vtab-close svg{width:12px;height:12px}
+/* 无底部新建按钮 */
+.term-vtab-add{display:none}
+/* 图标模式（宽度 < 50px） */
+.term-tab-bar.icon-mode .vtab-text{display:none}
+.term-tab-bar.icon-mode .vtab-close{display:none}
+.term-tab-bar.icon-mode .term-vtab{justify-content:center;padding:0}
+/* 折叠时高度变为 34px（仅 header 行） */
+#terminal-area.collapsed{height:34px!important;min-height:34px!important}
 
 /* 文件标签页 */
 #file-tabs{display:flex;height:35px;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0}
@@ -213,10 +428,6 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
 .bubble th,.bubble td{border:1px solid var(--border);padding:4px 8px;text-align:left}
 .bubble th{background:var(--bg3);font-weight:600}
 
-.term-status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin:0 4px}
-.term-status-dot.connected{background:var(--green);box-shadow:0 0 4px var(--green)}
-.term-status-dot.connecting{background:var(--yellow);animation:pulse 1s infinite}
-.term-status-dot.error{background:var(--red)}
 .loading-dots::after{content:'';animation:dots 1.5s infinite}
 @keyframes dots{0%{content:'.'}33%{content:'..'}66%{content:'...'}}
 
@@ -332,16 +543,93 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
       <div class="v-divider" :class="{active: vResizing}"
            @mousedown.prevent="startVResize($event)"></div>
 
-      <div id="terminal-area" :style="{height: termHeight + 'px'}">
-        <div class="term-header">
-          <span class="term-title">⬢ 终端</span>
-          <span class="term-status-dot" :class="termStatus"></span>
-          <span class="term-status-text">{{ termStatusText }}</span>
-          <span style="flex:1"></span>
-          <button class="term-btn" @click="resetTerminal" title="重启终端">↺</button>
-          <button class="term-btn" @click="toggleTerminal" title="折叠终端">{{ termCollapsed ? '⬆' : '⬇' }}</button>
+      <div id="terminal-area" :style="{height: termHeight + 'px'}" :data-theme="termTheme">
+        <!-- 跑马灯装饰条（仅在 cyber 主题显示） -->
+        <div class="cyber-rail" v-if="termTheme === 'cyber'"></div>
+        <div id="terminal-demo" :style="{height: '100%', display: 'flex'}">
+          <!-- 左侧终端主体 -->
+          <div class="term-main" style="flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden">
+            <div class="term-header">
+              <span class="term-title" v-html="svgIcon('terminal',15)"></span>
+              <span class="term-status-dot" :class="termStatus"></span>
+              <span class="term-status-text">{{ termStatusText }}</span>
+              <span style="flex:1"></span>
+
+              <!-- ★ 新建终端按钮（带下拉菜单），移至重启左侧 -->
+              <div class="term-dropdown-wrapper">
+                <button class="term-btn" data-btn="plus" @click="toggleTermDropdown" title="新建终端">
+                  <span v-html="svgIcon('plus')"></span>
+                </button>
+                <!-- 下拉菜单 -->
+                <div class="term-dropdown" v-show="showTermDropdown" @click.stop>
+                  <div class="term-dropdown-item" :class="{active: selectedTermType==='ps'}" @click="selectTermType('ps')">
+                    <span v-html="svgIcon('terminal')"></span>
+                    <span class="d-label">PowerShell</span>
+                    <span v-if="selectedTermType==='ps'" v-html="svgIcon('check')" style="margin-left:auto;color:var(--t-accent)"></span>
+                    <span v-if="availableShells['ps'] === false" style="margin-left:auto;font-size:9px;color:var(--t-red)">不可用</span>
+                  </div>
+                  <div class="term-dropdown-item" :class="{active: selectedTermType==='bash'}" @click="selectTermType('bash')"
+                       :style="availableShells['bash'] === false ? {opacity:.4,cursor:'default'} : {}">
+                    <span v-html="svgIcon('command')"></span>
+                    <span class="d-label">bash</span>
+                    <span v-if="availableShells['bash'] === true && selectedTermType==='bash'" v-html="svgIcon('check')" style="margin-left:auto;color:var(--t-accent)"></span>
+                    <span v-if="availableShells['bash'] === false" style="margin-left:auto;font-size:9px;color:var(--t-red);white-space:nowrap">未安装</span>
+                  </div>
+                  <div class="term-dropdown-item" :class="{active: selectedTermType==='zsh'}" @click="selectTermType('zsh')"
+                       :style="availableShells['zsh'] === false ? {opacity:.4,cursor:'default'} : {}">
+                    <span v-html="svgIcon('zap')"></span>
+                    <span class="d-label">zsh</span>
+                    <span v-if="availableShells['zsh'] === true && selectedTermType==='zsh'" v-html="svgIcon('check')" style="margin-left:auto;color:var(--t-accent)"></span>
+                    <span v-if="availableShells['zsh'] === false" style="margin-left:auto;font-size:9px;color:var(--t-red);white-space:nowrap">未安装</span>
+                  </div>
+                  <div class="term-dropdown-divider"></div>
+                  <div class="term-dropdown-item" :class="{active: selectedTermType==='wsl'}" @click="selectTermType('wsl')"
+                       :style="availableShells['wsl'] === false ? {opacity:.4,cursor:'default'} : {}">
+                    <span v-html="svgIcon('laptop')"></span>
+                    <span class="d-label">WSL</span>
+                    <span v-if="availableShells['wsl'] === true && selectedTermType==='wsl'" v-html="svgIcon('check')" style="margin-left:auto;color:var(--t-accent)"></span>
+                    <span v-if="availableShells['wsl'] === false" style="margin-left:auto;font-size:9px;color:var(--t-red);white-space:nowrap">未安装</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="term-sep"></div>
+
+              <!-- 重启终端 -->
+              <button class="term-btn" data-btn="refresh" @click="resetTerminal" title="重启终端">
+                <span v-html="svgIcon('refresh-cw')"></span>
+              </button>
+              <!-- 折叠终端 -->
+              <button class="term-btn" data-btn="collapse" @click="toggleTerminal" title="折叠终端">
+                <span v-html="svgIcon(termCollapsed ? 'chevron-up' : 'chevron-down')"></span>
+              </button>
+              <!-- ★ 主题切换 -->
+              <button class="term-btn" data-btn="theme" @click="cycleTermTheme" :title="termTheme === 'cyber' ? '切换为朴素风格' : '切换为流光溢彩'">
+                <span v-html="svgIcon(termTheme === 'cyber' ? 'palette' : 'sparkles')"></span>
+              </button>
+            </div>
+            <div id="terminal-xterm" ref="terminalXterm" v-show="!termCollapsed" style="flex:1;overflow:hidden"></div>
+          </div>
+
+          <!-- 右侧标签栏（v-show 控制：仅多终端时显示） -->
+          <div class="term-sidebar-wrapper" v-show="termTabs.length >= 2" style="display:flex;flex-shrink:0;position:relative">
+            <div class="resize-handle" id="term-resize-handle" style="width:4px;background:transparent;cursor:col-resize;z-index:5;transition:all .1s"></div>
+            <div class="term-tab-bar" id="term-tab-bar" style="width:90px;min-width:36px;max-width:200px;display:flex;flex-direction:column;background:var(--t-header-bg);border-left:1px solid var(--t-border);overflow:hidden;transition:width .15s">
+              <div class="term-tab-bar-inner" style="flex:1;display:flex;flex-direction:column;overflow-y:auto;gap:0;align-content:flex-start">
+                <!-- 终端标签页列表 -->
+                <div v-for="tab in termTabs" :key="tab.id" class="term-vtab" :class="{active: tab.id === activeTermTabId}" @click="switchTermTab(tab.id)">
+                  <span class="vtab-icon">
+                    <span v-html="svgIcon(tab.shellType === 'ps' ? 'terminal' : tab.shellType === 'bash' ? 'command' : tab.shellType === 'zsh' ? 'zap' : 'laptop', 14)"></span>
+                  </span>
+                  <span class="vtab-text">{{ tab.title }}</span>
+                  <button class="vtab-close" @click.stop="closeTermTab(tab.id)" title="关闭终端">
+                    <span v-html="svgIcon('trash-2',12)"></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <div id="terminal-xterm" ref="terminalXterm" v-show="!termCollapsed"></div>
       </div>
     </div>
 
@@ -532,7 +820,57 @@ app = createApp({
     const termHeight = ref(200);
     const termCollapsed = ref(false);
     const termStatus = ref('disconnected');
+    const termTheme = ref('cyber');                 // 'cyber' | 'plain'
+    const iconVersion = ref(0);
+    function getLucideIcon(name) {
+      // 尝试多种方式查找图标
+      if (typeof lucide === 'undefined') return null;
+      // 1. lucide.icons[name]
+      if (lucide.icons && lucide.icons[name]) return lucide.icons[name];
+      // 2. lucide[name] (直接属性)
+      if (lucide[name]) return lucide[name];
+      // 3. 转换为 PascalCase 再试 (kebab-case to PascalCase, 支持数字如 trash-2→Trash2)
+      const pascalName = name.replace(/-./g, m => m[1].toUpperCase()).replace(/^[a-z]/, c => c.toUpperCase());
+      if (lucide[pascalName]) return lucide[pascalName];
+      // 4. 在 lucide.icons 中查找 PascalCase
+      if (lucide.icons && lucide.icons[pascalName]) return lucide.icons[pascalName];
+      // 5. 全小写 (已经是小写)
+      // 6. 全大写 (可能用于某些图标)
+      const upperName = name.toUpperCase();
+      if (lucide[upperName]) return lucide[upperName];
+      if (lucide.icons && lucide.icons[upperName]) return lucide.icons[upperName];
+      return null;
+    }
+    // 终端标签页状态
+    const termTabs = ref([]);                      // 终端标签页数组
+    const activeTermTabId = ref(null);             // 当前活动标签页ID
+    const showTermDropdown = ref(false);            // 新建终端下拉菜单
+    const selectedTermType = ref('ps');             // 'ps'|'bash'|'zsh'|'wsl'
+    const availableShells = ref({});                // { ps:true, bash:false, ... }
     const vResizing = ref(false);
+    // 初始化默认标签页
+    setTimeout(() => {
+      if (termTabs.value.length === 0) {
+        const defaultTabId = 'term-default';
+        termTabs.value.push({
+          id: defaultTabId,
+          title: 'PowerShell',
+          shellType: 'ps',
+          status: 'connecting',
+          createdAt: new Date().toISOString()
+        });
+        activeTermTabId.value = defaultTabId;
+        // 延迟初始化终端，确保DOM已挂载
+        setTimeout(() => initTerminal(), 100);
+      }
+    }, 100);
+    // 查询可用终端类型
+    fetch('/api/shells').then(r=>r.json()).then(list => {
+      const obj = {};
+      list.forEach(s => obj[s.key] = s.available);
+      availableShells.value = obj;
+    }).catch(() => {});
+
     let _ptyWs = null;          // PTY WebSocket 连接
     let _ptyReconnectCount = 0; // 重连计数器
     let _ptyTermId = '';        // 当前终端 ID
@@ -619,6 +957,42 @@ app = createApp({
     // ── 初始化 ──
     onMounted(async () => {
       await loadConfig();
+      // 点击外部关闭下拉菜单
+      document.addEventListener('click', () => { showTermDropdown.value = false; });
+      // 调试：检查 Lucide 加载
+      console.log('onMounted: lucide available?', typeof lucide, lucide);
+      if (lucide) {
+        console.log('Lucide keys:', Object.keys(lucide));
+        if (lucide.icons) {
+          console.log('lucide.icons type:', typeof lucide.icons);
+          console.log('Lucide icons loaded, sample:', Object.keys(lucide.icons).slice(0, 5));
+          // 检查具体图标是否存在
+          const testIcons = ['terminal', 'plus', 'check', 'command', 'zap', 'laptop', 'refresh-cw', 'chevron-down', 'palette'];
+          testIcons.forEach(name => {
+            console.log(`Icon ${name}:`, lucide.icons[name] ? 'found' : 'not found');
+          });
+        } else {
+          console.warn('lucide.icons not present, checking direct properties');
+          // 可能图标是直接挂在 lucide 对象上的
+          const testIcons = ['Terminal', 'Plus', 'Check', 'Command', 'Zap', 'Laptop', 'RefreshCw', 'ChevronDown', 'Palette'];
+          testIcons.forEach(name => {
+            console.log(`Icon ${name}:`, lucide[name] ? 'found' : 'not found');
+          });
+        }
+        // 测试 getLucideIcon 函数
+        console.log('Testing getLucideIcon:');
+        const testIconNames = ['terminal', 'plus', 'check', 'command', 'zap', 'laptop', 'refresh-cw', 'chevron-down', 'palette'];
+        testIconNames.forEach(name => {
+          const icon = getLucideIcon(name);
+          console.log(`  ${name}:`, icon ? (typeof icon.toSvg) : 'no icon or no toSvg');
+        });
+        // Lucide 已加载，增加图标版本以刷新缓存
+        iconVersion.value++;
+        console.log('Icon cache version incremented to', iconVersion.value);
+      } else {
+        console.error('Lucide not loaded');
+        // 如果未加载，可以稍后重试，但暂时忽略
+      }
     });
 
     async function loadConfig() {
@@ -979,6 +1353,185 @@ app = createApp({
       _initEditor(tab.content, getMode(ext));
     }
 
+    // ── 图标系统 ──
+    const _svgCache = {}
+    // 将 hyperscript 数组渲染为 SVG 字符串
+    function renderHyperscript(h, size) {
+      if (!Array.isArray(h) || h[0] !== 'svg') {
+        console.log('renderHyperscript: invalid hyperscript', h);
+        return null;
+      }
+      const [tag, attrs, children] = h;
+      // 合并尺寸属性，确保 stroke-width 被设置
+      const mergedAttrs = { ...attrs, width: size, height: size };
+      if (!mergedAttrs['stroke-width']) {
+        mergedAttrs['stroke-width'] = 2;
+      }
+      // 构建属性字符串
+      const attrStr = Object.entries(mergedAttrs)
+        .map(([k, v]) => `${k}="${v}"`)
+        .join(' ');
+      // 递归渲染子元素
+      function renderChildren(children) {
+        if (!children) return '';
+        if (Array.isArray(children)) {
+          return children.map(child => {
+            if (typeof child === 'string') return child;
+            if (Array.isArray(child)) {
+              const [childTag, childAttrs, childChildren] = child;
+              const childAttrStr = Object.entries(childAttrs || {})
+                .map(([k, v]) => `${k}="${v}"`)
+                .join(' ');
+              return `<${childTag} ${childAttrStr}>${renderChildren(childChildren)}</${childTag}>`;
+            }
+            // 可能 child 是对象或其他类型
+            console.log('renderChildren: unexpected child type', typeof child, child);
+            return '';
+          }).join('');
+        }
+        // children 可能是单个元素（非数组）
+        if (typeof children === 'string') return children;
+        if (Array.isArray(children) && children.length === 1 && Array.isArray(children[0])) {
+          // 嵌套数组：[[tag, attrs, children]]
+          return renderChildren(children[0]);
+        }
+        console.log('renderChildren: unexpected children type', typeof children, children);
+        return '';
+      }
+      const result = `<${tag} ${attrStr}>${renderChildren(children)}</${tag}>`;
+      console.log('renderHyperscript result:', result.substring(0, 120));
+      return result;
+    }
+    function svgIcon(name, size) {
+      if (size === undefined) size = 16;
+      const key = name + '_' + size + '_' + iconVersion.value;
+      if (!_svgCache[key]) {
+        try {
+          console.log('svgIcon:', name, 'lucide available?', typeof lucide);
+          const icon = getLucideIcon(name);
+          if (icon && typeof icon.toSvg === 'function') {
+            // 标准 toSvg 方法
+            const svg = icon.toSvg({ width: size, height: size, 'stroke-width': 2 });
+            console.log('svgIcon: generated SVG for', name, svg.substring(0, 80));
+            _svgCache[key] = svg;
+          } else if (Array.isArray(icon) && icon[0] === 'svg') {
+            // hyperscript 数组格式
+            const svg = renderHyperscript(icon, size);
+            if (svg) {
+              console.log('svgIcon: rendered hyperscript for', name, svg.substring(0, 80));
+              _svgCache[key] = svg;
+            } else {
+              console.warn('svgIcon: failed to render hyperscript:', name, 'icon:', icon);
+              _svgCache[key] = `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="#f38ba8" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2" stroke-dasharray="4 2"/><line x1="6" y1="6" x2="18" y2="18" stroke="#f38ba8"/><line x1="18" y1="6" x2="6" y2="18" stroke="#f38ba8"/></svg>`;
+            }
+          } else {
+            console.warn('svgIcon: lucide not available or icon not found:', name, 'icon:', icon);
+            // 返回一个明显的占位符 SVG，带红色边框以便调试
+            _svgCache[key] = `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="#f38ba8" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2" stroke-dasharray="4 2"/><line x1="6" y1="6" x2="18" y2="18" stroke="#f38ba8"/><line x1="18" y1="6" x2="6" y2="18" stroke="#f38ba8"/></svg>`;
+          }
+        } catch(e) {
+          console.error('svgIcon error:', e);
+          _svgCache[key] = '<!-- ' + name + ' -->';
+        }
+      }
+      return _svgCache[key];
+    }
+
+    function cycleTermTheme() {
+      termTheme.value = termTheme.value === 'cyber' ? 'plain' : 'cyber';
+    }
+
+    // 创建新终端标签页
+    function newTerminalTab(shellType = selectedTermType.value) {
+      console.log('newTerminalTab:', shellType);
+      const tabId = 'term-' + Date.now();
+      const tab = {
+        id: tabId,
+        title: shellType === 'ps' ? 'PowerShell' :
+               shellType === 'bash' ? 'Bash' :
+               shellType === 'zsh' ? 'Zsh' :
+               shellType === 'wsl' ? 'WSL' : 'Terminal',
+        shellType,
+        status: 'connecting',
+        createdAt: new Date().toISOString()
+      };
+      // 添加到标签页列表
+      termTabs.value.push(tab);
+      // 设置为活动标签页
+      activeTermTabId.value = tabId;
+      // 初始化终端（这会替换当前终端）
+      initTerminal();
+      return tabId;
+    }
+
+    // 切换到指定终端标签页
+    function switchTermTab(tabId) {
+      console.log('switchTermTab:', tabId);
+      if (activeTermTabId.value === tabId) return;
+      activeTermTabId.value = tabId;
+      // TODO: 实际切换终端会话（目前单终端，仅更新UI）
+      // 更新状态显示
+      const tab = termTabs.value.find(t => t.id === tabId);
+      if (tab) {
+        termStatus.value = tab.status;
+        // 可以在这里重新连接对应终端的WebSocket
+      }
+    }
+
+    // 关闭终端标签页
+    function closeTermTab(tabId) {
+      console.log('closeTermTab:', tabId);
+      const index = termTabs.value.findIndex(t => t.id === tabId);
+      if (index === -1) return;
+      // 如果关闭的是活动标签页，需要切换到其他标签页
+      if (activeTermTabId.value === tabId) {
+        if (termTabs.value.length > 1) {
+          // 切换到前一个或后一个标签页
+          const newIndex = index === 0 ? 1 : index - 1;
+          activeTermTabId.value = termTabs.value[newIndex].id;
+        } else {
+          activeTermTabId.value = null;
+          // 如果没有标签页了，可以隐藏终端或显示占位符
+        }
+      }
+      // 从数组中移除
+      termTabs.value.splice(index, 1);
+      // TODO: 实际关闭终端会话（目前单终端，仅移除UI）
+    }
+
+    function toggleTermDropdown(e) {
+      if (e) e.stopPropagation();
+      console.log('toggleTermDropdown, current:', showTermDropdown.value);
+      showTermDropdown.value = !showTermDropdown.value;
+      console.log('toggleTermDropdown, new:', showTermDropdown.value);
+    }
+
+    function selectTermType(type) {
+      console.log('selectTermType:', type, 'available:', availableShells.value[type]);
+      showTermDropdown.value = false;
+      // 检查 shell 是否明确标记为不可用（undefined=未知，当做可用）
+      if (availableShells.value[type] === false) {
+        const hints = {bash:'安装 Git Bash (https://git-scm.com)', zsh:'安装 zsh', wsl:'启用 WSL'};
+        const hint = hints[type] || '安装对应终端';
+        if (_xterm && !termCollapsed.value) {
+          _xterm.writeln('\r\n\x1b[33m[提示] ' + type + ' 未安装，' + hint + '\u001b[0m');
+          _xterm.writeln('\x1b[33m  已自动使用默认 PowerShell\u001b[0m');
+        }
+        if (type !== 'ps') {
+          selectedTermType.value = 'ps';
+          newTerminalTab('ps');
+        }
+        return;
+      }
+      selectedTermType.value = type;
+      newTerminalTab(type);
+    }
+
+    // 侧边栏尺寸变化时通知 xterm 重新适配
+    function notifyTermResize() {
+      if (_xtermFit) setTimeout(() => _xtermFit.fit(), 50);
+    }
+
     // ── 终端（WebSocket ↔ PTY） ──
     function initTerminal() {
       if (termCollapsed.value) return;
@@ -1028,13 +1581,18 @@ app = createApp({
         }
       });
 
-      _connectPtyWs(_ptyTermId);
+      _connectPtyWs(_ptyTermId, selectedTermType.value);
     }
 
-    function _connectPtyWs(termId) {
+    function _connectPtyWs(termId, shellType) {
       if (!_xterm) return;
       const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const url = protocol + '//' + location.host + '/ws/pty/' + termId;
+      let url = protocol + '//' + location.host + '/ws/pty/' + termId;
+      // 添加 shell 类型参数
+      if (shellType) {
+        url += '?shell=' + encodeURIComponent(shellType);
+      }
+      console.log('Connecting to PTY WS:', url);
       const ws = new WebSocket(url);
       ws.binaryType = 'arraybuffer';
 
@@ -1103,9 +1661,17 @@ app = createApp({
       setTimeout(() => initTerminal(), 100);
     }
 
+    let _savedTermHeight = 200;
+
     function toggleTerminal() {
       termCollapsed.value = !termCollapsed.value;
-      if (!termCollapsed.value) {
+      if (termCollapsed.value) {
+        _savedTermHeight = termHeight.value;
+        termHeight.value = 34;
+        document.getElementById('terminal-area').classList.add('collapsed');
+      } else {
+        termHeight.value = Math.max(60, _savedTermHeight);
+        document.getElementById('terminal-area').classList.remove('collapsed');
         setTimeout(() => {
           if (!_xterm) {
             initTerminal();
@@ -1294,10 +1860,14 @@ app = createApp({
       messages, userInput, agentRunning, statusText, statusClass, costStr,
       messagesRef, layoutRef, editorContainer,
       leftWidth, rightWidth, resizing, vResizing, startResize, startVResize,
-      terminalXterm, termHeight, termCollapsed, termStatus, termStatusText,
+      terminalXterm, termHeight, termCollapsed, termStatus, termStatusText, termTheme,
+      showTermDropdown, selectedTermType,
+      termTabs, activeTermTabId, availableShells,
       browseWorkspace, setupNext, setupFinish, openFile, switchTab, closeTab,
       sendMessage, handleKeydown, resetChat, showCost, renderMarkdown,
       initTerminal, resetTerminal, toggleTerminal,
+      svgIcon, cycleTermTheme, toggleTermDropdown, selectTermType,
+      switchTermTab, closeTermTab, newTerminalTab, notifyTermResize,
       currentModel, currentModelHasKey, showApiKeyModal, pendingApiKey, pendingModelProvider,
       onModelChange, saveApiKey, formatModelName,
     };
@@ -1305,6 +1875,37 @@ app = createApp({
 });
 
 app.mount('#app');
+
+// 终端标签栏拖拽调整宽度
+setTimeout(() => {
+  const handle = document.querySelector('.resize-handle');
+  const sidebar = document.getElementById('term-tab-bar');
+  if (!handle || !sidebar) return;
+  let isResizing = false, startX, startWidth;
+  handle.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    startX = e.clientX;
+    startWidth = sidebar.offsetWidth;
+    handle.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+    const nw = Math.max(36, Math.min(200, startWidth + startX - e.clientX));
+    sidebar.style.width = nw + 'px';
+    sidebar.classList.toggle('icon-mode', nw < 50);
+  });
+  document.addEventListener('mouseup', () => {
+    if (isResizing) {
+      isResizing = false;
+      handle.classList.remove('active');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+  });
+}, 500);
 </script>
 </body>
 </html>
