@@ -877,7 +877,6 @@ app = createApp({
       availableShells.value = obj;
     }).catch(() => {});
 
-    let _ptyReconnectCount = 0; // 重连计数器
     let _fileOpsDebounce = 0;   // 文件树刷新防抖计时器
     let _pendingOpenFile = '';  // write_file 完成后待打开的新文件路径
     // 每个终端标签独立存储
@@ -1499,9 +1498,23 @@ app = createApp({
 
       // 如果目标标签还没有 xterm 实例，初始化它
       const inst = _termInstances[tabId];
-      console.log('[DEBUG switchTermTab] has instance:', !!inst, 'ptyWs state:', inst?.ptyWs?.readyState);
+      const wsOk = inst && inst.ptyWs && inst.ptyWs.readyState === WebSocket.OPEN;
+      console.log('[DEBUG switchTermTab] has instance:', !!inst, 'ptyWs state:', inst?.ptyWs?.readyState, 'wsOk:', wsOk);
       if (!inst) {
         setTimeout(() => initTerminal(tabId), 50);
+      } else if (!wsOk) {
+        // 实例存在但 WebSocket 已断开 → 重新连接（保留 xterm 实例）
+        console.log('[DEBUG switchTermTab] WebSocket closed, reconnecting...');
+        const tab = termTabs.value.find(t => t.id === tabId);
+        const shellType = tab ? tab.shellType : 'ps';
+        if (tab) tab.status = 'connecting';
+        termStatus.value = 'connecting';
+        const newPtyTermId = 't-' + Date.now();
+        const newWs = _connectPtyWs(tabId, newPtyTermId, shellType, inst.xterm, inst.xtermFit);
+        inst.ptyWs = newWs;
+        inst.ptyTermId = newPtyTermId;
+        if (inst.xtermFit) setTimeout(() => inst.xtermFit.fit(), 50);
+        if (inst.xterm) inst.xterm.focus();
       } else {
         if (inst.xtermFit) {
           setTimeout(() => inst.xtermFit.fit(), 50);
@@ -1610,7 +1623,6 @@ app = createApp({
       const shellType = tab ? tab.shellType : selectedTermType.value;
       console.log('[DEBUG initTerminal] for tab:', tabId, 'shell:', shellType);
 
-      _ptyReconnectCount = 0;
       const ptyTermId = 't-' + Date.now();
       if (tab) tab.status = 'connecting';
       termStatus.value = 'connecting';
@@ -1663,7 +1675,7 @@ app = createApp({
       });
 
       // 存储实例
-      _termInstances[tabId] = { xterm, xtermFit, ptyWs: ws, ptyTermId };
+      _termInstances[tabId] = { xterm, xtermFit, ptyWs: ws, ptyTermId, ptyReconnectCount: 0 };
     }
 
     function _connectPtyWs(tabId, ptyTermId, shellType, xterm, xtermFit) {
@@ -1679,7 +1691,9 @@ app = createApp({
 
       ws.onopen = () => {
         console.log('[DEBUG ws.onopen] tab:', tabId, 'ptyTermId:', ptyTermId);
-        _ptyReconnectCount = 0;
+        // 每个实例独立的重连计数
+        const inst = _termInstances[tabId];
+        if (inst) inst.ptyReconnectCount = 0;
         termStatus.value = 'connected';
         const tab = termTabs.value.find(t => t.id === tabId);
         if (tab) {
@@ -1714,15 +1728,16 @@ app = createApp({
       };
 
       ws.onclose = () => {
-        console.log('[DEBUG ws.onclose] tab:', tabId, 'readyState:', ws.readyState, 'reconnectCount:', _ptyReconnectCount);
         const inst = _termInstances[tabId];
         if (inst && inst.ptyWs === ws) inst.ptyWs = null;
-        if (xterm && _ptyReconnectCount < 3 && termStatus.value !== 'error') {
-          _ptyReconnectCount++;
+        const reconnectCount = inst ? (inst.ptyReconnectCount || 0) : 0;
+        console.log('[DEBUG ws.onclose] tab:', tabId, 'reconnectCount:', reconnectCount, 'wsOk:', inst ? !!inst.ptyWs : false);
+        if (xterm && reconnectCount < 3 && termStatus.value !== 'error') {
+          if (inst) inst.ptyReconnectCount = reconnectCount + 1;
           const t = termTabs.value.find(t2 => t2.id === tabId);
           if (t) t.status = 'connecting';
           termStatus.value = 'connecting';
-          console.log('[DEBUG ws.onclose] will reconnect in 2s, count:', _ptyReconnectCount);
+          console.log('[DEBUG ws.onclose] will reconnect in 2s, count:', reconnectCount + 1);
           setTimeout(() => {
             const inst2 = _termInstances[tabId];
             if (!inst2 || !inst2.ptyWs) {
@@ -1731,9 +1746,18 @@ app = createApp({
               if (inst2) inst2.ptyWs = newWs;
             }
           }, 2000);
-        } else if (_ptyReconnectCount >= 3 && termStatus.value !== 'error') {
+        } else if (reconnectCount >= 3 && termStatus.value !== 'error') {
           console.log('[DEBUG ws.onclose] max retries reached');
           termStatus.value = 'error';
+          const t = termTabs.value.find(t2 => t2.id === tabId);
+          if (t) t.status = 'error';
+          xterm.writeln('\r\n\x1b[31m[终端] 重连失败，请点击 ↺ 重试\x1b[0m');
+        }
+      };
+
+      ws.onerror = () => { ws.close(); };
+      return ws;
+    }
           const t = termTabs.value.find(t2 => t2.id === tabId);
           if (t) t.status = 'error';
           xterm.writeln('\r\n\x1b[31m[终端] 重连失败，请点击 ↺ 重试\x1b[0m');
