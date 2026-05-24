@@ -1951,22 +1951,31 @@ app = createApp({
 
     // 在新终端中执行命令
     function runInNewTerminal(cmd) {
-      // 用当前选择的 shell 类型创建新终端
       const tabId = newTerminalTab(selectedTermType.value);
+      let attempts = 0;
       const checkReady = setInterval(() => {
+        attempts++;
         const inst = _termInstances[tabId];
         if (inst && inst.ptyWs && inst.ptyWs.readyState === WebSocket.OPEN) {
           clearInterval(checkReady);
-          // 等待终端完全就绪后再发送命令
+          // 等 PTY/PowerShell 启动完成后再发送命令（~2秒）
+          const delay = Math.max(2000 - attempts * 200, 500);
           setTimeout(() => {
             const inst2 = _termInstances[tabId];
             if (inst2 && inst2.ptyWs && inst2.ptyWs.readyState === WebSocket.OPEN) {
               console.log('[CMD] 在新终端中执行:', cmd.slice(0,80));
-              inst2.ptyWs.send(cmd + '\n');
-            } else {
-              console.warn('[CMD] 终端已断开，无法执行');
+              // 先通过 xterm 显示命令（让用户看到），再通过 WS 发送到后端
+              if (inst2.xterm) inst2.xterm.write(cmd + '\r\n');
+              setTimeout(() => {
+                const inst3 = _termInstances[tabId];
+                if (inst3 && inst3.ptyWs && inst3.ptyWs.readyState === WebSocket.OPEN) {
+                  inst3.ptyWs.send(cmd + '\n');
+                }
+              }, 300);
             }
-          }, 800);
+          }, delay);
+        } else if (attempts > 30) {
+          clearInterval(checkReady); // 6秒超时
         }
       }, 200);
     }
