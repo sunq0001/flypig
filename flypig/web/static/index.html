@@ -1480,9 +1480,8 @@ app = createApp({
 
     // 切换到指定终端标签页
     function switchTermTab(tabId) {
-      console.log('switchTermTab:', tabId);
+      console.log('[DEBUG switchTermTab] target:', tabId, 'current:', activeTermTabId.value);
       if (activeTermTabId.value === tabId) return;
-      const prevId = activeTermTabId.value;
       activeTermTabId.value = tabId;
 
       // 切换容器显示：隐藏所有，只显示目标
@@ -1494,15 +1493,16 @@ app = createApp({
       // 更新状态显示
       const tab = termTabs.value.find(t => t.id === tabId);
       if (tab) {
+        console.log('[DEBUG switchTermTab] tab status:', tab.status);
         termStatus.value = tab.status;
       }
 
       // 如果目标标签还没有 xterm 实例，初始化它
-      if (!_termInstances[tabId]) {
+      const inst = _termInstances[tabId];
+      console.log('[DEBUG switchTermTab] has instance:', !!inst, 'ptyWs state:', inst?.ptyWs?.readyState);
+      if (!inst) {
         setTimeout(() => initTerminal(tabId), 50);
       } else {
-        // 已有实例，让 xterm fit 适应容器
-        const inst = _termInstances[tabId];
         if (inst.xtermFit) {
           setTimeout(() => inst.xtermFit.fit(), 50);
         }
@@ -1595,13 +1595,20 @@ app = createApp({
       if (!tabId) return;
 
       // 如果该标签已有实例，跳过
-      if (_termInstances[tabId]) return;
+      if (_termInstances[tabId]) {
+        console.log('[DEBUG initTerminal] SKIP - tab already has instance:', tabId);
+        return;
+      }
 
       const container = _termContainers[tabId];
-      if (!container) return;
+      if (!container) {
+        console.log('[DEBUG initTerminal] container not found for:', tabId);
+        return;
+      }
 
       const tab = termTabs.value.find(t => t.id === tabId);
       const shellType = tab ? tab.shellType : selectedTermType.value;
+      console.log('[DEBUG initTerminal] for tab:', tabId, 'shell:', shellType);
 
       _ptyReconnectCount = 0;
       const ptyTermId = 't-' + Date.now();
@@ -1671,11 +1678,14 @@ app = createApp({
       ws.binaryType = 'arraybuffer';
 
       ws.onopen = () => {
+        console.log('[DEBUG ws.onopen] tab:', tabId, 'ptyTermId:', ptyTermId);
         _ptyReconnectCount = 0;
         termStatus.value = 'connected';
-        // 更新标签状态
         const tab = termTabs.value.find(t => t.id === tabId);
-        if (tab) tab.status = 'connected';
+        if (tab) {
+          tab.status = 'connected';
+          console.log('[DEBUG ws.onopen] tab.status set to connected');
+        }
         xterm.writeln('\x1b[32m[终端已连接]\x1b[0m');
         if (setupWorkspace.value) {
           xterm.writeln('  工作区: \x1b[36m' + setupWorkspace.value + '\x1b[0m');
@@ -1704,28 +1714,28 @@ app = createApp({
       };
 
       ws.onclose = () => {
-        // 更新实例引用
+        console.log('[DEBUG ws.onclose] tab:', tabId, 'readyState:', ws.readyState, 'reconnectCount:', _ptyReconnectCount);
         const inst = _termInstances[tabId];
         if (inst && inst.ptyWs === ws) inst.ptyWs = null;
-        // 限制自动重连：最多 3 次
         if (xterm && _ptyReconnectCount < 3 && termStatus.value !== 'error') {
           _ptyReconnectCount++;
-          const tab = termTabs.value.find(t => t.id === tabId);
-          if (tab) tab.status = 'connecting';
+          const t = termTabs.value.find(t2 => t2.id === tabId);
+          if (t) t.status = 'connecting';
           termStatus.value = 'connecting';
+          console.log('[DEBUG ws.onclose] will reconnect in 2s, count:', _ptyReconnectCount);
           setTimeout(() => {
             const inst2 = _termInstances[tabId];
             if (!inst2 || !inst2.ptyWs) {
+              console.log('[DEBUG ws.onclose] reconnecting...');
               const newWs = _connectPtyWs(tabId, ptyTermId, shellType, xterm, xtermFit);
               if (inst2) inst2.ptyWs = newWs;
             }
           }, 2000);
         } else if (_ptyReconnectCount >= 3 && termStatus.value !== 'error') {
+          console.log('[DEBUG ws.onclose] max retries reached');
           termStatus.value = 'error';
-          if (tab) {
-            const tab = termTabs.value.find(t => t.id === tabId);
-            if (tab) tab.status = 'error';
-          }
+          const t = termTabs.value.find(t2 => t2.id === tabId);
+          if (t) t.status = 'error';
           xterm.writeln('\r\n\x1b[31m[终端] 重连失败，请点击 ↺ 重试\x1b[0m');
         }
       };
