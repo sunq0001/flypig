@@ -214,15 +214,15 @@ async def api_init_agent():
     ws_prompt = _config.system_prompt + (
         f"\n\nCurrent working directory: {workspace}\n"
         f"All file paths in tool results are relative to this directory.\n"
-        f"\nCRITICAL - Interactive Programs:\n"
-        f"NEVER run interactive programs directly (scripts with input(), "
-        f"while True loops, python -i, node REPL). They will hang forever.\n"
-        f"Instead, just OUTPUT the command using the bash tool (which creates "
-        f"a command card). The user will see a '在新终端中执行' button on the "
-        f"card and click it to run the command in a real terminal.\n"
-        f"\nExample output for interactive.py:\n"
-        f"  $ python interactive.py\n"
-        f"  (Then tell user: click '在新终端中执行' button above to interact)\n"
+        f"\nTerminal Panel:\n"
+        f"The UI has a terminal panel where commands can run interactively. "
+        f"When you use the bash tool, the command appears as a command card. "
+        f"The user can click the '在新终端中执行' button on the card to run "
+        f"the command in a real terminal with stdin connected.\n"
+        f"For interactive programs (input(), while True, python -i, node REPL), "
+        f"run the command normally with the bash tool. The command card will "
+        f"appear. The user should click '在新终端中执行' to open the "
+        f"interactive program in a real terminal instead.\n"
     )
 
     _agent = Agent(
