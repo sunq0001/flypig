@@ -340,7 +340,12 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
 .msg-user .bubble{display:inline-block;background:rgba(137,180,250,.2);color:var(--accent);padding:6px 12px;border-radius:12px 12px 4px 12px;max-width:85%;font-size:13px;line-height:1.5}
 .msg-agent .bubble{display:inline-block;background:var(--bg3);color:var(--fg);padding:6px 12px;border-radius:12px 12px 12px 4px;max-width:100%;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
 .msg-thinking .bubble{background:transparent;color:var(--fg3);font-style:italic;font-size:12px;padding:4px 8px}
+.thinking-indicator{animation:fadeIn .3s ease}
+.thinking-indicator::after{content:'';animation:thinkingDots 1.5s steps(3,end) infinite;display:inline-block;width:1.2em;text-align:left}
+@keyframes thinkingDots{0%{content:'.'}33%{content:'..'}66%{content:'...'}100%{content:''}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
 .msg-tool .bubble{background:rgba(166,227,161,.08);color:var(--green);padding:6px 12px;border-radius:8px;font-size:12px;font-family:monospace;line-height:1.4;white-space:pre-wrap;word-break:break-all}
+.msg-tool-label .bubble{background:transparent;color:var(--fg3);padding:3px 8px;font-size:12px;line-height:1.4}
 .msg-tool-end .bubble{background:rgba(108,112,134,.1);color:var(--fg2);padding:6px 12px;border-radius:8px;font-size:12px;font-family:monospace;line-height:1.4;max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
 .msg-error .bubble{background:rgba(243,139,168,.1);color:var(--red);padding:6px 12px;border-radius:8px;font-size:12px}
 .msg-info .bubble{background:transparent;color:var(--fg3);padding:4px 8px;font-size:11px;text-align:center}
@@ -352,12 +357,24 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
 .command-card{background:rgba(30,30,46,.6);border:1px solid var(--border);border-radius:8px;overflow:hidden}
 .command-card .cmd-text{padding:8px 12px;font-family:'JetBrains Mono','Fira Code',Consolas,monospace;font-size:12px;color:var(--green);line-height:1.5;white-space:pre-wrap;word-break:break-all;border-bottom:1px solid var(--border)}
 .command-card .cmd-text .prompt{color:var(--fg3);margin-right:6px}
-.command-card .cmd-actions{display:flex;gap:2px;padding:4px 8px;justify-content:flex-end;background:rgba(0,0,0,.1)}
+.command-card .cmd-actions{display:flex;align-items:center;gap:2px;padding:4px 8px;background:rgba(0,0,0,.1)}
 .command-card .cmd-btn{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:none;background:transparent;color:var(--fg3);border-radius:4px;cursor:pointer;transition:all .12s;position:relative}
 .command-card .cmd-btn:hover{color:var(--fg);background:var(--bg3)}
 .command-card .cmd-btn svg{width:14px;height:14px}
 .command-card .cmd-btn .cmd-tt{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--bg2);color:var(--fg);padding:3px 8px;border-radius:4px;font-size:10px;white-space:nowrap;pointer-events:none;border:1px solid var(--border)}
 .command-card .cmd-btn:hover .cmd-tt{display:block}
+
+/* 命令卡片 — 状态指示 */
+.command-card .cmd-status{display:flex;align-items:center;gap:5px;padding:3px 12px;font-size:11px;color:var(--fg3);border-bottom:1px solid var(--border);background:rgba(0,0,0,.08)}
+.command-card .cmd-status .status-dot{width:6px;height:6px;border-radius:50%;display:inline-block;animation:pulse-dot 1.4s ease-in-out infinite}
+.command-card .cmd-status .status-dot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+.command-card .cmd-status .status-dot.done{background:var(--fg3);animation:none;box-shadow:none}
+.command-card .cmd-status .status-dot.err{background:var(--red);animation:none;box-shadow:0 0 6px var(--red)}
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+.command-card .cmd-focus-btn{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:none;background:rgba(137,180,250,.12);color:var(--accent);border-radius:4px;cursor:pointer;font-size:10px;transition:all .12s}
+.command-card .cmd-focus-btn:hover{background:rgba(137,180,250,.25)}
+.command-card .cmd-done-btn{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border:none;background:rgba(166,227,161,.15);color:var(--green);border-radius:4px;cursor:pointer;font-size:10px;transition:all .12s;margin-left:4px}
+.command-card .cmd-done-btn:hover{background:rgba(166,227,161,.3)}
 
 /* 输入区域 */
 #input-area{padding:8px 10px 10px;border-top:1px solid var(--border)}
@@ -448,6 +465,26 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
 .divider:hover,.divider.active{background:var(--accent)}
 /* 增大热区方便点击（视觉上还是 2px） */
 .divider::after{content:'';position:absolute;left:-4px;right:-4px;top:0;bottom:0}
+
+/* 终端完成交互卡片 */
+/* 实时终端输出区 */
+.term-output-box{max-height:200px;overflow-y:auto;background:rgba(0,0,0,.2);border-bottom:1px solid var(--border)}
+.term-output-box .term-output-pre{margin:0;padding:6px 12px;font-family:'JetBrains Mono','Fira Code',Consolas,monospace;font-size:11px;line-height:1.5;color:var(--fg);white-space:pre-wrap;word-break:break-all}
+.term-output-box::-webkit-scrollbar{width:4px}
+.term-output-box::-webkit-scrollbar-track{background:transparent}
+.term-output-box::-webkit-scrollbar-thumb{background:rgba(69,71,90,.5);border-radius:2px}
+
+/* 推送终端结果按钮 */
+.cmd-actions{display:flex;align-items:center;gap:2px;padding:4px 8px;background:rgba(0,0,0,.1)}
+.cmd-actions-left{display:flex;gap:2px}
+.cmd-actions-right{display:flex;gap:6px;margin-left:auto}
+.push-btn{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border:none;background:linear-gradient(135deg,rgba(137,180,250,.2),rgba(203,166,247,.2));color:#b4befe;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;transition:all .15s}
+.push-btn:hover{background:linear-gradient(135deg,rgba(137,180,250,.35),rgba(203,166,247,.35));color:#cdd6f4;box-shadow:0 0 12px rgba(137,180,250,.15)}
+.push-btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+.push-btn .push-note{font-weight:400;font-size:10px;color:var(--fg3)}
+
+/* 交互模式标识 */
+.interactive-badge{display:inline-flex;align-items:center;font-size:10px;color:var(--yellow);margin-right:4px}
 
 /* 通用 */
 .ml-auto{margin-left:auto}
@@ -663,27 +700,53 @@ html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsof
         </div>
       </div>
       <div id="messages" ref="messagesRef">
+        <!-- 思考指示器 -->
+        <div class="msg msg-thinking" v-if="thinkingVisible">
+          <div class="bubble thinking-indicator">🧠 AI 正在思考...</div>
+        </div>
         <div v-for="(m, i) in messages" :key="i" :class="'msg msg-' + m.type">
           <div class="bubble" v-if="m.type==='agent'||m.type==='summary'" v-html="renderMarkdown(m.content)"></div>
           <div class="bubble" v-else-if="m.type==='command-card'" style="padding:0;background:transparent">
             <div class="command-card">
               <div class="cmd-text"><span class="prompt">$</span>{{ m.command }}</div>
+              <div class="cmd-status" v-if="m.terminalStatus">
+                <span class="status-dot" :class="{ok:m.terminalStatus==='injecting'||m.terminalStatus==='injected', done:m.terminalStatus==='completed', err:m.terminalStatus==='error'}"></span>
+                <span v-if="m.terminalStatus==='pending'">执行中...</span>
+                <span v-else-if="m.terminalStatus==='injecting'">执行中...</span>
+                <span v-else-if="m.terminalStatus==='injected'">执行中</span>
+                <span v-else-if="m.terminalStatus==='completed'"><strong>✓ 完成</strong></span>
+                <span v-else-if="m.terminalStatus==='error'">❌ 出错</span>
+                <button class="cmd-focus-btn" v-if="m.terminalStatus!=='completed'" @click.stop="focusTerminal" title="跳转到终端面板">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                  聚焦终端
+                </button>
+
+              </div>
+              <!-- ★ 实时终端输出区 ★ -->
+              <div class="term-output-box" v-if="m.outputArea" ref="outputBox">
+                <pre class="term-output-pre">{{ m.outputArea }}</pre>
+              </div>
               <div class="cmd-actions">
-                <button class="cmd-btn" @click.stop="copyCommand(m.command)" title="复制命令">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                  <span class="cmd-tt">复制命令</span>
-                </button>
-                <button class="cmd-btn" @click.stop="runInNewTerminal(m.command)" title="在新终端中执行">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
-                  <span class="cmd-tt">在新终端中执行</span>
-                </button>
-                <button class="cmd-btn" @click.stop="retryCommand(m.command)" title="重新执行">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-                  <span class="cmd-tt">重新执行</span>
-                </button>
+                <div class="cmd-actions-left">
+                  <button class="cmd-btn" @click.stop="copyCommand(m.command)" title="复制命令">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    <span class="cmd-tt">复制命令</span>
+                  </button>
+                  <button class="cmd-btn" @click.stop="runInNewTerminal(m.command)" title="在新终端中执行">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                    <span class="cmd-tt">在新终端中执行</span>
+                  </button>
+                  <button class="cmd-btn" @click.stop="retryCommand(m.command)" title="重新执行">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                    <span class="cmd-tt">重新执行</span>
+                  </button>
+                </div>
+                <div class="cmd-actions-right">
+                </div>
               </div>
             </div>
           </div>
+          <div class="bubble" v-else-if="m.type==='tool-label'">{{ m.content }}</div>
           <div class="bubble" v-else>{{ m.content }}</div>
         </div>
       </div>
@@ -821,6 +884,17 @@ app = createApp({
     const statusClass = ref('offline');
     const costStr = ref('');
 
+    // ── 思考指示器 / token 累计 ──
+    const _accumTokens = ref(0);
+    const _accumCost = ref(0);
+    const thinkingVisible = ref(false);
+    let _thinkingTimer = null;
+    let _hasVisibleOutput = false;
+
+    // ── 流式输出（打字效果） ──
+    let _streamTimer = null;
+    let _pendingSummary = '';
+
     // ── 模型切换 ──
     const currentModel = ref('');
     const showApiKeyModal = ref(false);
@@ -911,8 +985,8 @@ app = createApp({
     let _fileOpsDebounce = 0;   // 文件树刷新防抖计时器
     let _pendingOpenFile = '';  // write_file 完成后待打开的新文件路径
     // 每个终端标签独立存储
-    const _termContainers = {};        // { tabId: HTMLElement }
-    const _termInstances = {};         // { tabId: { xterm, xtermFit, ptyWs, ptyTermId } }
+const _termContainers = {};        // { tabId: HTMLElement }
+const _termInstances = {};         // { tabId: { xterm, xtermFit, ptyWs, ptyTermId } }
     // PTY WebSocket 走同端口（由 waitress + simple-websocket 处理）
     let _vResizeStartY = 0;
     let _vResizeStartH = 200;
@@ -970,7 +1044,10 @@ app = createApp({
       vResizing.value = null;
       document.removeEventListener('mousemove', onVResize);
       document.removeEventListener('mouseup', stopVResize);
-      if (_xtermFit) _xtermFit.fit();
+      // 用当前活动终端的 FitAddon
+      const tabId = activeTermTabId.value;
+      const inst = tabId ? _termInstances[tabId] : null;
+      if (inst && inst.xtermFit) inst.xtermFit.fit();
     }
 
     // ── 语言映射（遵循 Monaco Editor 的 language ID） ──
@@ -1058,6 +1135,7 @@ app = createApp({
         case 'tool_call': {
           const name = data.name;
           const args = data.args || {};
+          const label = data.label;  // 来自 server.py _tool_label()
           if (name === 'bash') {
             const cmd = args.command || '';
             messages.value.push({
@@ -1065,28 +1143,60 @@ app = createApp({
               id: 'cmd-' + Date.now() + '-' + Math.random().toString(36).slice(2,6),
               command: cmd,
               content: cmd.slice(0,500),
+              terminalStatus: 'pending',
             });
-          } else {
-            let desc = '';
-            if (name === 'read_file') desc = '📖 '+ (args.path || '');
-            else if (name === 'write_file') { desc = '✏️ 写入 '+ (args.path || ''); _pendingOpenFile = args.path || ''; }
-            else if (name === 'edit_file') desc = '🔧 编辑 '+ (args.path || '');
-            else if (name === 'find_files') desc = '🔍 '+ (args.pattern || '');
-            else if (name === 'grep') desc = '🔎 '+ (args.pattern || '');
-            else desc = `🔧 ${name}`;
-            messages.value.push({type:'tool', content: desc});
+            _hasVisibleOutput = true;
+            _hideThinking();
+          } else if (label) {
+            // 非 bash 工具：显示人类可读的说明文字
+            messages.value.push({type:'tool-label', content: label});
+            _hasVisibleOutput = true;
+            _hideThinking();
+          }
+          // label 为 null → 跳过（内部文件 / 不需要显示的工具）
+          break;
+        }
+        case 'terminal_inject': {
+          const injCmd = data.command || '';
+          const injMsgId = data.msgId || '';
+          const wrappedCmd = data.wrappedCommand || injCmd;
+          if (injCmd && injMsgId) {
+            // 找到对应的命令卡片（用原始命令匹配），更新状态，初始化输出区
+            for (let i = messages.value.length - 1; i >= 0; i--) {
+              const m = messages.value[i];
+              if (m.type === 'command-card' && m.command === injCmd && m.terminalStatus === 'pending') {
+                m.terminalStatus = 'injecting';
+                m.msgId = injMsgId;
+                m.outputArea = '';    // SSE 将追加到此字段
+                m.wrappedCommand = wrappedCmd;
+                m.interactive = data.interactive === true;
+                break;
+              }
+            }
+            // 注入命令到终端（使用 wrappedCommand 以包含 START/END 标记）
+            _injectCommandToActiveTerminal(wrappedCmd, injMsgId);
           }
           break;
         }
         case 'tool_result': {
-          const result = (data.result || '').slice(0,300);
-          if (result.trim()) {
-            messages.value.push({type:'tool-end', content: result});
-          }
-          // 工具执行后刷新文件树（防抖 500ms）+ 同步打开的标签页
           const toolName = data.name || '';
           const toolArgs = data.args || {};
-          const filePath = toolArgs.path || '';
+          const result = (data.result || '');
+          if (toolName === 'bash' && result.trim()) {
+            // 内联执行结果 → 合并到命令卡片，不单独显示「tool-end」
+            const cmd = toolArgs.command || '';
+            for (let i = messages.value.length - 1; i >= 0; i--) {
+              const m = messages.value[i];
+              if (m.type === 'command-card' && m.command === cmd && (m.terminalStatus === 'pending' || m.terminalStatus === 'injected')) {
+                m.outputArea = (m.outputArea || '') + result;
+                m.terminalStatus = 'completed';
+                break;
+              }
+            }
+          }
+          // 非 bash 工具不显示中间结果
+          // 工具执行后刷新文件树（防抖 500ms）+ 同步打开的标签页
+          const filePath = data.args?.path || '';
           if (filePath && openTabs.value.some(t => t.path === filePath)) {
             // 如果此文件有打开的标签，异步重载内容
             _refreshFileTab(filePath);
@@ -1101,21 +1211,33 @@ app = createApp({
           statusText.value = `工具链: ${data.tool_count} 个工具 | ${data.tokens?.toLocaleString()} tokens`;
           break;
         case 'llm_end':
-          if (data.model) {
-            let cacheInfo = '';
-            if (data.cache_hit_tokens && data.cache_hit_tokens > 0) {
-              cacheInfo = ` | 🗄️ ${data.cache_pct}% cached`;
-            }
-            messages.value.push({
-              type:'info',
-              content:`🤖 ${data.model} | ${(data.tokens || 0).toLocaleString()} tokens${cacheInfo} | $${_formatCostVal(data.cost || 0)}`
-            });
+          // 不再独立显示，累计到最终汇总
+          _accumTokens.value += (data.tokens || 0);
+          _accumCost.value += (data.cost || 0);
+          // 触发思考指示器（如果还没有任何可见输出）
+          if (!_hasVisibleOutput) {
+            clearTimeout(_thinkingTimer);
+            _thinkingTimer = setTimeout(() => {
+              if (agentRunning.value && !_hasVisibleOutput) {
+                _showThinking();
+              }
+            }, 500);
           }
           break;
         case 'response':
-          messages.value.push({type:'agent', content: data.content || '[无回复]'});
-          statusText.value = '就绪';
-          agentRunning.value = false;
+          const fullContent = data.content || '[无回复]';
+          // 提前准备好 token 汇总（打字结束后追加）
+          if (_accumTokens.value > 0) {
+            _pendingSummary = '\n\n<small class="token-summary">用了 '
+              + _accumTokens.value.toLocaleString()
+              + ' tokens | $' + _formatCostVal(_accumCost.value)
+              + '</small>';
+          }
+          // 推一条空白消息，打字效果逐步显示内容
+          messages.value.push({type:'agent', content: '', _streaming: true});
+          _startStreaming(fullContent);
+          _hasVisibleOutput = true;
+          _hideThinking();
           break;
         case 'summary':
           messages.value.push({type:'summary', content: data.content});
@@ -1126,6 +1248,7 @@ app = createApp({
           statusText.value = '出错了';
           break;
         case 'done':
+          // done 到达即释放输入框，不管流式是否还在进行
           agentRunning.value = false;
           statusText.value = '就绪';
           // Agent 全部完成后保底刷新一次文件树
@@ -1140,6 +1263,59 @@ app = createApp({
         const el = messagesRef.value;
         if (el) el.scrollTop = el.scrollHeight;
       });
+    }
+
+    function _showThinking() {
+      thinkingVisible.value = true;
+    }
+    function _hideThinking() {
+      clearTimeout(_thinkingTimer);
+      thinkingVisible.value = false;
+    }
+
+    function _startStreaming(text) {
+      clearInterval(_streamTimer);
+      let pos = 0;
+      const charsPerTick = 2;
+      const tickMs = 16;
+      const fullText = text;
+      _streamTimer = setInterval(() => {
+        pos += charsPerTick;
+        if (pos >= fullText.length) {
+          pos = fullText.length;
+          clearInterval(_streamTimer);
+          _streamTimer = null;
+          // 打完收工：追加 token 汇总 & 结束状态
+          const msg = messages.value[messages.value.length - 1];
+          if (msg && msg._streaming) {
+            msg._streaming = false;
+            msg.content = fullText + _pendingSummary;
+            _pendingSummary = '';
+            statusText.value = '就绪';
+            agentRunning.value = false;
+          }
+        } else {
+          const msg = messages.value[messages.value.length - 1];
+          if (msg && msg._streaming) {
+            msg.content = fullText.substring(0, pos);
+          }
+        }
+        scrollMessages();
+      }, tickMs);
+    }
+
+    function _finishStreaming() {
+      clearInterval(_streamTimer);
+      _streamTimer = null;
+      const msg = messages.value[messages.value.length - 1];
+      if (msg && msg._streaming) {
+        msg._streaming = false;
+        msg.content = msg.content + _pendingSummary;
+        _pendingSummary = '';
+        agentRunning.value = false;
+        statusText.value = '就绪';
+      }
+      scrollMessages();
     }
 
     // ── 文件树组件注册 ──
@@ -1745,7 +1921,16 @@ app = createApp({
           xterm.writeln('  工作区: \x1b[36m' + setupWorkspace.value + '\x1b[0m');
         }
         xterm.write('');
-        if (xtermFit) setTimeout(() => xtermFit.fit(), 50);
+        if (xtermFit) {
+          setTimeout(() => {
+            xtermFit.fit();
+            // 通知 PTY 服务端前端终端实际尺寸
+            const {cols, rows} = xterm;
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({type:'resize', cols, rows}));
+            }
+          }, 50);
+        }
       };
 
       ws.onmessage = (e) => {
@@ -1758,10 +1943,13 @@ app = createApp({
               termStatus.value = 'error';
               return;
             }
-          } catch (_) {}
-        }
-        if (e.data instanceof ArrayBuffer) {
-          xterm.write(new Uint8Array(e.data));
+          } catch (_) {
+            // 非 JSON → 普通文本终端数据
+            xterm.write(e.data);
+          }
+        } else if (e.data instanceof ArrayBuffer) {
+          const uint8 = new Uint8Array(e.data);
+          xterm.write(uint8);
         } else {
           xterm.write(e.data);
         }
@@ -1856,13 +2044,28 @@ app = createApp({
 
     async function sendMessage() {
       const text = userInput.value.trim();
-      if (!text || agentRunning.value) return;
+      if (!text) return;
+      // 如果正在流式输出，取消打字效果，显示全文
+      if (_streamTimer) {
+        _finishStreaming();
+      }
+      if (agentRunning.value) return;
       userInput.value = '';
       messages.value.push({type:'user', content: text});
       scrollMessages();
       agentRunning.value = true;
       statusText.value = 'AI 思考中...';
       statusClass.value = 'running';
+
+      // 重置累计变量
+      _accumTokens.value = 0;
+      _accumCost.value = 0;
+      _hasVisibleOutput = false;
+      thinkingVisible.value = false;
+      clearTimeout(_thinkingTimer);
+      _pendingSummary = '';
+      clearInterval(_streamTimer);
+      _streamTimer = null;
 
       try {
         // 通过 SSE 发送消息并流式接收事件
@@ -1888,11 +2091,17 @@ app = createApp({
           buffer = lines.pop() || '';
           for (const line of lines) {
             if (line.startsWith('data: ')) {
+              let data;
               try {
-                const data = JSON.parse(line.slice(6));
+                data = JSON.parse(line.slice(6));
+              } catch (e) {
+                console.error('[SSE] JSON parse error:', e);
+                continue;
+              }
+              try {
                 handleEvent(data);
               } catch (e) {
-                console.error('[SSE] parse error:', e);
+                console.error('[SSE] handleEvent error:', e, data);
               }
             }
           }
@@ -1931,6 +2140,209 @@ app = createApp({
     function formatCost(cost, tokens) {
       if (cost == null) return '';
       return `💵 $${_formatCostVal(cost)} | ${(tokens || 0).toLocaleString()} tokens`;
+    }
+
+    // ── 将命令注入活动终端（供用户观看实时输出）──
+    function _injectCommandToActiveTerminal(cmd, msgId) {
+      if (termCollapsed.value) {
+        toggleTerminal();
+      }
+      const tabId = activeTermTabId.value;
+      if (!tabId) {
+        const newId = newTerminalTab(selectedTermType.value);
+        _waitAndInject(newId, cmd, msgId);
+        return;
+      }
+      const inst = _termInstances[tabId];
+      if (inst && inst.ptyWs && inst.ptyWs.readyState === WebSocket.OPEN) {
+        _doInject(tabId, cmd, msgId);
+      } else {
+        _waitAndInject(tabId, cmd, msgId);
+      }
+    }
+
+    function _waitAndInject(tabId, cmd, msgId) {
+      let attempts = 0;
+      const timer = setInterval(() => {
+        attempts++;
+        const inst = _termInstances[tabId];
+        if (inst && inst.ptyWs && inst.ptyWs.readyState === WebSocket.OPEN) {
+          clearInterval(timer);
+          _doInject(tabId, cmd, msgId);
+        } else if (attempts > 30) {
+          clearInterval(timer);
+          const m = messages.value.find(m2 => m2.id === msgId);
+          if (m) m.terminalStatus = 'error';
+        }
+      }, 200);
+    }
+
+    async function _doInject(tabId, cmd, msgId) {
+      const inst = _termInstances[tabId];
+      if (!inst) return;
+
+      // PowerShell 不支持 &&/||，转换为 ; 防止命令失败
+      const tab = termTabs.value.find(t => t.id === tabId);
+      if (tab && tab.shellType === 'ps') {
+        cmd = cmd.replace(/\s*&&\s*/g, ' ; ').replace(/\s*\|\|\s*/g, ' ; ');
+      }
+
+      if (inst.xterm) {
+        inst.xterm.writeln('');
+        inst.xterm.writeln('\x1b[36m━━━ AI 执行命令 ━━━\x1b[0m');
+        inst.xterm.writeln('\x1b[33m$ ' + cmd + '\x1b[0m');
+      }
+      // 先 bind 再发命令：确保 pty_reader 的 tap 已就绪后才输出
+      if (inst.ptyWs && inst.ptyWs.readyState === WebSocket.OPEN) {
+        try {
+          await fetch('/api/terminal/inject-bind/' + msgId, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({pty_term_id: inst.ptyTermId}),
+          });
+        } catch (e) {
+          console.error('[TERM] inject-bind failed:', e);
+        }
+        // 绑定完成后再发送命令（一次性发送，避免逐字符回显污染 buffer）
+        inst.ptyWs.send(cmd + '\r');
+        const m = messages.value.find(m2 => m2.msgId === msgId);
+        if (m && m.terminalStatus === 'injecting') m.terminalStatus = 'injected';
+      }
+    }
+
+    // ── 独立 SSE 连接：接收终端实时输出 /api/terminal-events ──
+    function _connectTerminalEvents() {
+      let reconnectDelay = 500;  // 初始 500ms
+      function connect() {
+        const es = new EventSource('/api/terminal-events');
+        es.addEventListener('terminal_output', (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            const msgId = data.msgId;
+            const chunk = data.chunk;
+            if (!msgId || !chunk) return;
+            // 找到对应的命令卡片，追加输出
+            for (let i = messages.value.length - 1; i >= 0; i--) {
+              const m = messages.value[i];
+              if (m.type === 'command-card' && m.msgId === msgId) {
+                m.outputArea = (m.outputArea || '') + chunk;
+                break;
+              }
+            }
+            // 连接成功后重置退避时间
+            reconnectDelay = 500;
+          } catch (err) {
+            console.error('[TERM-SSE] parse error:', err);
+          }
+        });
+        // ── terminal_complete 事件：命令自动完成 → 自动推送结果给 AI ──
+        es.addEventListener('terminal_complete', async (e) => {
+          try {
+            const data = JSON.parse(e.data);
+            const msgId = data.msgId;
+            const interactive = data.interactive === true;
+            if (!msgId) return;
+            console.log('[TERM-SSE] 命令完成，自动推送结果 msgId=' + msgId + ' interactive=' + interactive);
+            // 复用推送逻辑：获取输出 → 自动发给 AI 分析
+            await _autoPushTerminalResult(msgId, interactive);
+          } catch (err) {
+            console.error('[TERM-SSE] terminal_complete error:', err);
+          }
+        });
+        es.onerror = () => {
+          // 关闭当前连接，带退避重连
+          es.close();
+          console.warn('[TERM-SSE] 连接异常，' + reconnectDelay + 'ms 后重连...');
+          setTimeout(connect, reconnectDelay);
+          reconnectDelay = Math.min(reconnectDelay * 2, 10000);  // 最大 10s
+        };
+        es.onopen = () => {
+          console.log('[TERM-SSE] 已连接到 /api/terminal-events');
+        };
+      }
+      connect();
+    }
+    // 页面加载完成后连接
+    _connectTerminalEvents();
+
+    // ── 用户点击「推送终端结果」──
+    async function handlePushResult(msgId) {
+      try {
+        let output, truncated;
+        if (msgId) {
+          const res = await fetch('/api/terminal/output/' + msgId);
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+          output = data.output;
+          truncated = data.truncated;
+        } else {
+          // 内联命令：从命令卡片的输出区域取
+          const m = messages.value.find(m2 => m2.interactive && m2.outputArea);
+          if (m) { output = m.outputArea; truncated = false; }
+        }
+        if (!output) { messages.value.push({type:'error', content:'❌ 无终端输出'}); return; }
+        if (output.length > 20000) {
+          output = output.slice(0, 20000) + '\n... [输出过长，已截断]';
+        }
+        const prompt = '请分析以下终端输出的结果：\n\n```\n' + output + '\n```';
+        userInput.value = prompt + (truncated ? '\n\n> ⚠️ 终端输出因过长已被截断（超过 10MB）' : '');
+        await sendMessage();
+      } catch(e) {
+        messages.value.push({type:'error', content:'❌ ' + e.message});
+      }
+    }
+
+    // ── 自动推送终端结果给 AI（命令完成时触发）──
+    async function _autoPushTerminalResult(msgId, interactive) {
+      try {
+        const res = await fetch('/api/terminal/output/' + msgId);
+        const data = await res.json();
+        if (data.error) {
+          console.error('[AUTO-PUSH] 获取终端输出失败:', data.error);
+          return;
+        }
+        let output = data.output;
+        const truncated = data.truncated;
+        if (output.length > 20000) {
+          output = output.slice(0, 20000) + '\n... [输出过长，已截断]';
+        }
+        let extraHint = '';
+        if (interactive) {
+          extraHint = '\n\n> ⚠️ 这是一个交互式命令，目前无更多输出，你可能需要进一步操作。';
+        }
+        const prompt = '请分析以下终端输出的结果：\n\n```\n' + output + '\n```' + extraHint;
+        if (truncated) {
+          userInput.value = prompt + '\n\n> ⚠️ 终端输出因过长已被截断（超过 10MB）';
+        } else {
+          userInput.value = prompt;
+        }
+        // 标记对应的命令卡片完成状态
+        for (let i = messages.value.length - 1; i >= 0; i--) {
+          const m = messages.value[i];
+          if (m.type === 'command-card' && m.msgId === msgId) {
+            m.terminalStatus = 'completed';
+            break;
+          }
+        }
+        await sendMessage();
+      } catch(e) {
+        messages.value.push({type:'error', content:'❌ 自动推送失败: ' + e.message});
+      }
+    }
+
+    // ── 聚焦终端面板 ──
+    function focusTerminal() {
+      if (termCollapsed.value) toggleTerminal();
+      const tabId = activeTermTabId.value;
+      if (tabId) {
+        const inst = _termInstances[tabId];
+        if (!inst || !inst.xterm) initTerminal(tabId);
+        else inst.xterm.focus();
+      }
+      setTimeout(() => {
+        const el = document.getElementById('terminal-area');
+        if (el) el.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+      }, 100);
     }
 
     // 复制命令到剪贴板
@@ -2083,9 +2495,10 @@ app = createApp({
       initTerminal, resetTerminal, toggleTerminal,
       svgIcon, cycleTermTheme, toggleTermDropdown, selectTermType,
       switchTermTab, closeTermTab, newTerminalTab, notifyTermResize,
-      registerTermContainer, copyCommand, runInNewTerminal, retryCommand,
+      registerTermContainer, copyCommand, runInNewTerminal, retryCommand, focusTerminal, handlePushResult,
       currentModel, currentModelHasKey, showApiKeyModal, pendingApiKey, pendingModelProvider,
       onModelChange, saveApiKey, formatModelName,
+      thinkingVisible,
     };
   }
 });

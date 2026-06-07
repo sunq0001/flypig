@@ -225,6 +225,15 @@ Do NOT stop after just finding files - read them and complete the task."""
         
         output = self.tools.execute(name, arguments)
 
+        # ── 终端交互模式检测（注入不等待）──
+        if isinstance(output, str) and output.startswith("[TERMINAL_INJECTED:"):
+            # 注入完成后直接返回给 LLM，不阻塞等待
+            if self.verbose:
+                msg_id = output[19:].rstrip("]").strip()
+                print(f"[DEBUG] Terminal injected, msg_id={msg_id}, returning directly")
+            # 替换原始标记为干净提示，不让 LLM 看到奇怪字符串而重试
+            output = "命令已发送到终端执行，终端输出将在命令完成后自动提交分析。请等待后续结果。"
+
         # ── SYSTEM_ERROR 检测 ──
         if isinstance(output, str) and output.startswith("[SYSTEM_ERROR]"):
             self.error_counter[name] = self.error_counter.get(name, 0) + 1
@@ -247,7 +256,7 @@ Do NOT stop after just finding files - read them and complete the task."""
             "arguments": arguments,
             "output": output
         }
-    
+
     def _format_tool_results(self, results: List[Dict], calls: List[Dict]) -> str:
         """格式化工具结果"""
         parts = []

@@ -5,8 +5,50 @@ import platform
 import subprocess
 import time
 import re
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Dict, Any, Optional
+
+
+# ── 多编码解码：尝试多种编码，选用替换字符最少的 ──
+def _best_decode(data: bytes, extra_enc: str = '') -> str:
+    """尝试多种编码解码 bytes，返回替换字符 '�' 最少的结果。
+
+    候选编码优先级：
+      1. extra_enc（如有，通常来自 locale.getpreferredencoding()）
+      2. utf-8
+      3. 系统 OEM 编码（Windows chcp 命令获取）
+    """
+    import locale
+    candidates = []
+    if extra_enc:
+        candidates.append(extra_enc)
+    candidates.append('utf-8')
+    if os.name == 'nt':
+        try:
+            r = subprocess.run(['chcp'], capture_output=True, text=True, timeout=2)
+            m = re.search(r'(\d+)', r.stdout)
+            if m:
+                oem = f'cp{m.group(1)}'
+                if oem not in candidates:
+                    candidates.append(oem)
+        except Exception:
+            pass
+
+    best = ''
+    best_bad = 999999
+    for enc in candidates:
+        try:
+            decoded = data.decode(enc, errors='replace')
+            bad = decoded.count('\ufffd')
+            if bad < best_bad:
+                best = decoded
+                best_bad = bad
+            if bad == 0:  # 完美解码，直接返回
+                return decoded
+        except Exception:
+            continue
+    return best
 from .background import BackgroundTaskManager
 from .context_compressor import TreeSitterCompressor
 
@@ -30,18 +72,153 @@ _ANSI_FRAGMENT = re.compile(
     r'\[\[<\d+(?:;\d+)*[Mm]'       # DSR 鼠标残留 [[<...M/m
     r'|\[\[\d+(?:;\d+)*[A-Za-z]'    # 其他 [[... 残留
     r'|\[\d+(?:;\d+)*[A-Za-z]'      # 更短变种 [... 残留
-    r'|<Objs[^>]*>'                 # CLIXML 标签头
-    r'|</?[A-Z][A-Za-z0-9_.]*[^>]*>'  # 其他 XML 标签
-    r'|[\r\n]+'                      # 多余空行压缩（保留一个）
 )
 
+def _decode_clixml(text: str) -> str:
+    """解码 PowerShell CLIXML 格式 → 纯文本
+
+    Windows PowerShell 可能输出混合内容：
+      #< CLIXML
+      <plain normal output>
+      <Objs Version="1.1.0.1" ...>
+        <S S="Error">error_line</S>
+      </Objs>
+
+    修复：保留非 CLIXML 文本 + 解码 CLIXML `<S>` 文本。
+    无 CLIXML 时原样返回。
+    """
+    # 移除 UTF-8 BOM（Windows PowerShell 常输出 \ufeff）
+    if text.startswith('\ufeff'):
+        text = text[1:]
+
+    if not text.startswith('#< CLIXML'):
+        return text
+
+    # 跳过 #< CLIXML 头行，从下一行开始处理
+    first_nl = text.find('\n')
+    if first_nl == -1:
+        return ''
+    rest = text[first_nl + 1:]
+
+    parts = []
+    pos = 0
+
+    while True:
+        objs_start = rest.find('<Objs', pos)
+        if objs_start == -1:
+            # 最后剩余文本
+            tail = rest[pos:].strip()
+            if tail:
+                parts.append(tail)
+            break
+
+        # CLIXML 块前的普通文本
+        if objs_start > pos:
+            before = rest[pos:objs_start].strip()
+            if before:
+                parts.append(before)
+
+        # CLIXML 块结束
+        objs_end = rest.find('</Objs>', objs_start)
+        if objs_end == -1:
+            # 不完整块 → 保留为普通文本
+            tail = rest[pos:].strip()
+            if tail:
+                parts.append(tail)
+            break
+
+        # 解码 CLIXML 块
+        xml_str = rest[objs_start:objs_end + 7]  # '</Objs>' is 7 chars
+        try:
+            root = ET.fromstring(xml_str)
+            for s_elem in root.iter('S'):
+                if s_elem.text:
+                    parts.append(s_elem.text)
+        except ET.ParseError:
+            pass  # 解析失败 → 丢弃垃圾
+
+        pos = objs_end + 7
+
+    return '\n'.join(parts) if parts else ''
+
+
 def strip_ansi(text: str) -> str:
-    """移除 ANSI escape sequences + 清理残留的控制序列片段"""
+    """移除 ANSI escape sequences + 清理残留的控制序列片段 + 解码 CLIXML"""
+    # 先解码 CLIXML（在 strip ANSI 之前，保留原始格式以便解析）
+    text = _decode_clixml(text)
     t = _ANSI_ESC.sub('', text)
     t = _ANSI_FRAGMENT.sub('', t)
+    # 统一换行符：\r\n → \n，独立 \r → \n
+    t = t.replace('\r\n', '\n').replace('\r', '\n')
     # 压缩连续空行
     t = re.sub(r'\n{3,}', '\n\n', t)
     return t.strip()
+
+
+# ── 交互式命令识别 ──
+_INTERACTIVE_COMMANDS = {
+    'vim', 'vi', 'nano', 'emacs', 'htop', 'top', 'less', 'more',
+    'mysql', 'psql', 'sqlite3', 'redis-cli',
+    'ssh', 'telnet',
+    'bash', 'zsh', 'sh',  # new shell
+}
+# REPL 命令：带参数时非交互（如 python script.py），无参数时交互（如 python）
+_REPL_COMMANDS = {'python', 'python3', 'ipython', 'node', 'irb'}
+
+
+def _guess_interactive(command: str) -> bool:
+    """根据命令名自动判断是否交互式
+
+    支持复合命令（cd dir && python script.py → 检查 python 段）
+    文件名含 interactive/input/prompt 时视为交互式（如 Interactive.py）
+    """
+    import re
+    # 分割复合命令：&&, ||, ;, |, &
+    segments = re.split(r'\s*(?:&&|\|\||;|\||&)\s*', command.strip())
+    if not segments:
+        return False
+
+    for segment in segments:
+        segment = segment.strip()
+        if not segment:
+            continue
+        parts = segment.split()
+        first_word = parts[0].lower()
+
+        # REPL 命令：无参数 → 交互（REPL），有参数 → 非交互（脚本执行）
+        if first_word in _REPL_COMMANDS:
+            if len(parts) == 1:
+                return True
+            # 有参数：检查文件名是否暗示交互（如 Interactive.py）
+            for p in parts[1:]:
+                p_lower = p.strip('\'"').lower()
+                if any(kw in p_lower for kw in ('interactive', 'input', 'prompt', 'repl')):
+                    return True
+            continue
+
+        # 普通交互式命令
+        if first_word in _INTERACTIVE_COMMANDS:
+            return True
+
+    # 复合命令前缀（整条命令检查）
+    if command.strip().startswith(('kubectl exec', 'docker exec -it')):
+        return True
+    return False
+
+
+def _is_shell_repl(command: str) -> bool:
+    """判断是否是 shell REPL (交互式 shell 环境)"""
+    parts = command.strip().split()
+    if not parts:
+        return False
+    cmd = parts[0].lower()
+    if cmd in ('python', 'python3', 'ipython', 'node', 'irb'):
+        # 带参数（脚本文件或 flag）→ 非交互式
+        if len(parts) > 1:
+            return False
+        # 无参数 → 交互式 REPL
+        return True
+    return None  # 不确定
 
 
 
@@ -248,13 +425,21 @@ class ToolExecutor:
         persist=True：后台命令，立即返回 task_id，AI 可用 task_status/task_list 工具追踪。
         """
         command = args.get("command", "")
-        timeout_val = args.get("timeout", 60)
+        timeout_val = args.get("timeout", 30)
         persist = args.get("persist", False)
 
         if not command:
             return "Error: No command provided"
 
-        # ── persist=True：投递到后台任务管理器，立即返回 ──
+        # ── Web UI 模式：所有命令内联执行 ──
+        if self._web_mode and hasattr(self, '_terminal_push_fn') and self._terminal_push_fn:
+            return self._run_inline(command, timeout_val, persist=False)
+
+        # ── Web UI 模式（无终端推送）：内联执行 ──
+        if self._web_mode:
+            return self._run_inline(command, timeout_val, persist=False)
+
+        # ── persist=True（非 Web 模式）：投递到后台任务管理器 ──
         if persist:
             effective_timeout = max(timeout_val, 3600)
             task_id = self.bg_tasks.launch(command, timeout=effective_timeout)
@@ -264,11 +449,6 @@ class ToolExecutor:
                 f"  Use task_status(task_id='{task_id}') to check status.\n"
                 f"  Use task_list() to see all background tasks."
             )
-
-        # ── persist=False：同步等待输出 ──
-        # Web UI 模式：内联执行
-        if self._web_mode:
-            return self._run_inline(command, timeout_val, persist=False)
 
         # 沙箱模式：在 Docker 容器内执行
         if self.sandbox_manager:
@@ -308,29 +488,68 @@ class ToolExecutor:
 
     @staticmethod
     async def _run_subprocess_async_core(command: str, timeout_val: int) -> str:
-        """async 子进程执行核心 — 使用 asyncio.create_subprocess_shell
+        """async 子进程执行核心 — 流式读 stdout/stderr，超时时保留已输出内容"""
+        import locale
+        preferred_enc = locale.getpreferredencoding()
 
-        跨平台安全，Windows 上无管道死锁问题，支持 asyncio.wait_for 真实超时。
-
-        Raises:
-            asyncio.TimeoutError: 超时
-        """
         proc = await asyncio.create_subprocess_shell(
             command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
+
+        stdout_parts = []
+        stderr_parts = []
+        timed_out = False
+
+        async def _read(stream, parts):
+            try:
+                while True:
+                    try:
+                        chunk = await asyncio.wait_for(stream.read(4096), timeout=2)
+                        if not chunk:
+                            break
+                        parts.append(chunk)
+                    except asyncio.TimeoutError:
+                        # 空闲超时 → 返回已读部分，但不杀死进程
+                        return
+            except (asyncio.CancelledError, GeneratorExit):
+                pass
+
         try:
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout_val
+            await asyncio.wait_for(
+                asyncio.gather(
+                    _read(proc.stdout, stdout_parts),
+                    _read(proc.stderr, stderr_parts),
+                ),
+                timeout=timeout_val + 3,
             )
         except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
-            raise
+            timed_out = True
 
-        stdout_str = strip_ansi(stdout.decode("utf-8", errors="replace"))
-        stderr_str = strip_ansi(stderr.decode("utf-8", errors="replace"))
+        # 进程可能还在跑（空闲超时但没到全局超时）
+        if proc.returncode is None:
+            try:
+                # 再等 3 秒让进程自然结束（如 pip 启动延迟）
+                await asyncio.wait_for(proc.wait(), timeout=3)
+            except asyncio.TimeoutError:
+                pass
+            if proc.returncode is None:
+                timed_out = True
+                proc.kill()
+                await proc.wait()
+
+        stdout_str = strip_ansi(_best_decode(b"".join(stdout_parts), preferred_enc))
+        stderr_str = strip_ansi(_best_decode(b"".join(stderr_parts), preferred_enc))
+
+        if timed_out:
+            detail = (stdout_str[:500] if stdout_str else "")
+            if stderr_str:
+                detail = (detail + "\n" + stderr_str[:500]).strip()
+            return (
+                f"[TIMEOUT] Command exceeded {timeout_val}s\n"
+                f"{detail[:2000]}"
+            )
 
         if proc.returncode == 0:
             if stdout_str:
@@ -381,6 +600,51 @@ class ToolExecutor:
 
         # ── 无沙箱：走 asyncio subprocess ──
         return self._run_subprocess_sync(command, effective_timeout)
+
+    def _run_terminal_interactive(self, command: str, timeout_val: int,
+                                   interactive: bool = None) -> str:
+        """终端交互模式：注入命令到 PTY，不等待，立即返回 INJECTED 标记。
+
+        interactive=True  → 不包装，无完成检测，用户手动推送
+        interactive=False → 包装 START/END 标记，自动完成检测 + 自动推送
+        interactive=None  → 自动判断（默认）
+
+        AI 代理无需等待，SSE 正常结束。终端输出由服务端 pty_reader 追加到 buffer，
+        独立 SSE 端点 /api/terminal-events 实时推送到前端卡片。
+        """
+        import uuid
+        msg_id = str(uuid.uuid4())
+
+        # 自动判断交互式
+        if interactive is None:
+            interactive = _guess_interactive(command)
+
+        # 所有命令统一加 START 和 END（用 \r\n 适配 Windows/PowerShell）
+        wrapped_command = f'echo "###AI_START###"\r\n{command}\r\necho "###AI_END###"'
+
+        # 获取共享字典（由 server.py 注入），无锁，GIL 保证原子性
+        injections = getattr(self, '_terminal_injections', {})
+
+        # 注册注入状态
+        injections[msg_id] = {
+            "buffer": [],
+            "pty_term_id": None,
+            "command": command,
+            "wrapped_command": wrapped_command,
+            "interactive": interactive,
+            "consumed": False,
+            "truncated": False,
+            "completed": False,
+        }
+
+        # 推送 terminal_inject SSE 事件到前端
+        push_fn = getattr(self, '_terminal_push_fn', None)
+        if push_fn:
+            push_fn("terminal_inject", msgId=msg_id, command=command,
+                    wrappedCommand=wrapped_command, interactive=interactive)
+
+        # 立即返回，AI 线程不等待
+        return f"[TERMINAL_INJECTED:{msg_id}]"
 
     
     @staticmethod
@@ -700,19 +964,17 @@ class ToolExecutor:
                 "function": {
                     "name": "bash",
                     "description": "Execute a shell command. "
-                                   "Short commands (compile, git, pip) return stdout directly. "
-                                   "Long-running commands (npm run dev, python server) MUST use persist=true "
-                                   "to run in the background without blocking your progress. "
-                                   "You can then use task_status() to check output later. "
-                                   "NOTE: The command appears as a card in the UI. "
-                                   "The user can click '在新终端中执行' to run it in an interactive terminal.",
+                                   "ALL commands return stdout directly (inline execution). "
+                                   "Interactive commands (vim, htop, python REPL) auto-detect and inject into the terminal. "
+                                   "For scripts with input() or interactive prompts, set interactive=true. "
+                                   "Command output appears as a card for the user to review.",
                     "parameters": {
                         "type": "object",
                         "properties": {
                             "command": {"type": "string", "description": "Shell command to execute"},
-                            "timeout": {"type": "integer", "description": "Timeout in seconds", "default": 60},
-                            "persist": {"type": "boolean", "description": "Run in background (default: False). "
-                                                                         "Use true for long-running commands like dev servers, npm install, docker builds.", "default": False}
+                            "timeout": {"type": "integer", "description": "Timeout in seconds", "default": 30},
+                            "interactive": {"type": "boolean", "description": "Force terminal injection. Use true when the command needs user interaction (input(), prompts, REPL).", "default": False},
+                            "persist": {"type": "boolean", "description": "DEPRECATED in web mode. All commands execute inline by default.", "default": False}
                         },
                         "required": ["command"]
                     }

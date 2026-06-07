@@ -102,13 +102,13 @@ class Coder:
 
 ## 2. DeepSeek TUI (Rust TUI Agent)
 
-| 项目 | 值 |
-|------|-----|
-| 仓库 | Hmbown/DeepSeek-TUI |
-| 语言 | Rust (edition 2024) |
-| 版本 | v0.8.38 |
-| 代码量 | ~120K-150K 行 Rust |
-| 定位 | DeepSeek 模型的 TUI 工具 |
+| 项目　 | 值　　　　　　　　　　　 |
+| --------| --------------------------|
+| 仓库　 | Hmbown/DeepSeek-TUI　　　|
+| 语言　 | Rust (edition 2024)　　　|
+| 版本　 | v0.8.38　　　　　　　　　|
+| 代码量 | ~120K-150K 行 Rust　　　 |
+| 定位　 | DeepSeek 模型的 TUI 工具 |
 
 ### 2.1 架构核心
 

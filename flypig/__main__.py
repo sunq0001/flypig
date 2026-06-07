@@ -1,7 +1,55 @@
-"""入口点 - 支持 --task 头戴模式和 --web UI 模式"""
+"""入口点 - 支持 --task 头戴模式、--web UI 模式、--kill-port 端口清理"""
 import sys
 import argparse
+import os
+import subprocess
 from .cli import main as cli_main
+
+
+def kill_port(port: int = 8321):
+    """杀掉占用指定端口的进程（跨平台）"""
+    import platform
+    system = platform.system()
+
+    if system == "Windows":
+        # netstat 找 PID
+        try:
+            result = subprocess.run(
+                f'netstat -ano | findstr ":{port}"',
+                capture_output=True, text=True, shell=True,
+            )
+            pids = set()
+            for line in result.stdout.splitlines():
+                parts = line.strip().split()
+                if len(parts) >= 5 and 'LISTENING' in line:
+                    pid = parts[-1]
+                    if pid.isdigit():
+                        pids.add(int(pid))
+            if not pids:
+                print(f"  [端口 {port}] 未发现监听进程")
+                return
+            for pid in pids:
+                subprocess.run(f"taskkill /PID {pid} /F",
+                               capture_output=True, shell=True)
+                print(f"  [端口 {port}] 已终止 PID {pid}")
+        except Exception as e:
+            print(f"  [错误] 无法终止进程: {e}")
+    else:
+        # Linux/Mac: lsof + kill
+        try:
+            result = subprocess.run(
+                f"lsof -ti:{port}", capture_output=True, text=True,
+                shell=True, timeout=3
+            )
+            if result.stdout.strip():
+                for pid in result.stdout.strip().splitlines():
+                    subprocess.run(["kill", "-9", pid],
+                                   capture_output=True, timeout=3)
+                    print(f"  [端口 {port}] 已终止 PID {pid}")
+            else:
+                print(f"  [端口 {port}] 未发现监听进程")
+        except Exception as e:
+            print(f"  [错误] 无法终止进程: {e}")
 
 
 def main():
@@ -16,7 +64,13 @@ def main():
                         help="Web UI port (default: 8321)")
     parser.add_argument("--host", type=str, default="127.0.0.1",
                         help="Web UI host (default: 127.0.0.1)")
+    parser.add_argument("--kill-port", type=int, nargs="?", const=8321, default=0,
+                        help="Kill process on port and exit (default: 8321)")
     args = parser.parse_args()
+
+    if args.kill_port:
+        kill_port(args.kill_port)
+        return
 
     if args.task:
         _headless_main(args.task)

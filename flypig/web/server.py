@@ -13,6 +13,7 @@ import time
 import uuid
 import webbrowser
 import queue as queue_mod
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -31,6 +32,33 @@ from ..hooks import WsEventHook
 _config = None
 _agent = None
 _workspace = ""
+
+# 终端交互式输出——服务端 tap + 独立 SSE 实时推送（无锁，GIL 保证原子性）
+# msgId → {"buffer": [bytes], "command": str, "pty_term_id": str|None,
+#           "consumed": bool, "truncated": bool, "completed": bool,
+#           "interactive": bool, "notified": bool}
+_terminal_injections: dict = {}
+_active_injections: dict = {}     # pty_term_id → msgId
+_SILENCE_THRESHOLD = 3.0          # 3 秒无输出视为完成（非交互式命令）
+
+
+def _extract_output_between_markers(text: str) -> str:
+    """提取 ###AI_START### 和 ###AI_END### 之间的纯净输出
+    
+    PTY 输出包含命令 echo（如 'echo "###AI_START###"' ）、prompt 等噪音。
+    用行级匹配找到独立占一行的 START/END 标记，提取中间的实际命令输出。
+    无标记时返回原始文本（兼容交互式命令）。
+    """
+    start_tag = "###AI_START###"
+    end_tag = "###AI_END###"
+    # 用正则匹配独立占一行的标记（不含 echo "..." 等前置内容）
+    start_match = re.search(rf'^{re.escape(start_tag)}\s*$', text, re.MULTILINE)
+    end_match = re.search(rf'^{re.escape(end_tag)}\s*$', text, re.MULTILINE)
+    if start_match and end_match and start_match.start() < end_match.start():
+        content = text[start_match.end():end_match.start()]
+        return content.strip()
+    return text  # 无标记则返回全部
+
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -280,6 +308,11 @@ async def api_chat():
     def _push(event_type: str, **kw):
         q.put({"type": event_type, **kw})
 
+    # 注入终端交互所需的对象到 tools（tool_bash 会用到）
+    if _agent and hasattr(_agent, 'tools'):
+        _agent.tools._terminal_push_fn = _push
+        _agent.tools._terminal_injections = _terminal_injections
+
     def _run_agent_sse():
         """在 executor 线程中运行 agent，事件推入队列"""
         # 创建 SSE 钩子
@@ -297,6 +330,7 @@ async def api_chat():
     asyncio.get_event_loop().run_in_executor(None, _run_agent_sse)
 
     async def generate():
+        _last_keepalive = time.time()
         while True:
             try:
                 event = await asyncio.get_event_loop().run_in_executor(
@@ -306,10 +340,51 @@ async def api_chat():
                 if event.get("type") == "done":
                     break
             except queue_mod.Empty:
+                now = time.time()
+                if now - _last_keepalive > 5:
+                    yield ": keepalive\n\n"
+                    _last_keepalive = now
                 continue
 
     return Response(generate(), mimetype="text/event-stream",
                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+def _tool_label(name: str, args: dict) -> str | None:
+    """为工具调用生成人类可读的说明文字
+
+    内部文件（flypig/、.codebuddy/）和无需显示的工具返回 None。
+    """
+    path = (args.get("path") or args.get("filePath") or "").replace("\\", "/")
+    # 内部文件不显示
+    if "/flypig/" in path or "/.codebuddy/" in path:
+        return None
+    if name == "read_file":
+        filename = path.split("/")[-1] if path else ""
+        if not filename:
+            return None
+        return f"📖 正在读取文件 {filename}"
+    elif name == "write_file":
+        filename = path.split("/")[-1] if path else ""
+        if not filename:
+            return None
+        return f"✏️ 正在写入文件 {filename}"
+    elif name == "edit_file":
+        filename = path.split("/")[-1] if path else ""
+        if not filename:
+            return None
+        return f"🔧 正在修改文件 {filename}"
+    elif name == "bash":
+        return None  # bash 由前端单独处理为命令卡片
+    elif name == "grep":
+        pattern = args.get("pattern", "")
+        return f"🔎 正在搜索 \"{pattern[:40]}\"" if pattern else None
+    elif name == "find_files":
+        pattern = args.get("pattern", "")
+        return f"📂 正在查找文件 \"{pattern}\"" if pattern else None
+    elif name in ("task_status", "task_list"):
+        return None  # 后台任务管理，不需要显示
+    return None  # 其他未知工具不显示
 
 
 class _SseHook:
@@ -328,7 +403,8 @@ class _SseHook:
                     cache_pct=round(100 * hit / inp, 0) if inp and hit else 0,
                     cost=cost)
     def on_tool_start(self, name, args):
-        self._push("tool_call", name=name, args=args)
+        label = _tool_label(name, args)
+        self._push("tool_call", name=name, args=args, label=label)
     def on_tool_end(self, name, result, args=None):
         self._push("tool_result", name=name, result=result[:3000], args=args or {})
     def on_tool_chain_end(self, *a): self._push("tool_chain_end")
@@ -381,6 +457,101 @@ async def api_file_tree():
         return jsonify(_tree_cache)
 
 
+# ── 终端交互注入状态管理 ──
+
+@app.route("/api/terminal/inject-bind/<msg_id>", methods=["POST"])
+async def api_terminal_inject_bind(msg_id):
+    """前端注入命令到具体 PTY 终端后，绑定 msgId 与 pty_term_id"""
+    data = await request.get_json(force=True)
+    pty_term_id = data.get("pty_term_id", "")
+    if not pty_term_id or msg_id not in _terminal_injections:
+        return jsonify({"error": "invalid"}), 400
+    _terminal_injections[msg_id]["pty_term_id"] = pty_term_id
+    _active_injections[pty_term_id] = msg_id
+    return jsonify({"ok": True})
+
+
+@app.route("/api/terminal/output/<msg_id>", methods=["GET"])
+async def api_get_terminal_output(msg_id):
+    """前端获取终端输出（点击"是，分析结果"时调用）"""
+    from ..tools import strip_ansi
+    inj = _terminal_injections.get(msg_id)
+    if not inj:
+        return jsonify({"error": "not found"}), 404
+    full_bytes = b"".join(inj["buffer"])
+    output = strip_ansi(full_bytes.decode("utf-8", errors="replace"))
+    # 提取 ###AI_START### 和 ###AI_END### 之间的纯净输出（去除命令 echo 等噪音）
+    output = _extract_output_between_markers(output)
+    # 标记为已消费，SSE 巡检将跳过
+    inj["consumed"] = True
+    return jsonify({"output": output, "truncated": inj.get("truncated", False)})
+
+
+# ── 独立 SSE 端点：终端事件实时推送（与 AI 对话 SSE 完全独立）──
+
+@app.route("/api/terminal-events")
+async def api_terminal_events():
+    """SSE 端点：轮询 buffer 增量，推送 terminal_output / terminal_complete 事件
+    
+    前端通过 EventSource 连接，页面打开期间常驻。
+    事件格式:
+      event: terminal_output
+      data: {"msgId":"...","chunk":"..."}
+      
+      event: terminal_complete  
+      data: {"msgId":"..."}
+    """
+    from ..tools import strip_ansi
+    async def generate():
+        local_cursors = {}
+        notified_set = set()  # 已推送 terminal_complete 的 msgId 集合
+        try:
+            while True:
+                for msg_id, inj in list(_terminal_injections.items()):
+                    # ── 完成通知（所有命令自动推）──
+                    if (inj.get("completed")
+                            and not inj.get("consumed")
+                            and msg_id not in notified_set):
+                        notified_set.add(msg_id)
+                        yield f"event: terminal_complete\ndata: {json.dumps({'msgId': msg_id, 'interactive': inj.get('interactive', False)}, ensure_ascii=False)}\n\n"
+
+                    # ── 实时输出推送（未消费的注入）──
+                    if inj.get("consumed"):
+                        continue
+                    # 交互式命令：用户按键回显只在终端面板可见，不推到对话卡片
+                    if inj.get("interactive"):
+                        continue
+                    buf = inj["buffer"]
+                    if not buf:
+                        continue
+                    cursor = local_cursors.get(msg_id, 0)
+                    total = sum(len(b) for b in buf)
+                    if total <= cursor:
+                        continue
+                    acc = 0
+                    chunks = []
+                    for b in buf:
+                        chunk_start = max(0, cursor - acc)
+                        chunk_end = len(b)
+                        if chunk_end > chunk_start:
+                            chunks.append(b[chunk_start:chunk_end])
+                        acc += len(b)
+                    if chunks:
+                        new_bytes = b"".join(chunks)
+                        text = strip_ansi(new_bytes.decode("utf-8", errors="replace"))
+                        local_cursors[msg_id] = total
+                        if text:
+                            yield f"event: terminal_output\ndata: {json.dumps({'msgId': msg_id, 'chunk': text}, ensure_ascii=False)}\n\n"
+                yield ": keepalive\n\n"
+                await asyncio.sleep(1)
+        except (GeneratorExit, asyncio.CancelledError):
+            pass
+
+    return Response(generate(), mimetype="text/event-stream",
+                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no",
+                             "Connection": "keep-alive"})
+
+
 # ── 实时文件监控 ──
 
 _file_watcher_started = False
@@ -431,8 +602,6 @@ async def api_available_shells():
 
 @app.websocket("/ws/pty/<term_id>")
 async def ws_pty(term_id: str):
-    import asyncio
-    import threading
     from urllib.parse import urlparse, parse_qs
     try:
         # 从WebSocket URL中解析查询参数（shell类型）
@@ -482,51 +651,99 @@ async def ws_pty(term_id: str):
             return
         
         print(f"  [PTY] 终端已激活，开始数据流传输")
-        loop = asyncio.get_event_loop()
-        stop_event = threading.Event()
+        reader_stopped = False
+        ws_send_queue: asyncio.Queue = asyncio.Queue(maxsize=100)
+
         @copy_current_websocket_context
-        async def pty_send(data: bytes):
-            await websocket.send(data)
-        def pty_reader():
-            while term.is_alive() and not stop_event.is_set():
-                data = term.read(4096)
+        async def _ws_sender():
+            """独立发送任务：从队列取数据发送到 WS，不阻塞 pty_reader"""
+            while True:
+                data = await ws_send_queue.get()
+                try:
+                    await websocket.send(data)
+                except Exception:
+                    break
+
+        asyncio.ensure_future(_ws_sender())
+
+        async def pty_reader():
+            nonlocal reader_stopped
+            last_output_time = 0.0
+            marker_buffer = b""
+            marker_found = False
+
+            # ── 独立静默检测：每 1 秒检查一次，不受阻塞读影响 ──
+            async def _silence_check():
+                while not reader_stopped:
+                    active_msg_id = _active_injections.get(term_id)
+                    if active_msg_id:
+                        inj = _terminal_injections.get(active_msg_id)
+                        if inj and not inj.get("consumed") and not inj.get("completed"):
+                            now = time.time()
+                            if last_output_time > 0 and (now - last_output_time) > _SILENCE_THRESHOLD:
+                                inj["completed"] = True
+                    await asyncio.sleep(1)
+
+            silence_task = asyncio.ensure_future(_silence_check())
+
+            while term.is_alive() and not reader_stopped:
+                data = await asyncio.to_thread(term.read, 4096)
                 if data is None:
                     break
                 if data:
+                    last_output_time = time.time()
+                    active_msg_id = _active_injections.get(term_id)
+                    if active_msg_id:
+                        inj = _terminal_injections.get(active_msg_id)
+                        if inj and not inj.get("consumed"):
+                            inj["buffer"].append(data)
+
+                            # ── 完成检测：END 标记 ──
+                            if not marker_found:
+                                marker_buffer += data
+                                if b"###AI_END###" in marker_buffer:
+                                    marker_found = True
+                                    inj["completed"] = True
+                                    marker_buffer = b""
+
+                    # 非阻塞送 WS 发送队列（队列满时丢弃旧数据，保新数据）
                     try:
-                        fut = asyncio.run_coroutine_threadsafe(pty_send(data), loop)
-                        fut.result(timeout=10)
-                    except Exception:
-                        break
+                        ws_send_queue.put_nowait(data)
+                    except asyncio.QueueFull:
+                        pass
                 else:
-                    threading.Event().wait(0.01)
-        reader_thread = threading.Thread(target=pty_reader, daemon=True, name=f"pty-read-{term_id}")
-        reader_thread.start()
+                    await asyncio.sleep(0.01)
+
+            silence_task.cancel()
+
+        reader_task = asyncio.ensure_future(pty_reader())
         try:
             while True:
                 msg = await websocket.receive()
                 if msg is None:
                     break
                 if isinstance(msg, bytes):
-                    term.write(msg)
+                    await asyncio.to_thread(term.write, msg)
                 elif isinstance(msg, str):
                     try:
                         cmd = json.loads(msg)
-                        if cmd.get("type") == "resize":
-                            term.resize(cmd["cols"], cmd["rows"])
-                        elif cmd.get("type") == "destroy":
-                            print(f"  [PTY] 收到销毁指令，清理终端 {term_id}")
-                            _terminal_manager.destroy(term_id)
-                            break
+                        if isinstance(cmd, dict):
+                            if cmd.get("type") == "resize":
+                                await asyncio.to_thread(term.resize, cmd["cols"], cmd["rows"])
+                            elif cmd.get("type") == "destroy":
+                                print(f"  [PTY] 收到销毁指令，清理终端 {term_id}")
+                                _terminal_manager.destroy(term_id)
+                                break
                         continue
                     except json.JSONDecodeError:
                         pass
-                    term.write(msg.encode("utf-8"))
+                    await asyncio.to_thread(term.write, msg.encode("utf-8"))
         except Exception as e:
             print(f"  [PTY] WebSocket 通信异常: {e}")
         finally:
             print(f"  [PTY] 关闭连接 {term_id}")
-            stop_event.set()
+            reader_stopped = True
+            reader_task.cancel()
             # 注意：不再自动销毁终端，由前端发送 type:"destroy" 消息控制
             # 这样终端切换标签时 WS 断开后会话保持，关闭标签时才销毁
     except Exception as e:

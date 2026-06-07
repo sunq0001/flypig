@@ -1,0 +1,104 @@
+# 架构导航索引
+
+> **本文档是导航索引**，不是详细设计文档。
+> 遇到问题 → 按分类查对应文档 → 在对应文档中查看关联链接。
+
+## 核心原则
+
+- **单向依赖**：Interface → Application → Domain → Infrastructure
+- **接口隔离**：领域层定义接口，基础设施层实现
+- **DI 单点装配**：所有依赖在 Container 类里装配
+- **每个文件一个职责**：不超过 200 行，一个类不超过 100 行
+
+## 重构动机（为什么需要这样做）
+
+### 当前痛点
+
+| 问题 | 严重程度 | 影响 |
+|-----|---------|------|
+| `tools.py` ~820 行一个大文件 | 🔴 | 改一个函数要读完整文件 |
+| `sandbox.py` ~1000 行一个大文件 | 🔴 | 沙箱配置、路径验证、Docker 管理混一起 |
+| `server.py` ~780 行一个大文件 | 🔴 | 路由、配置、SSE、WebSocket 全在 |
+| `index.html` ~2500 行单页 | 🔴 | Vue 组件、CSS、终端逻辑全在 |
+| 全局变量散落 | 🔴 | 多请求状态混乱，测试无法隔离 |
+| Agent 装配代码重复 3 处 | 🟡 | 改一个依赖要改三个地方 |
+| PTY 注入链路 7 步 | 🔴 | AI→SSE→前端→API→终端→WS→PTY |
+| 流式输出是模拟的 | 🟡 | setInterval 轮询，体验差 |
+| 没有依赖注入 | 🟡 | 换模型需要改核心代码 |
+
+### 重构收益
+
+| 指标 | 当前 | 重构后 |
+|------|------|--------|
+| 单个文件最大行数 | ~2500 行 | ≤200 行 |
+| Agent 装配代码重复 | 3 处 | 1 处（DI Container） |
+| 模块间耦合 | 紧耦合 | 接口依赖 |
+| 测试能力 | 几乎不可测试 | 接口可 Mock |
+| 加新模型 | 改 agent.py、server.py | 加一个 ModelAdapter 实现 |
+| 加新前端功能 | 改 2500 行 index.html | 加一个 .vue 组件 |
+
+## AI 友好编码规范
+
+### 命名规则
+
+| 要素 | 规则 | 例子 |
+|------|------|------|
+| 包名 | 功能分组 | `domain/`, `infrastructure/` |
+| 模块名 | 功能描述 | `tool_bash.py`, `mcp_loader.py` |
+| 类名 | 大驼峰 | `ChatService`, `FileTreeScanner` |
+| 函数名 | 小驼峰 | `check_permission()` |
+
+### 文件结构规范
+
+```python
+"""一句话描述模块职责"""
+# ── 标准库导入 ──
+import asyncio
+# ── 第三方库导入 ──
+from quart import Quart
+# ── 内部模块导入 ──
+from ..domain.interfaces import IToolExecutor
+# ── 常量 ──
+_DEFAULT_TIMEOUT = 30
+# ── 类定义 ──
+class ToolBash:
+    ...
+```
+
+## 问题导航
+
+| 你想做什么 | 先看哪个文档 |
+|-----------|------------|
+| 了解整体架构设计 | `architecture-diagram.md` + `folder-tree.md` + `tech-stack.md` |
+| 查看架构图 | `architecture-diagram.md` |
+| 查看项目文件夹结构 | `folder-tree.md` |
+| 查看技术选型 | `tech-stack.md` |
+| 理解三种模式（Explore/Plan/Execute）的权限 | `mode-matrix.md` |
+| 理解 LangGraph 节点、router、状态 | `langgraph-graph.md` |
+| 查看所有 API 端点和 SSE 事件格式 | `api-reference.md` |
+| 查看前端组件和架构 | `frontend-arch.md` |
+| 查看后端各层模块职责 | `backend-modules.md` |
+| 查看 subprocess 执行策略和 task_log | `subprocess-and-tools.md` |
+| 查看变更审查、Lint、对抗建议 | `adversarial-system.md` |
+| 查看 MCP、IHistoryStore 等预留接口 | `extensions.md` |
+| 查看迁移路线和 MVP 迭代 | `migration-roadmap.md` |
+| 查看数据流向 | `data-flow.md` |
+
+## 快速定位：AI 应该看哪个文件
+
+| 想改什么 | 先看哪个文件 |
+|---------|------------|
+| AI 对话流程 | `langgraph-graph.md` → `domain/agent/` |
+| 换 AI 模型 | `backend-modules.md` → `infrastructure/model/` |
+| 加工具 | `subprocess-and-tools.md` → `infrastructure/tools/` |
+| 改 SSE 事件 | `api-reference.md` → `interface/web/routes/chat.py` |
+| 改前端消息渲染 | `frontend-arch.md` → `static_vite/src/components/chat/` |
+| 改变更审查逻辑 | `adversarial-system.md` → `infrastructure/tools/tool_change_review.py` |
+| 改代码规范检查 | `adversarial-system.md` → `infrastructure/tools/tool_lint.py` + `pyproject.toml` |
+| 改变更评分逻辑 | `adversarial-system.md` → `domain/models/change_score.py` |
+| 改模式配置(温度/工具) | `mode-matrix.md` → `domain/models/mode.py` |
+| 改权限规则 | `backend-modules.md` → `infrastructure/policies/` + Casbin 策略文件 |
+| 改会话持久化 | `extensions.md` → `infrastructure/repository/` |
+| 改终端管理 | `subprocess-and-tools.md` → `infrastructure/terminal.py` |
+| DI 容器装配 | `backend-modules.md` → `di/container.py` |
+| LangGraph 状态机 | `langgraph-graph.md` → `domain/agent/` |
