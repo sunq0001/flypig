@@ -88,17 +88,20 @@ class ToolBash:
 
 | 想改什么 | 先看哪个文件 |
 |---------|------------|
-| AI 对话流程 | `langgraph-graph.md` → `domain/agent/` |
+| AI 对话流程 | `langgraph-graph.md` → `domain/agent/nodes.py` |
+| 图构建/路由注册 | `langgraph-graph.md` → `application/services/graph_factory.py` |
 | 换 AI 模型 | `backend-modules.md` → `infrastructure/model/` |
-| 加工具 | `subprocess-and-tools.md` → `infrastructure/tools/` |
+| 加工具 | `subprocess-and-tools.md` → `infrastructure/tools/`（按 edit/search/system/mcp 分组） |
 | 改 SSE 事件 | `api-reference.md` → `interface/web/routes/chat.py` |
 | 改前端消息渲染 | `frontend-arch.md` → `static_vite/src/components/chat/` |
-| 改变更审查逻辑 | `adversarial-system.md` → `infrastructure/tools/tool_change_review.py` |
-| 改代码规范检查 | `adversarial-system.md` → `infrastructure/tools/tool_lint.py` + `pyproject.toml` |
+| 改变更审查逻辑 | `adversarial-system.md` → `infrastructure/tools/edit/tool_change_review.py` |
+| 改代码规范检查 | `adversarial-system.md` → `infrastructure/tools/edit/tool_lint.py` + `pyproject.toml` |
 | 改变更评分逻辑 | `adversarial-system.md` → `domain/models/change_score.py` |
 | 改模式配置(温度/工具) | `mode-matrix.md` → `domain/models/mode.py` |
 | 改权限规则 | `backend-modules.md` → `infrastructure/policies/` + Casbin 策略文件 |
 | 改会话持久化 | `extensions.md` → `infrastructure/repository/` |
 | 改终端管理 | `subprocess-and-tools.md` → `infrastructure/terminal.py` |
 | DI 容器装配 | `backend-modules.md` → `di/container.py` |
-| LangGraph 状态机 | `langgraph-graph.md` → `domain/agent/` |
+| LangGraph 节点逻辑 | `langgraph-graph.md` → `domain/agent/state.py + nodes.py + router.py + context.py` |
+| 对抗建议生成 | `backend-modules.md` → `application/services/suggestion_engine.py` |
+| 钩子事件注册 | `backend-modules.md` → `application/services/hook_service.py` |

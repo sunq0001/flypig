@@ -25,17 +25,20 @@ flypig/interface/web/
 
 | 服务 | 职责 | 行数 |
 |------|------|------|
-| `ChatService` | 接收输入 → 调用 LangGraph → 事件回调 | ≤60 |
+| `ChatService` | 接收输入 → 调用 LangGraph → 事件分发 | ≤60 |
 | `ConfigService` | Config 初始化、模型切换、API Key 管理 | ≤80 |
 | `SessionService` | 多会话创建/切换/销毁/持久化 | ≤80 |
-| `OrchestrationService` | 图构建 + 对抗建议 + build_graph() | ≤100 |
+| `PolicyService` | Casbin 封装 | ≤80 |
+| `GraphFactory` | ★ 图构建：导入 nodes + router → 编译 StateGraph（原 OrchestrationService.build_graph()） | ≤80 |
+| `SuggestionEngine` | ★ 评分→建议映射：generate_suggestion()（原 OrchestrationService 拆分） | ≤40 |
+| `HookService` | ★ 钩子管理器：register(event_type, hook) / emit(event_type, data) | ≤40
 
 ## Domain Layer — 核心领域逻辑
 
 ```
 flypig/domain/
-├── interfaces/         # IModel, IToolExecutor, ICostTracker, IHook, IHistoryStore
-├── agent/              # graph.py, nodes.py, router.py, context.py（统一图）
+├── interfaces/         # IModel, IToolExecutor, ICostTracker, IHook+HookContext, IHistoryStore
+├── agent/              # state.py, nodes.py, router.py, context.py（领域层只定义逻辑）
 ├── models/             # Message, Session, ChangeScore, ExecutionMode
 ├── prompt_manager.py   # 多角色 prompt 懒加载
 ├── prompts/            # developer.md, reviewer.md, tester.md, architect.md, documenter.md
@@ -48,13 +51,13 @@ flypig/domain/
 
 ```
 ├── model/              # openai_adapter.py, anthropic.py, local.py
-├── tools/              # 全部工具（详见 subprocess-and-tools.md）
+├── tools/              # executor.py + edit/search/system/mcp 四组（详见 folder-tree.md）
 ├── sandbox/            # config, path_validator, manager, builder
 ├── cost/               # CostTracker + pricing
 ├── repository/         # SQLAlchemy + IHistoryStore NoOp
 ├── policies/           # Casbin（model.conf + policy.csv + setup）
 ├── terminal.py         # 用户手动 PTY（精简版，无 AI 注入）
-├── hooks.py            # 事件钩子
+├── hooks.py            # HookService 的具体实现（log / sse_push / notification 等）
 └── background.py       # 后台任务管理
 ```
 
@@ -88,9 +91,11 @@ class Container:
         policy = PolicyService(config.permissions)      # 权限规则
         prompts = PromptManager()                       # 多角色 prompt
         knowledge = NoOpKnowledgeStore()                # 知识库空实现
-        orchestration = OrchestrationService(
-            model=model, prompts=prompts, policy=policy
+        graph_factory = GraphFactory(
+            tools=tools, prompts=prompts, policy=policy
         )
+        suggestion_engine = SuggestionEngine()
+        hook_service = HookService()
         cls.register("config", config, singleton=True)
         cls.register("model", model, singleton=True)
         cls.register("cost_tracker", cost_tracker, singleton=True)
@@ -100,7 +105,9 @@ class Container:
         cls.register("prompts", prompts, singleton=True)
         cls.register("knowledge_store", knowledge, singleton=True)
         cls.register("history_store", NoOpHistoryStore(), singleton=True)
-        cls.register("orchestration", orchestration, singleton=True)
+        cls.register("graph_factory", graph_factory, singleton=True)
+        cls.register("suggestion_engine", suggestion_engine, singleton=True)
+        cls.register("hook_service", hook_service, singleton=True)
 
     @classmethod
     def create_agent(cls, workspace=None, hooks=None) -> "IAgent":

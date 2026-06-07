@@ -28,10 +28,10 @@ flypig/
 │   │   ├── ihook.py              ← IHook（事件钩子）
 │   │   └── iagent.py             ← IAgent
 │   │
-│   ├── agent/                    ← LangGraph StateGraph（统一图）
-│   │   ├── graph.py              ← 统一 StateGraph + 条件边路由
+│   ├── agent/                    ← LangGraph（领域层只定义节点和状态）
+│   │   ├── state.py              ← AgentState TypedDict（纯数据，零依赖）
 │   │   ├── nodes.py              ← 节点函数（chat/ask_choice/execute/lint/review/suggest）
-│   │   ├── router.py             ← LLM 条件边路由（基于 tool_calls）
+│   │   ├── router.py             ← 条件边路由逻辑（基于 tool_calls）
 │   │   └── context.py            ← Explore/Plan/Execute context 约束
 │   │
 │   ├── models/                   ← 数据类
@@ -61,7 +61,9 @@ flypig/
 │   │   ├── config_service.py     ← 配置管理
 │   │   ├── session_service.py    ← 会话状态管理
 │   │   ├── policy_service.py     ← Casbin 封装
-│   │   └── orchestration_service.py ← 图构建 + 对抗建议 + build_graph()
+│   │   ├── graph_factory.py      ← ★ 图构建：组装 nodes + router → 编译 StateGraph
+│   │   ├── suggestion_engine.py  ← ★ 评分→建议映射：generate_suggestion()
+│   │   └── hook_service.py       ← ★ 钩子管理器：register / emit
 │   └── dto/
 │       ├── chat_dto.py           ← 数据传输对象
 │       └── config_dto.py
@@ -72,19 +74,24 @@ flypig/
 │   │   ├── anthropic.py          ← Claude 适配
 │   │   └── local.py              ← 本地模型（Ollama/vLLM, 预留）
 │   │
-│   ├── tools/                    ← 工具执行
+│   ├── tools/                    ← 工具执行（按功能分组）
+│   │   ├── __init__.py
 │   │   ├── executor.py           ← ToolExecutor 主类（调度器）
-│   │   ├── tool_bash.py          ← subprocess 命令（无 PTY）
-│   │   ├── tool_file.py          ← read/write/edit 文件（Aider 或 git apply）
-│   │   ├── tool_search.py        ← grep + find_files
-│   │   ├── tool_task.py          ← task_status + task_list + task_log
-│   │   ├── tool_ask_choice.py    ← Explore 选择题（§3.6.3）
-│   │   ├── tool_change_review.py ← 变更审查数据生成（§3.8.7）
-│   │   ├── tool_lint.py          ← 代码规范自动检查（Ruff, §3.8.8）
-│   │   ├── tool_change_score.py  ← 变更影响评分（§3.8.9）
-│   │   ├── tool_extract_archive.py ← 压缩解压 + Zip Slip 防护（§3.7.2）
-│   │   ├── tool_mcp_manager.py   ← MCP 自助安装（§3.7.1.1）
-│   │   ├── mcp_loader.py         ← MCP 加载器
+│   │   ├── edit/                 ← 代码编辑工具
+│   │   │   ├── tool_file.py          ← read/write/edit（Aider 或 git apply）
+│   │   │   ├── tool_change_review.py ← 变更审查数据生成（§3.8.7）
+│   │   │   ├── tool_lint.py          ← 代码规范自动检查（Ruff, §3.8.8）
+│   │   │   └── tool_change_score.py  ← 变更影响评分（§3.8.9）
+│   │   ├── search/               ← 搜索调研工具
+│   │   │   ├── tool_search.py        ← grep + find_files
+│   │   │   └── tool_ask_choice.py    ← Explore 选择题（§3.6.3）
+│   │   ├── system/               ← 系统工具
+│   │   │   ├── tool_bash.py          ← subprocess 命令（无 PTY）
+│   │   │   ├── tool_task.py          ← task_status + task_list + task_log
+│   │   │   └── tool_extract_archive.py ← 压缩解压 + Zip Slip 防护（§3.7.2）
+│   │   ├── mcp/                  ← MCP 协议工具
+│   │   │   ├── mcp_loader.py         ← MCP 加载器
+│   │   │   └── tool_mcp_manager.py   ← MCP 自助安装（§3.7.1.1）
 │   │   └── utils.py              ← strip_ansi, _best_decode, _decode_clixml
 │   │
 │   ├── sandbox/                  ← Docker 沙箱

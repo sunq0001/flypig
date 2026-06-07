@@ -189,11 +189,25 @@ MVP（第 1 轮）:              方案二（git apply）
 | git 操作 | **Aider 内部 git 管理** 或 **标准 git** | 市面方案（复用） |
 | diff 格式 | **search/replace** 或 **unified diff** | 标准（RFC） |
 
-## 工具文件列表
+## 工具文件列表（按功能分组）
 
-- `tool_bash.py` — subprocess 命令执行
-- `tool_file.py` — read/write/edit 文件（基于 Aider 或 git apply）
-- `tool_search.py` — grep + find_files
-- `tool_task.py` — task_status + task_list + task_log
-- `tool_extract_archive.py` — 压缩解压（含 Zip Slip 防护）
-- `mcp_loader.py` — MCP 加载器（预留）
+```
+infrastructure/tools/
+├── executor.py                        # ToolExecutor 主类（调度器）
+├── edit/                              # 代码编辑工具
+│   ├── tool_file.py                   # read/write/edit（Aider 或 git apply）
+│   ├── tool_change_review.py          # 变更审查数据生成
+│   ├── tool_lint.py                   # 代码规范检查（Ruff）
+│   └── tool_change_score.py           # 变更影响评分
+├── search/                            # 搜索调研工具
+│   ├── tool_search.py                 # grep + find_files
+│   └── tool_ask_choice.py             # Explore 选择题
+├── system/                            # 系统工具
+│   ├── tool_bash.py                   # subprocess 命令（无 PTY）
+│   ├── tool_task.py                   # task_status + task_list + task_log
+│   └── tool_extract_archive.py        # 压缩解压 + Zip Slip 防护
+├── mcp/                               # MCP 协议工具
+│   ├── mcp_loader.py                  # MCP 加载器
+│   └── tool_mcp_manager.py            # MCP 自助安装
+└── utils.py                           # strip_ansi, _best_decode, _decode_clixml
+```

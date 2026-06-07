@@ -43,30 +43,27 @@
 │              APPLICATION LAYER (业务编排)                                  │
 │                                                                          │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │  OrchestrationService                                            │   │
-│  │  ├─ build_graph() → 统一 LangGraph（条件路由非固定流水线）         │   │
-│  │  ├─ generate_suggestion() → 根据 ChangeScore 生成对抗建议卡      │   │
-│  │  └─ handle_adversarial_decision() → 用户选择后执行优化            │   │
+│  │  GraphFactory                                                     │   │
+│  │  ├─ build_graph() → 导入 domain/agent/ 下 nodes + router         │   │
+│  │  │  + context → 编译 StateGraph（路由注册在应用层完成）            │   │
+│  │  └─ 工具变化时重建图（DynamicGraphFactory）                        │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
-│  ┌────────────────────────────────┐ ┌────────────┐ ┌──────────┐        │
-│  │  LangGraph (统一 Graph)         │ │ConfigSvc   │ │SessionSvc│        │
-│  │  chat → router(条件边) →       │ │(配置管理)  │ │(会话持久) │        │
-│  │    ask_choice / execute /      │ ├────────────┤ ├──────────┤        │
-│  │    lint / change_review /      │ │PolicySvc   │ │          │        │
-│  │    suggestion / approval       │ │(权限规则)  │ │          │        │
-│  │  LLM 在 context 约束内自由跳转   │ └────────────┘ └──────────┘        │
-│  └────────────────────────────────┘                                    │
+│  ┌──────────────────────────────┐ ┌──────────────────┐ ┌─────────────┐  │
+│  │  SuggestionEngine            │ │  HookService     │ │ ConfigSvc   │  │
+│  │  generate_suggestion(score)  │ │  register/emit   │ │ SessionSvc  │  │
+│  │  → SuggestionCard            │ │  (通用事件钩子)   │ │ PolicySvc   │  │
+│  └──────────────────────────────┘ └──────────────────┘ └─────────────┘  │
 │                                                                          │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                     DOMAIN LAYER (领域层)                                  │
 │                                                                          │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │  LangGraph: StateSchema + ToolNode + conditional_edges           │   │
-│  │  + Checkpointer(SqliteSaver) + Human-in-the-loop + Streaming    │   │
-│  │  AgentState: messages, mode, persona, phase,                     │   │
-│  │    pending_approval, change_review, rejected_changes,            │   │
-│  │    change_score, adversarial_suggestion, test_results            │   │
+│  │  LangGraph: state.py(AgentState) + nodes.py + router.py +       │   │
+│  │  context.py + ToolNode + Checkpointer(SqliteSaver)              │   │
+│  │  AgentState: messages, turn_id, mode, persona,                  │   │
+│  │    pending_approval, change_review, rejected_changes,           │   │
+│  │    change_score, adversarial_suggestion, test_results           │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 │  ┌───────────────────┐ ┌────────────────────┐ ┌────────────────────────┐│
 │  │  Interfaces       │ │  Models            │ │  PromptManager         ││
@@ -77,6 +74,7 @@
 │  │  IKnowledgeStore  │ │  ExecutionMode     │ │  architect             ││
 │  │  IHistoryStore    │ │  ConversationState │ │  documenter            ││
 │  │  IAgent / IHook   │ │  exceptions.py     │ │                        ││
+│  │  + HookContext    │ │                    │ │                        ││
 │  └───────────────────┘ └────────────────────┘ └────────────────────────┘│
 │  ┌──────────────────────────────────────────────────────────────────┐   │
 │  │  Policies & Casbin: model.conf + policy.csv                      │   │
@@ -87,17 +85,16 @@
 │                  INFRASTRUCTURE LAYER (基础设施层)                          │
 │                                                                          │
 │  ┌────────┐ ┌──────────────────────────┐ ┌─────────┐ ┌──────────────┐  │
-│  │ Model  │ │  Tools(全部工具)          │ │ Sandbox │ │ Repository   │  │
-│  │ Adapter│ │  bash/file/search/task   │ │ (Docker)│ │ SQLAlchemy   │  │
-│  │(多种)  │ │  ask_choice/change_review│ │         │ │ + IHistory   │  │
-│  │        │ │  lint/change_score       │ │         │ │   Store(预留)│  │
-│  │        │ │  extract_archive/mcp    │ │         │ │              │  │
-│  │        │ │  _loader/tool_mcp_mgr   │ │         │ │              │  │
+│  │ Model  │ │  Tools（按功能分组）       │ │ Sandbox │ │ Repository   │  │
+│  │ Adapter│ │  edit/  : 文件编辑+审查    │ │ (Docker)│ │ SQLAlchemy   │  │
+│  │(多种)  │ │  search/: 搜索+选择题      │ │         │ │ + IHistory   │  │
+│  │        │ │  system/: bash+任务+解压   │ │         │ │   Store(预留)│  │
+│  │        │ │  mcp/   : MCP 加载器+管理  │ │         │ │              │  │
 │  └────────┘ └──────────────────────────┘ └─────────┘ └──────────────┘  │
 │  ┌────────┐ ┌─────────────────────┐ ┌──────────┐ ┌──────────────────┐  │
 │  │ Cost   │ │ PermissionChecker   │ │ Terminal │ │ Background +    │  │
-│  │ Tracker│ │ file/term/git/test  │ │ (用户PTY)│ │ Casbin Setup    │  │
-│  │        │ │ allow/ask/deny      │ │          │ │                 │  │
+│  │ Tracker│ │ file/term/git/test  │ │ (用户PTY)│ │ HookService      │  │
+│  │        │ │ allow/ask/deny      │ │          │ │ 实现(hooks.py)   │  │
 │  └────────┘ └─────────────────────┘ └──────────┘ └──────────────────┘  │
 │                                                                          │
 ├─────────────────────────────────────────────────────────────────────────┤
@@ -105,7 +102,7 @@
 │  Container.configure() → 装配:                                          │
 │    IModel / IToolExecutor / ICostTracker / IRepository                  │
 │    IHistoryStore(NoOp) / PolicyService / PromptManager                 │
-│    IKnowledgeStore(NoOp) / OrchestrationService                        │
+│    IKnowledgeStore(NoOp) / GraphFactory / SuggestionEngine / HookService │
 │  create_agent() → 返回 IAgent (一张图统一 Graph，context 约束内 LLM 决定路径)
 └─────────────────────────────────────────────────────────────────────────┘
 ```

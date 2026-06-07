@@ -12,15 +12,16 @@
 
 ## 节点定义
 
-| 节点 | 职责 | 所在文件 |
-|------|------|---------|
-| `chat` | LLM 对话（所有路径起点） | `nodes.py` |
-| `ask_choice` | Explore：出选择题 | `nodes.py` |
-| `execute` | Execute：调工具（ToolNode） | `nodes.py` |
-| `lint` | 自动格式化 | `nodes.py` |
-| `change_review` | 变更审查 | `nodes.py` |
-| `suggestion` | 对抗建议 | `nodes.py` |
-| `approval` | 审批（伪装成 tool_call） | `nodes.py` |
+| 节点 | 职责 | 所属层 | 文件 |
+|------|------|--------|------|
+| `chat` | LLM 对话（所有路径起点） | Domain | `domain/agent/nodes.py` |
+| `ask_choice` | Explore：出选择题 | Domain | `domain/agent/nodes.py` |
+| `execute` | Execute：调工具（ToolNode） | Domain | `domain/agent/nodes.py` |
+| `lint` | 自动格式化 | Domain | `domain/agent/nodes.py` |
+| `change_review` | 变更审查 | Domain | `domain/agent/nodes.py` |
+| `suggestion` | 对抗建议 | Domain | `domain/agent/nodes.py` |
+| `approval` | 审批（伪装成 tool_call） | Domain | `domain/agent/nodes.py` |
+| **图构建** | 编译 StateGraph（导入 nodes + router） | **Application** | `application/services/graph_factory.py` |
 
 ## Router（路由）
 
@@ -37,7 +38,7 @@ def router(state: AgentState) -> str:
     return "chat"
 ```
 
-## AgentState
+## AgentState（domain/agent/state.py）
 
 ```python
 class AgentState(TypedDict):
