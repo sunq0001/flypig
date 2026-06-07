@@ -4,6 +4,33 @@
 > **关联文档**: `backend-modules.md`（工具列表）、`adversarial-system.md`（lint/change_review 工具）
 > 改工具实现时，需同步检查 backend-modules.md 中的工具列表。
 
+## 核心哲学：工具调用是 AI 的反射外延
+
+AI 调用工具 = AI 的思考过程。工具执行结果（包括报错）原样返回给 AI，不做任何预处理：
+
+```
+AI 决定调 tool_bash("ls -la")
+  ↓
+ToolExecutor 透传到具体实现（subprocess 或 MCP server）
+  ↓
+执行结果原样返回（成功/报错都不加工）
+  ↓
+喂回 AI loop
+  ↓
+AI 自行判断：
+  ├── 报错了？→ 读错误信息 → 决定修代码 / 换参数 / 换方案 / 问用户
+  ├── 成功但要继续？→ 调下一个工具
+  └── 任务完成？→ 给用户输出总结
+```
+
+**不需要**：
+- 错误计数器（AI 自己知道失败和上次的区别）
+- 错误前缀分类（AI 能读懂 `UnboundLocalError`）
+- 自愈特殊流程（AI 有 read/edit 工具，自己会修）
+- 重试阈值 / 系统提示词规则（全是硬编码中间层，破坏反射的自然性）
+
+ToolExecutor 就是一条直连线：**收到 tool_call → 执行 → 原始结果返回给 AI**，不做任何加工或状态管理。
+
 ## Subprocess 策略
 
 AI 所有命令操作统一使用 subprocess，不再有 PTY 路径。
