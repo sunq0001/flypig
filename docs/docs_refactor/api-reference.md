@@ -147,6 +147,30 @@ def check_permission(tool: str, params: dict) -> str:
 
 采用 Casbin (pycasbin) 作为权限引擎。用户通过对话配置规则动态更新策略。规则过多时使用数据库 adapter（非纯 CSV），AI 辅助生成新策略规则。
 
+### 默认 policy.csv 示例
+
+```csv
+p, ai, write_file:.zshenv, deny
+p, ai, write_file:.zlogin, deny
+p, ai, write_file:.zprofile, deny
+p, ai, write_file:.bashrc, deny
+p, ai, write_file:.bash_profile, deny
+p, ai, write_file:.npmrc, deny
+p, ai, write_file:.yarnrc, deny
+p, ai, write_file:bunfig.toml, deny
+p, ai, write_file:.bazelrc, deny
+p, ai, terminal:rm -rf /, deny
+p, ai, git:push --force, ask
+p, ai, terminal:git push --force, ask
+p, ai, file:delete *, ask
+p, ai, terminal:rm *, ask
+```
+
+> 规则读法：`p, 主体, 对象, 动作`
+> `deny` = AI 不能执行（除非用户明确要求并显式批准）
+> `ask` = AI 执行前弹审批卡片
+> 未匹配的规则默认 `allow`（AI 可以直接执行）
+
 ## 测试集成 API
 
 ```
