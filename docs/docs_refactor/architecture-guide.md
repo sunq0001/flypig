@@ -105,3 +105,7 @@ class ToolBash:
 | LangGraph 节点逻辑 | `langgraph-graph.md` → `domain/agent/state.py + nodes.py + router.py + context.py` |
 | 对抗建议生成 | `backend-modules.md` → `application/services/suggestion_engine.py` |
 | 钩子事件注册 | `backend-modules.md` → `application/services/hook_service.py` |
+| 配置即代码 | `backend-modules.md` → YAML + `@dataclass ModelConfig` |
+| 数据类型规范 | `backend-modules.md` → `@dataclass` 替代 `dict` |
+| 工具自动注册 | `subprocess-and-tools.md` → `@tool()` 装饰器 |
+| 文件编辑策略 | `subprocess-and-tools.md` → `FileEditStrategy` 策略模式 |

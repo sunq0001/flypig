@@ -3753,8 +3753,8 @@ class ToolBash:
 | **改图表渲染** | `static_vite/src/components/chat/MermaidDiagram.vue` + `composables/useMarkdownRender.js` |
 | **改代码规范检查** | `infrastructure/tools/tool_lint.py` + `pyproject.toml` (ruff 配置) |
 | **改变更评分逻辑** | `domain/models/change_score.py` + `infrastructure/tools/tool_change_score.py` |
-| **改对抗触发阈值** | `application/services/orchestration_service.py` |
-| **改模式选择逻辑** | `application/services/orchestration_service.py` (图构建+对抗建议) |
+| **改对抗触发阈值** | `application/services/suggestion_engine.py` |
+| **改图构建逻辑** | `application/services/graph_factory.py` |
 | **改选择题逻辑** | `infrastructure/tools/tool_ask_choice.py` |
 | **改模式配置(温度/工具)** | `domain/models/mode.py` (ExecutionMode 枚举) |
 | 改权限规则 | Casbin 策略文件 |
@@ -3765,8 +3765,19 @@ class ToolBash:
 | MCP 自助安装 | `infrastructure/tools/tool_mcp_manager.py` + `mcp.json` |
 | DI 容器装配 | `di/container.py` |
 | LangGraph 状态机 | `domain/agent/` |
+| 工具自动注册 | `infrastructure/tools/registry.py` → `@tool()` 装饰器 |
+| 模型配置 YAML | `model_registry.yaml` → `Config(ModelConfig)` |
+| 数据类型规范 | 所有返回 `dict` 的接口改 `@dataclass` |
+| 文件编辑策略 | `infrastructure/tools/edit/` → `FileEditStrategy` 策略模式 |
 
----
+### 9.4 编码风格建议
+
+| 改进点 | 方案 | 详细参考 |
+|--------|------|---------|
+| 工具自动注册 | `@tool()` 装饰器声明即注册 | `subprocess-and-tools.md` |
+| 配置即代码 | YAML 配置文件 + `@dataclass ModelConfig` | `backend-modules.md` |
+| 数据类替代 dict | 所有跨层传递数据用 `@dataclass` | `backend-modules.md` |
+| 策略模式 | 文件编辑三种方案统一 `FileEditStrategy` + `EditResult` | `subprocess-and-tools.md` |
 
 ## 十、分步迁移路线
 

@@ -72,6 +72,61 @@ infrastructure/model/
 └── local.py            # 本地模型（Ollama/vLLM，预留）
 ```
 
+## 配置即代码（Config as Code）
+
+模型配置不应硬编码，建议用 YAML + 数据类分离配置与代码：
+
+```yaml
+# model_registry.yaml
+models:
+  deepseek:
+    provider: openai-compatible
+    base_url: https://api.deepseek.com
+    default_model: deepseek-chat
+    temperature: { explore: 0.1, plan: 0.2, execute: 0.3 }
+  qwen:
+    provider: openai-compatible
+    base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+```
+
+```python
+@dataclass
+class ModelConfig:
+    provider: str
+    base_url: str
+    default_model: str
+    temperature: dict
+
+class Config:
+    def __init__(self, path="config.yaml"):
+        raw = yaml.safe_load(Path(path).read_text())
+        self.models = {k: ModelConfig(**v) for k, v in raw["models"].items()}
+```
+
+## 数据类型规范
+
+所有跨层传递的数据用 `@dataclass` 替代 `dict`，函数签名自文档化，IDE 自动补全：
+
+```python
+# 避免: def ask_choice(...) -> dict:  # 返回什么？要读实现
+# 采用: def ask_choice(...) -> ChoiceCard:  # 返回类型说明一切
+
+@dataclass
+class ChoiceCard:
+    id: str
+    question: str
+    options: list[Option]
+    multi_select: bool = False
+
+@dataclass
+class Option:
+    label: str
+    desc: str
+    value: str
+```
+
+同样适用于 ChangeReview、ChangeScore 等所有返回 `dict` 的接口。
+
 ## DI Container
 
 ```python

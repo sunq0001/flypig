@@ -181,6 +181,37 @@ MVP（第 1 轮）:              方案二（git apply）
 
 > 三者不冲突，可以共存：tool_file.py 内部可以有三层 fallback——先尝试结构化 AST 替换（方案三），失败则降级到 Aider 模糊匹配（方案一），再失败则降级到 git apply（方案二）。
 
+### 策略模式重构建议
+
+三种文件编辑方案建议用策略模式 + 统一结果类型，提高可读性和扩展性：
+
+```python
+@dataclass
+class EditResult:
+    success: bool
+    content: str
+    method_used: str     # "git_apply" / "aider" / "ast"
+    fallback_chain: list[str]
+
+class FileEditStrategy(ABC):
+    @abstractmethod
+    async def apply(self, path: str, old: str, new: str) -> EditResult: ...
+
+class GitApplyStrategy(FileEditStrategy): ...
+class AiderStrategy(FileEditStrategy): ...
+class ASTStrategy(FileEditStrategy): ...
+
+class FileEditor:
+    strategies: list[FileEditStrategy] = [ASTStrategy(), AiderStrategy(), GitApplyStrategy()]
+
+    async def edit(self, path, old, new) -> EditResult:
+        for strategy in self.strategies:
+            result = await strategy.apply(path, old, new)
+            if result.success:
+                return result
+        return EditResult(success=False, ...)
+```
+
 **技术栈**：
 
 | 模块 | 采用方案 | 类型 |
@@ -188,6 +219,33 @@ MVP（第 1 轮）:              方案二（git apply）
 | 文件编辑引擎 | **Aider (coder 模块)** 或 **git apply** | 市面方案（开源） |
 | git 操作 | **Aider 内部 git 管理** 或 **标准 git** | 市面方案（复用） |
 | diff 格式 | **search/replace** 或 **unified diff** | 标准（RFC） |
+
+## `@tool` 自动注册（元编程）
+
+当前设计需手动注册每个工具到 ToolExecutor。建议加装饰器实现声明即注册：
+
+```python
+# infrastructure/tools/registry.py
+_TOOL_REGISTRY: dict[str, type] = {}
+
+def tool(name=None, category="system", timeout=30):
+    def decorator(cls):
+        tool_name = name or cls.__name__.removeprefix("Tool").lower()
+        _TOOL_REGISTRY[tool_name] = cls
+        cls._meta = {"name": tool_name, "category": category, "timeout": timeout}
+        return cls
+    return decorator
+
+# 使用示例——加工具只需写文件+加 @tool()
+@tool(name="bash", category="system", timeout=30)
+class ToolBash:
+    async def __call__(self, cmd: str, cwd: str | None = None) -> str: ...
+
+# ToolExecutor 自动从注册表加载
+class ToolExecutor:
+    def get_available_tools(self):
+        return {name: cls() for name, cls in _TOOL_REGISTRY.items()}
+```
 
 ## 工具文件列表（按功能分组）
 
