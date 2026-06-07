@@ -93,20 +93,17 @@
 │              APPLICATION LAYER (业务编排)                                  │
 │                                                                          │
 │  ┌──────────────────────────────────────────────────────────────────┐   │
-│  │  OrchestrationService                                            │   │
-│  │  ├─ build_graph() → 统一 LangGraph（条件路由非固定流水线）         │   │
-│  │  ├─ generate_suggestion() → 根据 ChangeScore 生成对抗建议卡      │   │
-│  │  └─ handle_adversarial_decision() → 用户选择后执行优化            │   │
+│  │  GraphFactory                                                    │   │
+│  │  ├─ build_graph() → 导入 domain/agent/ 下 nodes + router        │   │
+│  │  │  + context → 编译 StateGraph（路由注册在应用层完成）           │   │
+│  │  └─ 工具变化时重建图（DynamicGraphFactory）                       │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
-│  ┌────────────────────────────────┐ ┌────────────┐ ┌──────────┐        │
-│  │  LangGraph (统一 Graph)         │ │ConfigSvc   │ │SessionSvc│        │
-│  │  chat → router(条件边) →       │ │(配置管理)  │ │(会话持久) │        │
-│  │    ask_choice / execute /      │ ├────────────┤ ├──────────┤        │
-│  │    lint / change_review /      │ │PolicySvc   │ │          │        │
-│  │    suggestion / approval       │ │(权限规则)  │ │          │        │
-│  │  LLM 在 context 约束内自由跳转   │ └────────────┘ └──────────┘        │
-│  └────────────────────────────────┘                                    │
+│  ┌──────────────────────────────┐ ┌──────────────────┐ ┌─────────────┐  │
+│  │  SuggestionEngine            │ │  HookService     │ │ ConfigSvc   │  │
+│  │  generate_suggestion(score)  │ │  register/emit   │ │ SessionSvc  │  │
+│  │  → SuggestionCard            │ │  (通用事件钩子)   │ │ PolicySvc   │  │
+│  └──────────────────────────────┘ └──────────────────┘ └─────────────┘  │
 │                                                                          │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                     DOMAIN LAYER (领域层)                                  │
@@ -154,7 +151,7 @@
 │  Container.configure() → 装配:                                          │
 │    IModel / IToolExecutor / ICostTracker / IRepository                  │
 │    IHistoryStore(NoOp) / PolicyService / PromptManager                 │
-│    IKnowledgeStore(NoOp) / OrchestrationService                        │
+│    IKnowledgeStore(NoOp) / GraphFactory / SuggestionEngine / HookService │
 │  create_agent() → 返回 IAgent (一张图统一 Graph，context 约束内 LLM 自行决定路径)
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -211,7 +208,10 @@ flypig/application/
 │   ├── chat_service.py          # 对话编排：调用 Agent → 事件分发
 │   ├── config_service.py        # 配置管理：加载、保存、模型切换
 │   ├── session_service.py       # 会话状态管理（支持多会话）
-│   └── orchestration_service.py # 图构建 + 对抗建议 + 模式间切换
+│   ├── graph_factory.py         # 图构建：导入 nodes + router → 编译 StateGraph
+│   ├── suggestion_engine.py     # 评分→建议映射：generate_suggestion()
+│   ├── hook_service.py          # 钩子管理器：register / emit
+│   └── policy_service.py        # Casbin 封装
 └── dto/
     ├── chat_dto.py              # 数据传输对象
     └── config_dto.py
@@ -222,22 +222,27 @@ flypig/application/
 | `ChatService` | 接收用户输入 → 调用 LangGraph（LLM 自行决定路径）→ 事件回调 | ≤60 |
 | `ConfigService` | Config 初始化、Model 解析、API Key 管理 | ≤80 |
 | `SessionService` | 多会话创建/切换/销毁/持久化 | ≤80 |
-| `OrchestrationService` | 图构建（三种 context）+ 对抗建议生成 + `build_graph(mode)` | ≤100 |
+| `GraphFactory` | 图构建：导入 nodes + router → 编译 StateGraph（原 OrchestrationService.build_graph） | ≤80 |
+| `SuggestionEngine` | 评分→建议映射：generate_suggestion() | ≤40 |
+| `HookService` | 钩子管理器：register(event_type, hook) / emit(event_type, data) | ≤40 |
 
-**OrchestrationService 核心职责：**
+
+**GraphFactory 核心职责：**
 
 ```python
-class OrchestrationService:
-    """图构建 + 对抗建议 + 模式间切换"""
+class GraphFactory:
+    """图构建——导入 domain/agent/ 下的节点和路由，编译 StateGraph"""
 
     def build_graph(self) -> StateGraph:
         """构建统一的 LangGraph——不是三张不同的图，而是一张图三个 context
         LLM 通过条件边自行决定路径，不需要外部 select_mode() 预分类。"""
-        # 一个入口，三条路径由 LLM 自行选择
+        from domain.agent.nodes import chat_node, choice_node, execute_node, lint_node, review_node, suggest_node, approval_node
+        from domain.agent.router import router
+
         workflow = StateGraph(AgentState)
         workflow.add_node("chat", chat_node)          # LLM 对话（所有路径起点）
         workflow.add_node("ask_choice", choice_node)  # Explore：出选择题
-        workflow.add_node("execute", execute_node)    # Execute：调工具
+        workflow.add_node("execute", DynamicToolNode(tools))    # Execute：调工具
         workflow.add_node("lint", lint_node)          # LINT 自动修复
         workflow.add_node("change_review", review_node)  # 变更审查
         workflow.add_node("suggestion", suggest_node) # 对抗建议
@@ -245,13 +250,46 @@ class OrchestrationService:
         workflow.add_conditional_edges("chat", router) # LLM 决定下一步
         return workflow.compile()
 
+    def rebuild_if_tools_changed(self):
+        """工具变化时重建图（DynamicGraphFactory）"""
+        ...
+```
+
+**SuggestionEngine：**
+
+```python
+class SuggestionEngine:
+    """评分→建议映射——原 OrchestrationService.generate_suggestion()"""
+
     def generate_suggestion(self, score: ChangeScore) -> dict:
         """根据变更评分生成对抗建议（3.8.9）"""
-        ...
+        # 见 adversarial-system.md generate_suggestion() 完整实现
+```
 
-    def build_graph_for_mode(self, mode: str) -> StateGraph:
-        """[仅测试] 按模式构建不同的 Graph——生产环境不使用，仅用于单元测试验证各模式子链"""
-        ...
+**HookService：**
+
+```python
+@dataclass
+class HookContext:
+    event_type: str         # "pre_agent_run" / "post_tool_call" / "sse_output" / ...
+    timestamp: float
+    data: dict
+    state: dict | None = None
+
+class HookService:
+    """通用钩子管理器——业务场景决定何时触发"""
+
+    _hooks: dict[str, list[IHook]] = {}
+
+    @classmethod
+    def register(cls, event_type: str, hook: IHook):
+        cls._hooks.setdefault(event_type, []).append(hook)
+
+    @classmethod
+    async def emit(cls, event_type: str, data: dict, state=None):
+        ctx = HookContext(event_type=event_type, timestamp=time.time(), data=data, state=state)
+        for hook in cls._hooks.get(event_type, []):
+            await hook.on_event(ctx)
 ```
 
 ### 3.3 Domain Layer — 核心领域逻辑
@@ -263,11 +301,11 @@ flypig/domain/
 │   ├── imodel.py            # IModel 接口（模式无关的 stream 调用）
 │   ├── itool_executor.py    # IToolExecutor 接口
 │   ├── icost_tracker.py     # ICostTracker 接口
-│   ├── ihook.py             # IHook（事件钩子）接口
+│   ├── ihook.py             # IHook 接口 + HookContext 数据类（通用事件钩子）
 │   └── ihistory_store.py    # IHistoryStore 接口（3.9.1 预留）
 │
-├── agent/                   ← 统一图，非三张独立图
-│   ├── graph.py             # 统一 StateGraph + 条件边路由
+├── agent/                   ← 领域层只定义节点和状态（图构建在应用层）
+│   ├── state.py             # AgentState TypedDict（纯数据，零依赖）
 │   ├── nodes.py             # 所有节点函数（chat/ask_choice/execute/lint/review/suggest）
 │   ├── router.py            # LLM 条件边路由
 │   └── context.py           # Explore/Plan/Execute context 约束（温度+工具限制）
@@ -604,9 +642,11 @@ class Container:
         policy = PolicyService(config.permissions)      # 权限规则
         prompts = PromptManager()                       # 多角色 prompt
         knowledge = NoOpKnowledgeStore()                # 知识库空实现
-        orchestration = OrchestrationService(           # 模式选择 + 切换
-            model=model, prompts=prompts, policy=policy
+        graph_factory = GraphFactory(
+            tools=tools, prompts=prompts, policy=policy
         )
+        suggestion_engine = SuggestionEngine()
+        hook_service = HookService()
         cls.register("config", config, singleton=True)
         cls.register("model", model, singleton=True)
         cls.register("cost_tracker", cost_tracker, singleton=True)
@@ -616,7 +656,9 @@ class Container:
         cls.register("prompts", prompts, singleton=True)
         cls.register("knowledge_store", knowledge, singleton=True)
         cls.register("history_store", NoOpHistoryStore(), singleton=True)
-        cls.register("orchestration", orchestration, singleton=True)
+        cls.register("graph_factory", graph_factory, singleton=True)
+        cls.register("suggestion_engine", suggestion_engine, singleton=True)
+        cls.register("hook_service", hook_service, singleton=True)
 
     @classmethod
     def create_agent(cls, workspace=None, hooks=None) -> "IAgent":
@@ -2567,7 +2609,9 @@ state = PromptManager.switch(state, "reviewer", {"files_changed": 5})
 | | **历史搜索预留** | **SQLite FTS5 / PostgreSQL tsvector** | 市面方案 | IHistoryStore 接口定义，实现用数据库全文索引 |
 | | **CostTracker** | **自研（~30 行）** | 业务定制 | 定价公式高度定制，无通用替代；Litellm 太重 |
 | | **PromptManager** | **自研（~50 行）** | 业务定制 | 多角色对抗切换，无现成方案 |
-| | **OrchestrationService** | **自研（~100 行）** | 业务定制 | LangGraph 之上的业务编排，无替代方案 |
+| | **GraphFactory** | **自研（~80 行）** | 业务定制 | 导入 domain/agent 节点编译 StateGraph |
+| | **SuggestionEngine** | **自研（~40 行）** | 业务定制 | ChangeScore → 对抗建议卡片映射 |
+| | **HookService** | **自研（~40 行）** | 业务定制 | 通用钩子管理器，register/emit |
 | **工具** | bash 执行 | **subprocess(标准库)** | 市面方案 | Python 内置 |
 | | 文件操作 | **Aider 编辑引擎 或 git apply** | 市面方案 | 开源方案（Aider 或标准 git apply + unified diff），详见 3.4.3 |
 | | 后台任务 | **subprocess.Popen + 自研 buffer** | 混合 | 标准库执行 + 自研环形缓冲区 |
@@ -2582,7 +2626,7 @@ state = PromptManager.switch(state, "reviewer", {"files_changed": 5})
 
 **总结**（修正后）：
 - **开源方案 ~94%** — LangGraph + Casbin + dependency-injector + Element Plus + Mermaid.js + Vercel AI SDK + **Aider(编辑引擎)** + **tree-sitter(结构化编辑)** + Ruff + Quart + SQLAlchemy + marked + highlight.js + Docker...
-- **真正自研 ~4%** — 多角色 PromptManager(~50行)、CostTracker(~30行)、OrchestrationService(~100行)、ChangeScore(~40行)、ChangeReview(~60行)。这些是业务核心逻辑，确实没有现成方案替代。
+- **真正自研 ~4%** — 多角色 PromptManager(~50行)、CostTracker(~30行)、GraphFactory(~80行)+SuggestionEngine(~40行)+HookService(~40行)、ChangeScore(~40行)、ChangeReview(~60行)。这些是业务核心逻辑，确实没有现成方案替代。
 - **薄包装不计入** — tool_ask_choice(~20行返回值)、tool_lint(~20行调Ruff CLI)、IHistoryStore(接口定义)、git diff 解析。这些都是标准库/开源工具的薄包装，不算真正的自研。
 
 ---
@@ -3248,7 +3292,7 @@ flypig/
 │       ├── config_service.py
 │       ├── session_service.py
 │       ├── policy_service.py   ← Casbin 封装
-│       └── orchestration_service.py  ← 预留
+│       └── graph_factory.py    ← 预留
 
 ├── infrastructure/           ← 基础设施层
 │   ├── model/                 ← 模型适配
@@ -3403,8 +3447,11 @@ flypig/                           ← 项目根
 │   │   ├── chat_service.py      ← 对话编排
 │   │   ├── config_service.py    ← 配置管理
 │   │   ├── session_service.py   ← 会话状态管理
+│   │   ├── graph_factory.py     ← 图构建：导入 nodes + router → 编译 StateGraph
+│   │   ├── suggestion_engine.py ← 评分→建议映射：generate_suggestion()
+│   │   ├── hook_service.py      ← 钩子管理器：register / emit
 │   │   ├── policy_service.py    ← Casbin 封装
-│   │   └── orchestration_service.py  ← 图构建 + 对抗建议
+│   │   └── chat_service.py      ← 对话编排
 │   └── dto/
 │       ├── chat_dto.py          ← 数据传输对象
 │       └── config_dto.py
@@ -3703,7 +3750,7 @@ class ToolBash:
 | **重写** terminal.py（删除 PTY 注入，仅保留用户手动 PTY 的 WebSocket 管理） | 大幅精简 |
 | 新增 infrastructure/tools/tool_bash.py（subprocess 命令执行） | 新文件（若未在 Step 2 做） |
 | 新增 infrastructure/tools/tool_task.py（后台任务监控） | 新文件（若未在 Step 2 做） |
-| 注册 orchestration_service.py（图构建 + 对抗建议）到 DI 容器 | 新服务 |
+| 注册 graph_factory.py + suggestion_engine.py + hook_service.py 到 DI 容器 | 新服务 |
 
 ### Step 5：前端 Vite 迁移 + Vercel AI SDK + 富内容组件
 
