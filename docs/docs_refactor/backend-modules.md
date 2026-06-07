@@ -160,3 +160,88 @@ _TOOL_TIMEOUTS = {"read_file": 5, "bash": 30, "grep": 30, "write_file": 10}
 @app.route("/health")
 @app.route("/ready")
 ```
+
+### 断路器（Circuit Breaker）
+
+模型 API 连续失败时自动熔断，防止级联故障：
+
+```python
+@dataclass
+class CircuitBreakerState:
+    failure_count: int = 0
+    last_failure_time: float = 0
+    is_open: bool = False               # 熔断开启
+    half_open_attempts: int = 0
+
+_CIRCUIT_BREAKERS: dict[str, CircuitBreakerState] = {}
+
+def circuit_breaker(name: str, failure_threshold=5, recovery_timeout=60):
+    """装饰器：API 调用连续失败 threshold 次后熔断 recovery_timeout 秒"""
+    def decorator(func):
+        async def wrapper(*args, **kwargs):
+            state = _CIRCUIT_BREAKERS.setdefault(name, CircuitBreakerState())
+            if state.is_open:
+                elapsed = time.time() - state.last_failure_time
+                if elapsed < recovery_timeout:
+                    raise CircuitBreakerError(f"{name} 熔断中，剩余 {recovery_timeout - elapsed:.0f}s")
+                state.is_open = False  # 尝试半开
+            try:
+                result = await func(*args, **kwargs)
+                state.failure_count = 0
+                return result
+            except Exception as e:
+                state.failure_count += 1
+                state.last_failure_time = time.time()
+                if state.failure_count >= failure_threshold:
+                    state.is_open = True
+                raise
+        return wrapper
+    return decorator
+
+class CircuitBreakerError(FlyPigException): pass
+```
+
+使用场景：`IModel.chat_stream()` 外层加 `@circuit_breaker("chat_stream", failure_threshold=5, recovery_timeout=60)`。
+
+### 重试机制（Retry）
+
+工具执行因网络抖动/临时资源不足失败时自动重试：
+
+```python
+async def retry(func, max_retries=2, backoff=1.0, retryable_exceptions=(TimeoutError, ConnectionError)):
+    """重试装饰器：指数退避重试"""
+    for attempt in range(max_retries + 1):
+        try:
+            return await func()
+        except retryable_exceptions as e:
+            if attempt == max_retries:
+                raise
+            await asyncio.sleep(backoff * (2 ** attempt))
+```
+
+使用场景：`tool_bash.py` 的 subprocess 执行、`tool_file.py` 的文件写入。
+
+### 监控（Metrics）
+
+生产环境通过 Prometheus 暴露性能指标：
+
+| 指标 | 类型 | 说明 |
+|------|------|------|
+| `flypig_requests_total` | Counter | 总请求数，按 endpoint/status 标记 |
+| `flypig_request_duration_seconds` | Histogram | 请求延迟分布 |
+| `flypig_tool_calls_total` | Counter | 工具调用次数，按 tool/mode 标记 |
+| `flypig_llm_tokens_total` | Counter | LLM token 消耗，按 model 标记 |
+| `flypig_circuit_breaker_state` | Gauge | 断路器状态（0=关闭, 1=开启, 2=半开） |
+
+```python
+# application/services/metrics.py
+from prometheus_client import Counter, Histogram, Gauge, start_http_server
+
+requests_total = Counter("flypig_requests_total", "Total requests", ["endpoint", "status"])
+request_duration = Histogram("flypig_request_duration_seconds", "Request latency", ["endpoint"])
+tool_calls_total = Counter("flypig_tool_calls_total", "Tool calls", ["tool", "mode"])
+llm_tokens_total = Counter("flypig_llm_tokens_total", "LLM tokens", ["model"])
+circuit_breaker_state = Gauge("flypig_circuit_breaker_state", "Circuit breaker state", ["name"])
+```
+
+暴露端点：`/metrics`（由 prometheus_client 自动提供）。

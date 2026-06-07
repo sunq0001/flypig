@@ -31,13 +31,16 @@
 | | 历史搜索预留 | **SQLite FTS5 / PostgreSQL tsvector** | 市面方案 | IHistoryStore 接口定义，实现用数据库全文索引 |
 | | CostTracker | **自研（~30 行）** | 业务定制 | 定价公式高度定制，Litellm 太重 |
 | | PromptManager | **自研（~50 行）** | 业务定制 | 多角色对抗切换，无现成方案 |
-| | OrchestrationService | **自研（~100 行）** | 业务定制 | LangGraph 之上的业务编排 |
+| | OrchestrationService（已拆分为三） | | | 原三职合一服务拆为 GraphFactory+SuggestionEngine+HookService |
 | **工具** | bash 执行 | **subprocess（标准库）** | 市面方案 | Python 内置，无 PTY |
 | | 文件操作 | **Aider 编辑引擎 或 git apply** | 市面方案 | 开源方案（Aider 或标准 git apply + unified diff） |
 | | 后台任务 | **subprocess.Popen + 自研 buffer** | 混合 | 标准库执行 + 自研环形缓冲区 |
 | | 代码规范检查 | **Ruff CLI** | 市面方案 | subprocess 调用 ruff --fix，自动修复 |
 | | 文件上传 | **Element Plus Upload** | 市面方案 | 前端拖拽，后端接收解压 |
 | | 压缩解压 | **zipfile/tarfile/py7zr** | 市面方案 | 标准库 + py7zr，含 Zip Slip 防护 |
+| | **断路器** | **自研 @circuit_breaker** | 业务定制 | 调用连续失败 5 次自动熔断 60s |
+| | **重试机制** | **自研 async retry** | 业务定制 | 网络抖动自动重试，指数退避 |
+| | **监控** | **prometheus_client** | 市面方案 | Counter/Histogram/Gauge，暴露 /metrics |
 | | 选择题卡片 | **自研 tool_ask_choice** | 业务定制 | 核心 UX 模式，~20 行返回值 |
 | | MCP 协议 | **社区标准（mcp.json）** | 市面方案 | 不自研协议；[v1] 提示用户手动安装 |
 | | 工具路由 | **LangGraph ToolNode** | 市面方案 | 标准 LangGraph tool node |
@@ -47,5 +50,5 @@
 ## 总结
 
 - **开源方案 ~94%** — LangGraph + Casbin + dependency-injector + Element Plus + Mermaid.js + Vercel AI SDK + Ruff + Quart + SQLAlchemy + marked + highlight.js + Docker...
-- **真正自研 ~4%** — PromptManager(~50行)、CostTracker(~30行)、OrchestrationService(~100行)、ChangeScore(~40行)、ChangeReview(~60行)
+- **真正自研 ~4%** — PromptManager(~50行)、CostTracker(~30行)、GraphFactory(~80行)+SuggestionEngine(~40行)+HookService(~40行)、ChangeScore(~40行)、ChangeReview(~60行)
 - **薄包装不计入** — tool_ask_choice(~20行)、tool_lint(~20行调Ruff)、IHistoryStore(接口定义)

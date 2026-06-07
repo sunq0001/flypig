@@ -784,7 +784,7 @@ workflow.add_conditional_edges("chat", router)
 
 ```
 旧方案： 用户输入 → select_mode() 关键词匹配 → 在三个模式中选一个
-    → 构建对应 Graph → 执行（路径固定，切换需要 OrchestrationService 介入）
+    → 构建对应 Graph → 执行（路径固定，切换需外部介入）
 
 新方案： 用户输入 → chat_node（LLM 自行理解）
     → LLM 决定：问问题(Explore) / 输出方案(Plan) / 调工具(Execute)
@@ -1040,7 +1040,7 @@ Execute Mode Context:
      └───── ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─┘
 ```
 
-执行模式下，AI 如果发现需求不明确或需要更多信息，**可以主动切入 Explore 模式**（通过 OrchestrationService 发出切换信号），出选择题引导用户理清需求后再回到 Execute。
+执行模式下，AI 如果发现需求不明确或需要更多信息，**可以主动切入 Explore 模式**（通过 GraphFactory 重建 context 约束），出选择题引导用户理清需求后再回到 Execute。
 
 #### 3.6.6 三种模式上下文对比
 
@@ -1391,7 +1391,7 @@ class AgentState(TypedDict):
 from langgraph.graph import StateGraph, START, END
 
 workflow = StateGraph(AgentState)
-# 节点注册见 §3.2 OrchestrationService.build_graph()
+# 节点注册见 §3.2 GraphFactory.build_graph()
 # 路由规则：§3.6.2 router() 根据 LLM 调用的工具类型决定下一步
 
 app = workflow.compile(checkpointer=SqliteSaver.from_conn_string("langgraph.db"))
@@ -2505,6 +2505,71 @@ _TOOL_TIMEOUTS = {"read_file": 5, "bash": 30, "grep": 30, "write_file": 10}
 @app.route("/health")
 @app.route("/ready")
 ```
+
+#### 3.10.5 断路器（Circuit Breaker）
+
+模型 API 连续失败时自动熔断，防止级联故障：
+
+```python
+@dataclass
+class CircuitBreakerState:
+    failure_count: int = 0
+    last_failure_time: float = 0
+    is_open: bool = False
+    half_open_attempts: int = 0
+
+_CIRCUIT_BREAKERS: dict[str, CircuitBreakerState] = {}
+
+def circuit_breaker(name: str, failure_threshold=5, recovery_timeout=60):
+    def decorator(func):
+        async def wrapper(*args, **kwargs):
+            state = _CIRCUIT_BREAKERS.setdefault(name, CircuitBreakerState())
+            if state.is_open:
+                elapsed = time.time() - state.last_failure_time
+                if elapsed < recovery_timeout:
+                    raise CircuitBreakerError(f"{name} 熔断中，剩余{recovery_timeout - elapsed:.0f}s")
+                state.is_open = False
+            try:
+                result = await func(*args, **kwargs)
+                state.failure_count = 0
+                return result
+            except Exception as e:
+                state.failure_count += 1
+                state.last_failure_time = time.time()
+                if state.failure_count >= failure_threshold:
+                    state.is_open = True
+                raise
+        return wrapper
+    return decorator
+```
+
+使用：`IModel.chat_stream()` 外层加 `@circuit_breaker("chat_stream")`。
+
+#### 3.10.6 重试机制
+
+```python
+async def retry(func, max_retries=2, backoff=1.0,
+                retryable=(TimeoutError, ConnectionError)):
+    for attempt in range(max_retries + 1):
+        try:
+            return await func()
+        except retryable as e:
+            if attempt == max_retries:
+                raise
+            await asyncio.sleep(backoff * (2 ** attempt))
+```
+
+#### 3.10.7 监控（Prometheus Metrics）
+
+| 指标 | 类型 | 说明 |
+|------|------|------|
+| `flypig_requests_total` | Counter | 请求数（按 endpoint/status） |
+| `flypig_request_duration_seconds` | Histogram | 请求延迟 |
+| `flypig_tool_calls_total` | Counter | 工具调用（按 tool/mode） |
+| `flypig_llm_tokens_total` | Counter | Token 消耗（按 model） |
+| `flypig_circuit_breaker_state` | Gauge | 断路器状态 |
+
+端点 `/metrics` 由 prometheus_client 自动暴露。
 
 ---
 
