@@ -1,69 +1,46 @@
-## Mermaid 架构图
+## Mermaid 架构图（高层概览，细节见上方 ASCII 图）
 
 ```mermaid
 flowchart LR
-    subgraph PRES["表现层"]
-        direction TB
-        P0["Vue 3 + Vercel AI SDK + Monaco + xterm.js"]
-        P1["对话面板<br/>MessageList / MessageItem<br/>ThinkingIndicator / InputBox<br/>Markdown / Mermaid / LivePreview"]
-        P2["交互卡片<br/>ChoiceCard / ChangeReview<br/>SuggestionCard / ToolCallCard"]
-        P3["终端面板<br/>XtermViewer / OutputViewer<br/>TerminalTab"]
-        P4["侧边栏<br/>FileTree / FileTreeNode<br/>未来: Dashboard"]
+    subgraph P["表现层"]
+        P0["Vue 3 + Vercel AI SDK"]
+        P1["对话面板 · 卡片区域"]
+        P2["终端面板 · 侧边栏"]
     end
-
-    subgraph INT["接口层"]
-        direction TB
-        I1["/api/chat (SSE流式)<br/>/api/config"]
-        I2["/api/files / /api/tree<br/>/ws/pty (手动终端)"]
-        I3["/api/sessions<br/>/api/rollback (Git回滚)"]
-        I4["/api/health<br/>/api/upload (文件+解压)"]
-        I5["/api/history/search<br/>/api/agent/status /stop"]
+    subgraph I["接口层"]
+        I0["Quart 唯一入口"]
+        I1["/api/chat · /api/config"]
+        I2["/api/files · /ws/pty"]
+        I3["/api/rollback · health"]
     end
-
-    subgraph APP["应用层"]
-        direction TB
-        A1["GraphFactory<br/>build_graph → 编译StateGraph<br/>工具变化重建"]
-        A2["SuggestionEngine<br/>generate_suggestion()"]
-        A3["HookService<br/>register / emit"]
-        A4["ConfigSvc / SessionSvc<br/>PolicySvc"]
-        A5["GitCheckpointManager<br/>CheckpointStore<br/>SummaryGenerator"]
+    subgraph A["应用层"]
+        A0["GraphFactory"]
+        A1["SuggestionEngine"]
+        A2["HookService"]
+        A3["Config · Session · Policy"]
+        A4["Checkpoint 服务"]
     end
-
-    subgraph DOM["领域层"]
-        direction TB
-        D1["LangGraph<br/>state.py / nodes.py / router.py<br/>context.py / ToolNode / Checkpointer<br/>AgentState: 11字段"]
-        D2["Interfaces<br/>IModel / IToolExecutor / ICostTracker<br/>IRepository / IKnowledgeStore<br/>IHistoryStore / IAgent / IHook"]
-        D3["Models<br/>Message / ToolCall / Session<br/>ChoiceCard / ChangeScore<br/>ExecutionMode / ConversationState"]
-        D4["PromptManager<br/>5角色: developer/reviewer<br/>tester/architect/documenter"]
-        D5["Casbin 权限<br/>model.conf + policy.csv<br/>allow / ask / deny"]
+    subgraph D["领域层"]
+        D0["LangGraph 状态机"]
+        D1["Interfaces · Models"]
+        D2["PromptManager · Casbin"]
     end
-
-    subgraph INFRA["基础设施层"]
-        direction TB
-        M1["Model Adapter<br/>openai / anthropic / local"]
-        M2["edit/ 文件编辑+审查<br/>tool_file / tool_lint<br/>tool_change_review / tool_change_score"]
-        M3["search/ 搜索+选择题<br/>tool_search / tool_ask_choice"]
-        M4["system/ bash+任务+解压<br/>tool_bash / tool_task<br/>tool_extract_archive"]
-        M5["mcp/ MCP管理<br/>mcp_loader / tool_mcp_manager"]
-        M6["Sandbox / Repository<br/>CostTracker / PermissionChecker<br/>Terminal / Background<br/>HookService实现"]
+    subgraph F["基础设施层"]
+        F0["Model Adapter"]
+        F1["Tools: edit/search/system/mcp"]
+        F2["Sandbox · Repository"]
+        F3["CostTracker · Terminal"]
     end
-
     subgraph DI["DI 容器"]
-        D2["Container.configure()<br/>装配: IModel / IToolExecutor<br/>ICostTracker / IRepository<br/>IHistoryStore / PolicyService<br/>PromptManager / GraphFactory<br/>SuggestionEngine / HookService<br/>create_agent() → IAgent"]
+        DI0["Container.configure()"]
+        DI1["装配全部依赖"]
+        DI2["create_agent()"]
     end
 
-    PRES -->|SSE+WS| INT -->|调用| APP -->|接口| DOM -->|实现| INFRA
-    DI -.->|注入| APP
-    DI -.->|注入| DOM
-    DI -.->|注入| INFRA
-
-    style PRES fill:#BBDEFB,stroke:#1565C0,stroke-width:3px
-    style INT fill:#FFE0B2,stroke:#E65100,stroke-width:3px
-    style APP fill:#C8E6C9,stroke:#2E7D32,stroke-width:3px
-    style DOM fill:#E1BEE7,stroke:#6A1B9A,stroke-width:3px
-    style INFRA fill:#FFCDD2,stroke:#C62828,stroke-width:3px
-    style DI fill:#FFF9C4,stroke:#F57F17,stroke-width:3px
-```
+    P --> I --> A --> D --> F
+    DI -.-> A
+    DI -.-> D
+    DI -.-> F
 
 > **来源**: `architecture-refactor.md` §2
 > **关联文档**: `folder-tree.md`（文件结构）、`architecture-guide.md`（总览）
