@@ -82,11 +82,11 @@
 │  │ /api/chat │ │/api/config│ │ /api/files │ │ /ws/pty │ │/api/sessions │ │
 │  │ (SSE流式) │ │           │ │+ /api/tree │ │(手动终端)│ │(历史会话)    │ │
 │  └────┬─────┘ └───────────┘ └───────────┘ └─────────┘ └──────────────┘ │
-│  ┌──────────┐ ┌───────────┐ ┌───────────┐ ┌────────────┐               │
-│  │/api/roll │ │/api/health│ │/api/upload│ │/api/history│               │
-│  │  back    │ │(健康检查)  │ │(文件上传) │ │  /search   │               │
-│  │(Git回滚) │ │           │ │(+解压)    │ │(历史搜索)  │               │
-│  └──────────┘ └───────────┘ └───────────┘ └────────────┘               │
+│  ┌──────────┐ ┌───────────┐ ┌───────────┐ ┌────────────┐ ┌──────────┐  │
+│  │/api/roll │ │/api/health│ │/api/upload│ │/api/history│ │/api/agent│  │
+│  │  back    │ │(健康检查)  │ │(文件上传) │ │  /search   │ │ /status  │  │
+│  │(Git回滚) │ │           │ │(+解压)    │ │(历史搜索)  │ │+ /stop   │  │
+│  └──────────┘ └───────────┘ └───────────┘ └────────────┘ └──────────┘  │
 │       │                                                                 │
 ├───────┼─────────────────────────────────────────────────────────────────┤
 │       ▼                                                                 │
@@ -1177,25 +1177,30 @@ def tool_mcp_install(server_name: str) -> str:
     return f"请手动运行安装命令：\n{info['install']}"
 ```
 
-**交互流程**：
+**[v1] 交互流程**（仅提示手动安装，不自执行）：
 
 ```
 用户: 帮我查一下这段代码的bug
 AI: 让我先搜索一下这个错误...
     → tool_mcp_search("搜索错误信息")
     → 返回: 需要"网页搜索" MCP 服务器
+AI: "我需要安装网页搜索 MCP 服务器来帮你查这个问题，请手动运行："
+    → 输出安装命令: `npx @anthropic/mcp-server-web-search`
+    → 用户手动在终端执行，然后刷新 mcp.json 配置
+```
+
+**[v2（未来）] 自动安装流程**（Docker 沙箱内安全执行）：
+
+```
 AI: "我需要安装网页搜索 MCP 服务器来帮你查这个问题，要装吗？"
     → 审批卡片: [安装] [跳过]
 用户: [安装]
-    → tool_mcp_install("@anthropic/mcp-server-web-search")
-    → 自动添加到 mcp.json → mcp_loader 加载 → 注册到 ToolNode
+    → tool_mcp_install 在 Docker 沙箱内执行安装命令
+    → 自动写入 mcp.json → mcp_loader 加载 → 注册到 ToolNode
 AI: 已安装，现在开始搜索...
 ```
 
-⚠️ **MCP 自助安装安全**：`tool_mcp_install` 需要执行外部 `npx`/`uvx` 命令，安装不受信任的 MCP 服务器存在安全风险。应对措施：
-1. 安装命令在 Docker 沙箱内执行，隔离文件系统
-2. 审批卡片中显示服务器来源和权限范围，用户知情后再批准
-3. 或仅提示安装命令由用户手动执行：`npx @anthropic/mcp-server-web-search`
+⚠️ **安全考虑**：v2 自动安装时，安装命令在 Docker 沙箱内执行，审批卡片显示服务器来源和权限范围。v1 由用户手动执行，审批卡片显示安装命令供用户复制粘贴。
 ```
 
 #### 3.7.1.2 architect_node 触发条件
@@ -2608,8 +2613,8 @@ class PromptManager:
 
     def switch(self, state: AgentState, persona: str, context: dict) -> AgentState:
         """
-        切换 Agent 身份。向 LangGraph AgentState 追加 system message，
-        不直接操作 messages 数组。保留历史让 LLM 知道上下文。
+        切换 Agent 身份。向 LangGraph AgentState 追加一条 system message，
+        不覆盖已有消息。保留历史让 LLM 知道上下文。
         """
         prompt = self.load(persona)
         switch_msg = (
@@ -2631,7 +2636,7 @@ state = PromptManager.switch(state, "reviewer", {"files_changed": 5})
 # state["persona"] 更新为 "reviewer"
 ```
 
-**关键**：只替换 system message，历史保留。模型知道之前写了什么，同时以新身份重新审视。所有操作通过 AgentState 完成，不直接操作 messages 数组。
+**关键**：只追加一条 system message，不修改已有的 user/assistant 消息。模型知道之前写了什么，同时以新身份重新审视。所有操作通过 AgentState 完成。
 
 #### 3.11.3 什么时候触发切换
 
@@ -3595,6 +3600,8 @@ flypig/                           ← 项目根
 │           │   ├── editor/      ← EditorArea, MonacoEditor
 │           │   ├── chat/        ← 对话区域组件
 │           │   │   ├── ChatPanel.vue, MessageList.vue, InputBox.vue
+│           │   │   ├── MessageItem.vue, ThinkingIndicator.vue
+│           │   │   ├── ToolCallCard.vue      ← 工具调用/审批卡片
 │           │   │   ├── ChoiceCard.vue        ← Explore 选择题（3.6.3）
 │           │   │   ├── ChangeReviewCard.vue  ← 变更审查（3.8.7）
 │           │   │   ├── SuggestionCard.vue    ← 对抗建议（3.8.9）
@@ -3820,7 +3827,7 @@ class ToolBash:
 | 动作 | 影响 |
 |------|------|
 | 用 LangGraph 定义 StateGraph + 条件路由（替换旧 Agent.run()） | 核心替换 |
-| 实现 `domain/agent/graph.py`（统一 StateGraph，非三张独立图） | 新文件 |
+| 实现 `domain/agent/state.py`（AgentState） + `application/services/graph_factory.py`（图构建） | 新文件 |
 | 实现 suggestion_node + handle_adversarial_decision（3.8.9 对抗建议） | 新节点 |
 | 实现 AgentState 字段：change_review, rejected_changes, change_score, adversarial_suggestion | 扩展 |
 | 删除 PTY 注入全部代码（_run_terminal_interactive, _terminal_injections） | 清理 |

@@ -18,6 +18,8 @@
 | `/api/upload` | POST | 文件上传 + 解压 |
 | `/api/rollback/<turn_id>` | POST | Git 回滚 |
 | `/api/history/search` | GET | 历史搜索 |
+| `/api/agent/status` | GET | Agent 运行状态（空闲/忙碌/当前任务/成本统计） |
+| `/api/agent/stop` | POST | 强制停止当前运行中的 Agent |
 
 ## SSE 事件格式（/api/chat）
 

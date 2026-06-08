@@ -39,12 +39,12 @@
 | 动作 | 说明 |
 |------|------|
 | 用 LangGraph 定义统一 StateGraph + 条件路由（替换旧 Agent.run） | 核心替换 |
-| 实现 `domain/agent/graph.py`（统一图，非三张独立图） | 新文件 |
+| 实现 `domain/agent/state.py`（AgentState） + `application/services/graph_factory.py`（图构建） | 新文件 |
 | 实现 suggestion_node + handle_adversarial_decision | 新节点 |
 | 扩展 AgentState：change_review, rejected_changes, change_score 等 | 扩展 |
 | 删除 PTY 注入全部代码 | 清理 |
 | **重写** terminal.py（仅保留用户手动 PTY 的 WebSocket 管理） | 大幅精简 |
-| 注册 orchestration_service.py 到 DI 容器 | 新服务 |
+| 注册 graph_factory.py + suggestion_engine.py + hook_service.py 到 DI 容器 | 新服务 |
 
 ## Step 5：前端 Vite 迁移 + Vercel AI SDK + 富内容组件
 

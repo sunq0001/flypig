@@ -9,10 +9,10 @@
 > 解决：AI 改完一批文件后用户只能「全盘接受」或「全盘拒绝」的问题。
 > 实际上用户可能：认可文件 A 的改动但不认可文件 B；认可某个函数但不认可同文件中另一处修改；对某个改动有疑虑希望 AI 解释后决定。
 
-执行完后自动触发，逐项展示变更、原因、依赖、风险，用户逐项确认/驳回。
+**触发方式**：系统在 `execute_node` 执行完毕后自动调用（作为 ToolNode 的后续节点）。AI 在每次文件变更工具调用后，LangGraph 条件边自动导向 `change_review` 节点，无需 AI 手动触发。
 
 ```
-EXECUTE（改代码）→ LINT（静默修复）→ CHANGE_REVIEW（输出审查卡片）→ 用户逐项确认/驳回
+EXECUTE（改代码）→ LINT（静默修复）→ CHANGE_REVIEW（系统自动调用）→ 用户逐项确认/驳回
   → 被驳回的变更 → AI 分析原因 → 提出替代方案 → 重新审查
 ```
 
@@ -244,6 +244,10 @@ class ChangeScore:
     @classmethod
     def from_git_diff(cls, diff_output: str) -> "ChangeScore": ...
 ```
+
+> **v1 范围**：仅统计文件数、行数、模块数（基于 git diff 文件路径推断）。`functions_added`/`functions_modified` 字段保留但不参与评分，v2 再通过函数识别增强。
+>
+> **依赖分析**：`change_review` 中的 `dependencies` 字段由 AI 在 change_review 节点中智能判断，不做自动 AST 解析。v2 再考虑精确依赖分析。
 
 ## 对抗建议（SuggestionCard）
 

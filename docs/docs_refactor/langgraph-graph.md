@@ -27,7 +27,14 @@
 
 ```python
 def router(state: AgentState) -> str:
-    """基于 LLM 工具调用的条件路由"""
+    """基于 LLM 工具调用的条件路由。
+    
+    AI 决定下一步走向——不是系统硬编码的判断：
+    - 有 tool_call 且名为 ask_choice → 走选择题节点（Explore 模式）
+    - 有其他 tool_call → 走 execute 节点执行工具
+    - 有待审批请求 → 走 approval 节点
+    - 无任何条件匹配 → 默认留在 chat 节点（AI 继续思考/输出文本）
+    """
     last_msg = state["messages"][-1]
     if last_msg.get("tool_calls") and last_msg["tool_calls"][0]["name"] == "ask_choice":
         return "ask_choice"
@@ -35,7 +42,7 @@ def router(state: AgentState) -> str:
         return "execute"
     if state.get("pending_approval"):
         return "approval"
-    return "chat"
+    return "chat"  # 无 tool_calls + 无审批 = AI 继续对话或总结
 ```
 
 ## AgentState（domain/agent/state.py）
@@ -221,8 +228,8 @@ class PromptManager:
 
     def switch(self, state: AgentState, persona: str, context: dict) -> AgentState:
         """
-        切换 Agent 身份。向 LangGraph AgentState 追加 system message，
-        不直接操作 messages 数组。保留历史让 LLM 知道上下文。
+        切换 Agent 身份。向 LangGraph AgentState 追加一条 system message，
+        不覆盖已有消息。保留历史让 LLM 知道上下文。
         """
         prompt = self.load(persona)
         switch_msg = (

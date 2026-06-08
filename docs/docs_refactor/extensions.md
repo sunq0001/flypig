@@ -26,8 +26,9 @@ _MCP_REGISTRY = {
 }
 ```
 
-**v1**：AI 调用 `tool_mcp_install(server_name)` 仅返回安装命令字符串，由用户手动执行。
-**v2（未来）**：在 Docker 沙箱内自动执行安装命令。
+**v1**：AI 调用 `tool_mcp_search(requirement)` 返回注册表中匹配的 MCP 服务器信息（含安装命令），由用户手动执行安装。`tool_mcp_install` 在 v1 仅返回安装命令字符串，不自动执行。
+
+**v2（未来）**：`tool_mcp_install` 在 Docker 沙箱内自动执行安装命令，自动写入 mcp.json，mcp_loader 动态加载注册到 ToolNode。
 
 **mcp.json 配置文件**：
 ```json

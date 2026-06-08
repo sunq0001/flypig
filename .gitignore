@@ -19,3 +19,7 @@ api_key
 # Workspace directories (user-generated, not project code)
 workspace/
 myproject/
+
+# Third-party projects (not ours)
+aider/
+deepseek-tui/
