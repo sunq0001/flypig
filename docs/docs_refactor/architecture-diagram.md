@@ -112,34 +112,74 @@
 └─────────────────────────────────────────────────────────────────────────┘
 ```
 
-## Mermaid 概览图
+## Mermaid 架构图
 
 ```mermaid
-flowchart LR
-    subgraph P["表现层"]
-        P0["Vue 3 + Vercel AI SDK"]
-        P1["对话面板 · 卡片区域 · 终端面板 · 侧边栏"]
+flowchart TD
+    subgraph PRESENTATION ["🎨 表现层 - Web Dashboard"]
+        direction TB
+        Vue["Vue 3 + Vercel AI SDK (useChat) + Monaco Editor + xterm.js"]
+        Chat["💬 对话面板<br/>MessageList / InputBox"]
+        Cards["📇 卡片区域<br/>ChoiceCard / ChangeReview / SuggestionCard"]
+        Terminal["🖥️ 终端面板<br/>XtermViewer / OutputViewer"]
+        Sidebar["📁 侧边栏<br/>FileTree / Dashboard"]
     end
-    subgraph I["接口层"]
-        I0["Quart · /api/chat · /api/config"]
-        I1["/api/files · /ws/pty · /api/rollback"]
+
+    subgraph INTERFACE ["🔌 接口层 - Quart（唯一入口）"]
+        direction TB
+        API1["/api/chat (SSE)"] --- API2["/api/config"]
+        API3["/api/files /tree"] --- API4["/ws/pty"]
+        API5["/api/sessions"] --- API6["/api/rollback"]
+        API7["/api/health"] --- API8["/api/upload"]
+        API9["/api/history/search"] --- API10["/api/agent/status & stop"]
     end
-    subgraph A["应用层"]
-        A0["GraphFactory · SuggestionEngine"]
-        A1["HookService · Config/Session/Policy"]
-        A2["GitCheckpoint · CheckpointStore"]
+
+    subgraph APPLICATION ["⚙️ 应用层 - 业务编排"]
+        direction TB
+        GF["GraphFactory<br/>build_graph()"]
+        SE["SuggestionEngine<br/>generate_suggestion()"]
+        HS["HookService<br/>register / emit"]
+        SVCS["其他服务<br/>ConfigSvc / SessionSvc / PolicySvc"]
+        CP["Checkpoint 服务<br/>GitCheckpointManager / CheckpointStore / SummaryGenerator"]
     end
-    subgraph D["领域层"]
-        D0["LangGraph · Interfaces · Models"]
-        D1["PromptManager · Casbin"]
+
+    subgraph DOMAIN ["📦 领域层 - 核心逻辑"]
+        direction TB
+        LG["LangGraph<br/>state.py + nodes.py + router.py"]
+        IF["接口<br/>IModel / IToolExecutor / IRepository / IHook"]
+        MDL["模型<br/>Message / ChangeScore / AgentState"]
+        PM["PromptManager<br/>5 角色 prompt"]
+        CAS["Casbin 策略<br/>model.conf + policy.csv"]
     end
-    subgraph F["基础设施层"]
-        F0["Model Adapter · Tools(4组)"]
-        F1["Sandbox · Repository · CostTracker"]
+
+    subgraph INFRASTRUCTURE ["🔧 基础设施层 - 具体实现"]
+        direction TB
+        MA["模型适配<br/>openai / anthropic / local"]
+        T1["edit/ 文件编辑+审查"]
+        T2["search/ 搜索+选择题"]
+        T3["system/ bash+任务+解压"]
+        T4["mcp/ 自动安装+加载"]
+        INFRA_OTHER["Sandbox / Repository / CostTracker / Terminal"]
     end
-    subgraph DI["DI 容器"]
-        DI0["Container.configure() · create_agent()"]
+
+    subgraph DI ["💉 依赖注入容器"]
+        DI_TEXT["Container.configure() → 装配全部依赖<br/>create_agent() → 返回 IAgent"]
     end
-    P --> I --> A --> D --> F
-    DI -.-> A & D & F
+
+    PRESENTATION -->|HTTP / WebSocket| INTERFACE
+    INTERFACE --> APPLICATION
+    APPLICATION -->|调用接口| DOMAIN
+    DOMAIN -->|接口实现| INFRASTRUCTURE
+    DI -.->|注入依赖| APPLICATION
+    DI -.->|注入依赖| DOMAIN
+    DI -.->|注入依赖| INFRASTRUCTURE
+
+    style PRESENTATION fill:#E3F2FD,stroke:#1565C0,color:#1565C0
+    style INTERFACE fill:#FFF3E0,stroke:#E65100,color:#E65100
+    style APPLICATION fill:#E8F5E9,stroke:#2E7D32,color:#2E7D32
+    style DOMAIN fill:#F3E5F5,stroke:#6A1B9A,color:#6A1B9A
+    style INFRASTRUCTURE fill:#FFEBEE,stroke:#C62828,color:#C62828
+    style DI fill:#FFF8E1,stroke:#F57F17,color:#F57F17
 ```
+
+> **读图方式**：从上到下依次为表现层 → 接口层 → 应用层 → 领域层 → 基础设施层。DI 容器横跨各层，单点装配所有依赖。箭头方向 = 依赖方向。虚线 = DI 注入。
