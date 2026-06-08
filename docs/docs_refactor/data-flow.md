@@ -85,13 +85,21 @@ AI 执行 write_file/edit_file 等文件变更
 ## 回滚数据流
 
 ```
-用户说"回到第 3 轮的状态"
-  → AI 调用 rollback_by_natural_language()
-    → CheckpointStore 查询 turn_id → commit_hash
-    → GitCheckpointManager.restore()
-      → git --git-dir=.flypig_checkpoints restore --source=<hash>
+用户"前面改出问题了，回到之前能运行的状态"
+  → AI 搜索 CheckpointStore 所有 summary
+    → 语义匹配找到最可能的 turn
+  ├── 置信度 ≥ 80% → 直接回滚
+  └── 不明确 → 出 choice_card 让用户选：
+      ┌─────────────────────────────────────┐
+      │ 请选择要回滚到的状态：                │
+      │  ○ 第 3 轮 - 修改 auth.py，登录功能   │
+      │  ○ 第 2 轮 - 新增用户模型，测试通过   │
+      │  ○ 第 1 轮 - 项目初始化               │
+      └─────────────────────────────────────┘
+  → 用户选择 → GitCheckpointManager.restore()
+    → git --git-dir=.flypig_checkpoints restore --source=<hash>
     → WebSocket 推送 workspace:updated 事件
-  → 前端收到后重新加载文件树 + 刷新编辑器内容
+  → 前端重新加载文件树 + 刷新编辑器内容
 ```
 
 ## 终端数据流
