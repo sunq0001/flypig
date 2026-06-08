@@ -1,46 +1,4 @@
-## Mermaid 架构图（高层概览，细节见上方 ASCII 图）
-
-```mermaid
-flowchart LR
-    subgraph P["表现层"]
-        P0["Vue 3 + Vercel AI SDK"]
-        P1["对话面板 · 卡片区域"]
-        P2["终端面板 · 侧边栏"]
-    end
-    subgraph I["接口层"]
-        I0["Quart 唯一入口"]
-        I1["/api/chat · /api/config"]
-        I2["/api/files · /ws/pty"]
-        I3["/api/rollback · health"]
-    end
-    subgraph A["应用层"]
-        A0["GraphFactory"]
-        A1["SuggestionEngine"]
-        A2["HookService"]
-        A3["Config · Session · Policy"]
-        A4["Checkpoint 服务"]
-    end
-    subgraph D["领域层"]
-        D0["LangGraph 状态机"]
-        D1["Interfaces · Models"]
-        D2["PromptManager · Casbin"]
-    end
-    subgraph F["基础设施层"]
-        F0["Model Adapter"]
-        F1["Tools: edit/search/system/mcp"]
-        F2["Sandbox · Repository"]
-        F3["CostTracker · Terminal"]
-    end
-    subgraph DI["DI 容器"]
-        DI0["Container.configure()"]
-        DI1["装配全部依赖"]
-        DI2["create_agent()"]
-    end
-
-    P --> I --> A --> D --> F
-    DI -.-> A
-    DI -.-> D
-    DI -.-> F
+# 架构图
 
 > **来源**: `architecture-refactor.md` §2
 > **关联文档**: `folder-tree.md`（文件结构）、`architecture-guide.md`（总览）
@@ -152,4 +110,36 @@ flowchart LR
 │    IKnowledgeStore(NoOp) / GraphFactory / SuggestionEngine / HookService │
 │  create_agent() → 返回 IAgent (一张图统一 Graph，context 约束内 LLM 决定路径)
 └─────────────────────────────────────────────────────────────────────────┘
+```
+
+## Mermaid 概览图
+
+```mermaid
+flowchart LR
+    subgraph P["表现层"]
+        P0["Vue 3 + Vercel AI SDK"]
+        P1["对话面板 · 卡片区域 · 终端面板 · 侧边栏"]
+    end
+    subgraph I["接口层"]
+        I0["Quart · /api/chat · /api/config"]
+        I1["/api/files · /ws/pty · /api/rollback"]
+    end
+    subgraph A["应用层"]
+        A0["GraphFactory · SuggestionEngine"]
+        A1["HookService · Config/Session/Policy"]
+        A2["GitCheckpoint · CheckpointStore"]
+    end
+    subgraph D["领域层"]
+        D0["LangGraph · Interfaces · Models"]
+        D1["PromptManager · Casbin"]
+    end
+    subgraph F["基础设施层"]
+        F0["Model Adapter · Tools(4组)"]
+        F1["Sandbox · Repository · CostTracker"]
+    end
+    subgraph DI["DI 容器"]
+        DI0["Container.configure() · create_agent()"]
+    end
+    P --> I --> A --> D --> F
+    DI -.-> A & D & F
 ```
