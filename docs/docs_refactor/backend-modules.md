@@ -33,7 +33,10 @@ flypig/interface/web/
 | `PolicyService` | Casbin 封装 | ≤80 |
 | `GraphFactory` | ★ 图构建：导入 nodes + router → 编译 StateGraph（原 OrchestrationService.build_graph()） | ≤80 |
 | `SuggestionEngine` | ★ 评分→建议映射：generate_suggestion()（原 OrchestrationService 拆分） | ≤40 |
-| `HookService` | ★ 钩子管理器：register(event_type, hook) / emit(event_type, data) | ≤40
+| `HookService` | ★ 钩子管理器：register(event_type, hook) / emit(event_type, data) | ≤40 |
+| `GitCheckpointManager` | ★ Agent Git checkpoints 管理（init/commit/restore） | ≤80 |
+| `CheckpointStore` | ★ SQLite 映射表（turn_id → commit_hash → summary） | ≤60 |
+| `SummaryGenerator` | ★ 根据本轮交互生成 ≤50 字摘要 | ≤40 |
 
 ## Domain Layer — 核心领域逻辑
 

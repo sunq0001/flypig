@@ -63,7 +63,10 @@ flypig/
 │   │   ├── policy_service.py     ← Casbin 封装
 │   │   ├── graph_factory.py      ← ★ 图构建：组装 nodes + router → 编译 StateGraph
 │   │   ├── suggestion_engine.py  ← ★ 评分→建议映射：generate_suggestion()
-│   │   └── hook_service.py       ← ★ 钩子管理器：register / emit
+│   │   ├── hook_service.py       ← ★ 钩子管理器：register / emit
+│   │   ├── git_checkpoint_manager.py ← ★ Agent Git checkpoint 管理
+│   │   ├── checkpoint_store.py   ← ★ SQLite 映射（turn_id → commit_hash）
+│   │   └── summary_generator.py  ← ★ 自动生成短语摘要
 │   └── dto/
 │       ├── chat_dto.py           ← 数据传输对象
 │       └── config_dto.py

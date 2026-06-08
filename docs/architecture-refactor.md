@@ -1533,26 +1533,51 @@ def check_permission(tool: str, params: dict) -> str:
 后端通过审批 → 恢复挂起的 LangGraph 工具调用
 ```
 
-#### 3.8.4 Git 回滚（与 turn_id 挂钩）
+#### 3.8.4 Git 回滚（两套 Git 隔离）
 
-每轮对话生成一个 `turn_id`，AI 写文件后自动执行 git commit：
+工作区维护两套独立的 Git 上下文：
 
-```python
-# Prompt 引导 AI 在每次文件变更后执行:
-#   git add -A && git commit -m "turn_3: 实现用户登录功能"
+| Git | 目录 | 用途 | 谁控制 |
+|-----|------|------|--------|
+| **用户 Git** | `项目根/.git` | 用户自己的版本管理 | 用户自己 |
+| **Agent Git** | `项目根/.flypig_checkpoints` | AI 每次文件变更后自动 checkpoint | AI |
 
-# 用户说"回退到第 2 轮":
-#   后端执行 git revert HEAD~N（N = 当前轮次 - 目标轮次）
-#   恢复对话状态到 turn_2 结束时的 messages 快照
-#   更新 ConversationState 为 ROLLED_BACK
+两套 Git 通过 `--git-dir` 和 `--work-tree` 隔离，互不干扰。
+
+**何时创建 checkpoint**：
+
+| 触发时机 | 说明 |
+|---------|------|
+| `write_file`/`edit_file` 工具调用成功后 | 即使只是新建文件 |
+| bash 命令改变文件系统后 | 如 `git add`、`rm`、`mv`（不含查询） |
+| 用户通过变更审查卡片点击"批准"后 | 批准的内容涉及文件修改 |
+| 用户手动点击 Dashboard"保存里程碑" | 可选 |
+
+**Commit Message 格式**：
+
+```
+[turn_3] 修改 auth.py，新增 login_user 函数，测试通过
+批准变更
 ```
 
-| 组件 | 职责 |
+**回滚执行**：
+
+```bash
+git --git-dir=.flypig_checkpoints/.git --work-tree=. restore --source=<hash> .
+git clean -fd
+```
+
+回滚后通过 WebSocket 推送 `workspace:updated` 事件，前端自动刷新文件树。
+
+**新增模块**：
+
+| 模块 | 职责 |
 |------|------|
-| Prompt | 引导 AI 在文件变更后自动 git commit -m "turn_N: ..." |
-| ChatService | 维护 turn_id 计数器 + 每轮 messages 快照 |
-| tool_bash | 执行 git 命令（commit / revert / log） |
-| 新增 API | `POST /api/rollback/<turn_id>` 一键回滚 |
+| `GitCheckpointManager` | 初始化、commit、restore 封装 |
+| `CheckpointStore` | SQLite 映射表（turn_id → commit_hash） |
+| `SummaryGenerator` | 自动生成 ≤ 50 字符的摘要 |
+| `POST /api/rollback/<turn_id>` | 回滚 |
+| `POST /api/rollback/search` | 自然语言搜索回滚点 |
 
 #### 3.8.5 Git Diff 预览（文件变更审批时附带）
 

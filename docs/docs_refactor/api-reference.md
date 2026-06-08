@@ -16,7 +16,8 @@
 | `/api/sessions` | GET | 历史会话 |
 | `/api/health` | GET | 健康检查 |
 | `/api/upload` | POST | 文件上传 + 解压 |
-| `/api/rollback/<turn_id>` | POST | Git 回滚 |
+| `/api/rollback/<turn_id>` | POST | 回滚到指定 turn_id 的文件状态 |
+| `/api/rollback/search` | POST | 自然语言搜索回滚点，返回匹配列表或 choice_card |
 | `/api/history/search` | GET | 历史搜索 |
 | `/api/agent/status` | GET | Agent 运行状态（空闲/忙碌/当前任务/成本统计） |
 | `/api/agent/stop` | POST | 强制停止当前运行中的 Agent |
@@ -66,36 +67,164 @@
 }
 ```
 
-## Git 回滚（与 turn_id 挂钩）
+## Git 回滚（两套 Git 隔离）
 
-每轮对话生成一个 `turn_id`，AI 写文件后自动执行 git commit：
+### 整体架构
+
+工作区维护两套独立的 Git 上下文：
+
+| Git | 目录 | 用途 | 谁控制 |
+|-----|------|------|--------|
+| **用户 Git** | `项目根/.git` | 用户自己的版本管理 | 用户自己 |
+| **Agent Git** | `项目根/.flypig_checkpoints` | AI 每次文件变更后自动 checkpoint | AI（隐藏目录） |
+
+两套 Git 互不干扰。Agent 的 checkpoint 操作不会影响用户的 `git status`。
+
+### 何时创建 checkpoint
+
+| 触发时机 | 说明 |
+|---------|------|
+| `write_file`/`edit_file` 工具调用成功后 | 即使只是新建文件 |
+| bash 命令改变文件系统后（`git add`、`rm`、`mv` 等，不含查询） | 检测文件变更 |
+| 用户通过变更审查卡片点击"批准"后 | 批准的内容涉及文件修改 |
+| 用户手动点击 Dashboard"保存里程碑" | 可选 |
+
+每次 checkpoint 前执行 `git add -A`（只针对工作区，不影响用户 Git），然后 commit。
+
+### Commit Message 格式
+
+```
+[turn_<turn_id>] <自动生成的简短摘要>
+
+<可选：触发来源，如"批准变更" / "手动保存">
+```
+
+示例：
+
+```
+[turn_3] 修改 auth.py，新增 login_user 函数，测试通过
+批准变更
+```
+
+- `turn_id` 来自 ChatService 维护的计数器
+- 摘要由 SummaryGenerator 生成（≤ 50 字符）
+- 正文可附加测试结果、变更评分等元数据
+
+### CheckpointStore（SQLite）
+
+```sql
+CREATE TABLE checkpoints (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id TEXT NOT NULL,
+    turn_id INTEGER NOT NULL,
+    commit_hash TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    source TEXT DEFAULT 'auto',         -- 'auto' | 'approval' | 'manual'
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    metadata TEXT,                       -- JSON: 变更评分、测试结果等
+    UNIQUE(session_id, turn_id)
+);
+```
+
+- `turn_id → commit_hash` 映射
+- `summary` 全文用于自然语言搜索
+- `metadata` 存储变更评分、测试结果，用于精细检索
+
+### 回滚执行逻辑
 
 ```python
-# Prompt 引导 AI 在每次文件变更后执行:
-#   git add -A && git commit -m "turn_3: 实现用户登录功能"
+def rollback_to_turn(turn_id: int, session_id: str):
+    # 1. 从 CheckpointStore 获取该 turn_id 对应的 commit_hash
+    row = db.query(
+        "SELECT commit_hash FROM checkpoints WHERE turn_id = ? AND session_id = ?",
+        turn_id, session_id
+    )
+    if not row:
+        return {"error": f"turn_{turn_id} 无 checkpoint"}
 
-# 用户说"回退到第 2 轮":
-#   后端执行 git revert HEAD~N（N = 当前轮次 - 目标轮次）
-#   恢复对话状态到 turn_2 结束时的 messages 快照
-#   更新 ConversationState 为 ROLLED_BACK
+    # 2. git restore 恢复文件（不影响用户 Git）
+    subprocess.run([
+        "git", "--git-dir=.flypig_checkpoints/.git",
+        "--work-tree=.", "restore", "--source=" + row.commit_hash, "."
+    ], cwd=workspace_root)
+
+    # 3. 清理未跟踪的文件
+    subprocess.run(["git", "clean", "-fd"], cwd=workspace_root)
+
+    # 4. 通过 WebSocket 推送事件，前端刷新文件树
+    event_bus.emit("workspace:updated", {"session_id": session_id})
 ```
 
-| 组件 | 职责 |
+### 与用户 Git 的隔离
+
+Agent Git 使用隐藏目录 `.flypig_checkpoints/`，通过 `--git-dir` 和 `--work-tree` 操作：
+
+```bash
+# 初始化 Agent Git
+git init --separate-git-dir=.flypig_checkpoints/.git .
+
+# 每次 checkpoint
+git --git-dir=.flypig_checkpoints/.git --work-tree=. add -A
+git --git-dir=.flypig_checkpoints/.git --work-tree=. commit -m "[turn_3] ..."
+
+# 回滚
+git --git-dir=.flypig_checkpoints/.git --work-tree=. restore --source=<hash> .
+git --git-dir=.flypig_checkpoints/.git --work-tree=. clean -fd
+```
+
+用户 Git 完全不受影响——`git status` 看不到 Agent 的 commit，`git log` 也不包含 Agent 的提交记录。
+
+**MVP 阶段简化**：暂不隔离用户 Git。Agent 直接用工作区做 `--work-tree`，告知用户"Agent checkpoint 可能影响你的 git status"。正式版实现完整隔离。
+
+### 自然语言回滚
+
+```python
+async def rollback_by_natural_language(user_query: str, session_id: str):
+    # 1. 获取该 session 所有 checkpoints（turn_id, summary, commit_hash）
+    checkpoints = db.query(
+        "SELECT turn_id, summary, commit_hash FROM checkpoints WHERE session_id = ?",
+        session_id
+    )
+
+    # 2. 语义搜索或关键词匹配
+    best = semantic_search(user_query, [cp.summary for cp in checkpoints])
+
+    if best.confidence >= 0.8:
+        rollback_to_turn(best.turn_id, session_id)
+        return f"已回滚到：{best.summary}"
+    else:
+        # 出选择题让用户选择
+        candidates = [
+            {"id": cp.turn_id, "label": cp.summary}
+            for cp in checkpoints[:5]
+        ]
+        return {"type": "choice_card", "question": "请选择要回滚到的状态", "options": candidates}
+```
+
+### 新增模块
+
+| 模块 | 职责 |
 |------|------|
-| Prompt | 引导 AI 在文件变更后自动 git commit -m "turn_N: ..." |
-| ChatService | 维护 turn_id 计数器 + 每轮 messages 快照 |
-| tool_bash | 执行 git 命令（commit / revert / log） |
-| 新增 API | `POST /api/rollback/<turn_id>` 一键回滚 |
+| `GitCheckpointManager` | 封装 Agent Git 的初始化、commit、restore |
+| `CheckpointStore` | SQLite 映射表 CRUD（turn_id → commit_hash） |
+| `SummaryGenerator` | 根据本轮交互生成短语摘要（规则或小模型，≤ 50 字符） |
+| `POST /api/rollback/<turn_id>` | 根据 turn_id 回滚工作区 |
+| `POST /api/rollback/search` | 接受自然语言，返回匹配的 turn_id 列表或 choice_card |
+| 前端 Dashboard "回滚点时间线" | 展示摘要列表，供用户直接点击回滚 |
 
-## Git Diff 预览（文件变更审批时附带）
+### 前端感知
 
-每次写文件/编辑文件的工具调用，在执行前通过 `git diff` 获取变更内容：
+回滚后后端通过 WebSocket 发送 `workspace:updated` 事件：
 
 ```
-写文件前 → tool_bash("git diff <file>") → 获取增量变更
-审批卡片附带 diff 内容 → 用户看到"改了哪里"再决定
-执行后 → git add + git commit -m "turn_N: ..."
+event: workspace:updated
+data: {"session_id": "abc123"}
 ```
+
+前端收到后：
+- 重新加载文件树
+- 刷新已打开的文件内容
+- 当前编辑文件如有变化，提示"文件已被回滚，是否重新加载？"
 
 ## 审批分类
 
