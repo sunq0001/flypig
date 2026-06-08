@@ -3735,13 +3735,37 @@ LangGraph StateGraph (领域层)
   │
   ▼
 SSE 事件流 → Vercel AI SDK 自动渲染
-  ├── type: "token"         → 普通文本流式渲染
-  ├── type: "choice"        → Explore 选择题卡片
-  ├── type: "approval"      → Plan 审批卡片
-  ├── type: "change_review" → Execute 变更审查卡片（3.8.7）
-  └── type: "response_end"  → 结束 + usage
+  ├── type: "token"                → 普通文本流式渲染
+  ├── type: "choice"               → Explore 选择题卡片
+  ├── type: "approval"             → Plan 审批卡片
+  ├── type: "change_review"        → Execute 变更审查卡片（3.8.7）
+  ├── type: "adversarial_suggestion" → 对抗建议卡片（3.8.9）
+  └── type: "response_end"         → 结束 + usage
 
-### 8.4 终端数据流
+### 8.4 Checkpoint 数据流
+
+```
+AI 执行 write_file/edit_file 等文件变更
+  → ToolNode 返回成功
+  → GitCheckpointManager 执行 git add -A + commit
+    → commit 到 .flypig_checkpoints（独立 Agent Git，不影响用户 .git）
+    → CheckpointStore 记录 (turn_id → commit_hash → summary)
+  → 写入 SQLite 映射表
+```
+
+### 8.5 回滚数据流
+
+```
+用户说"回到第 3 轮的状态"
+  → AI 调用 rollback_by_natural_language()
+    → CheckpointStore 查询 turn_id → commit_hash
+    → GitCheckpointManager.restore()
+      → git --git-dir=.flypig_checkpoints restore --source=<hash>
+    → WebSocket 推送 workspace:updated 事件
+  → 前端收到后重新加载文件树 + 刷新编辑器内容
+```
+
+### 8.6 终端数据流
 
 ```
 用户手动终端: xterm.js → WebSocket /ws/pty → terminal.py → 真正 PTY

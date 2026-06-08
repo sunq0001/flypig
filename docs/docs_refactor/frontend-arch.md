@@ -182,6 +182,7 @@ export function useChatComposable() {
   │
   └── 用户手动终端 xterm.js
         └── WebSocket /ws/pty（与 AI 对话完全独立，互不干扰）
+        └── WebSocket 接收 workspace:updated 事件（回滚后刷新文件树和编辑器）
 ```
 
 ## 富内容渲染
