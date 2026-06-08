@@ -2,76 +2,128 @@
 
 ```mermaid
 flowchart TD
-    subgraph PRESENTATION ["🎨 表现层 · Web Dashboard"]
+    subgraph PRESENTATION["🎨 表现层 · Web Dashboard"]
         direction TB
-        VUE["Vue 3 + Vercel AI SDK·Monaco·xterm.js"]
-        CHAT["💬 对话面板<br/>MessageList·MessageItem·ThinkingIndicator<br/>InputBox·MarkdownRender·MermaidDiagram"]
-        CARDS["📇 卡片区域<br/>ChoiceCard·ChangeReviewCard<br/>SuggestionCard·ToolCallCard"]
-        TERM["🖥️ 终端面板<br/>XtermViewer·OutputViewer·TerminalTab"]
-        SIDE["📁 侧边栏<br/>FileTree·FileTreeNode | 未来: Dashboard"]
+        VUE["Vue 3 + Vercel AI SDK(useChat) + Monaco Editor + xterm.js"]
+        CHAT["💬 对话面板
+            MessageList · MessageItem · ThinkingIndicator
+            InputBox · MarkdownRender · Mermaid · LivePreview"]
+        CARDS["📇 交互卡片
+            ChoiceCard · ChangeReviewCard
+            SuggestionCard · ToolCallCard(审批)"]
+        TERM["🖥️ 终端面板
+            XtermViewer(PTY) · OutputViewer(只读) · TerminalTab"]
+        SIDE["📁 侧边栏
+            FileTree · FileTreeNode
+            未来: Dashboard(监控/成本)"]
     end
 
-    subgraph INTERFACE ["🔌 接口层 · Quart 唯一入口"]
+    subgraph INTERFACE["🔌 接口层 · Quart 唯一入口"]
         direction LR
-        API1["/api/chat<br/>SSE 流式"] --- API2["/api/config<br/>配置"]
-        API3["/api/files<br/>+ /api/tree"] --- API4["/ws/pty<br/>手动终端"]
-        API5["/api/sessions<br/>会话"] --- API6["/api/rollback<br/>Git 回滚"]
-        API7["/api/health<br/>健康检查"] --- API8["/api/upload<br/>文件上传"]
-        API9["/api/history/search<br/>历史搜索"] --- API10["/api/agent/status<br/>+ /api/agent/stop"]
+        api1["/api/chat(SSE流式)"] --- api2["/api/config"]
+        api3["/api/files+/tree"] --- api4["/ws/pty(手动终端)"]
+        api5["/api/sessions(会话)"] --- api6["/api/rollback(回滚)"]
+        api7["/api/health(健康)"] --- api8["/api/upload(文件+解压)"]
+        api9["/api/history/search"] --- api10["/api/agent/status+/stop"]
     end
 
-    subgraph APPLICATION ["⚙️ 应用层 · 业务编排"]
+    subgraph APPLICATION["⚙️ 应用层 · 业务编排"]
         direction TB
-        GF["GraphFactory<br/>build_graph → 编译 StateGraph<br/>工具变化时重建"]
-        SE["SuggestionEngine<br/>generate_suggestion(score)<br/>→ SuggestionCard"]
-        HS["HookService<br/>register / emit<br/>(pre_agent_run·post_tool_call·等)"]
-        SVCS["基础服务<br/>ConfigSvc·SessionSvc·PolicySvc"]
-        CP["回滚服务<br/>GitCheckpointManager<br/>CheckpointStore·SummaryGenerator"]
+        GF["GraphFactory
+            build_graph → 导入nodes+router+context
+            编译 StateGraph · 工具变化重建"]
+        SE["SuggestionEngine
+            generate_suggestion(score)
+            → SuggestionCard"]
+        HS["HookService
+            register(event_type, hook)
+            emit(event_type, data)
+            场景: pre_run·post_tool·sse_output"]
+        SVC["基础服务
+            ConfigSvc · SessionSvc · PolicySvc"]
+        CP["回滚服务
+            GitCheckpointManager(Agent Git)
+            CheckpointStore(SQLite turn→hash)
+            SummaryGenerator(≤50字)"]
     end
 
-    subgraph DOMAIN ["📦 领域层 · 核心逻辑"]
+    subgraph DOMAIN["📦 领域层 · 核心逻辑"]
         direction TB
-        LG["LangGraph 状态机<br/>state.py·nodes.py·router.py<br/>context.py·Checkpointer<br/>AgentState: turn_id·mode·persona<br/>pending_approval·change_review·等"]
-        IF["接口定义<br/>IModel·IToolExecutor·ICostTracker<br/>IRepository·IKnowledgeStore<br/>IHistoryStore·IAgent·IHook"]
-        MDL["模型<br/>Message·ToolCall·Session<br/>ChangeScore·ExecutionMode<br/>ConversationState·ChoiceCard"]
-        PM["PromptManager<br/>5 角色懒加载<br/>developer·reviewer·tester<br/>architect·documenter"]
-        CAS["Casbin 权限<br/>model.conf + policy.csv<br/>审批: file/term/git/test<br/>allow / ask / deny"]
+        LG["LangGraph 状态机
+            state.py · nodes.py · router.py · context.py
+            ToolNode · Checkpointer(SqliteSaver)
+            AgentState:
+              messages · turn_id · mode · persona
+              pending_approval · change_review
+              rejected_changes · change_score
+              adversarial_suggestion · test_results"]
+        IF["接口定义(7+)
+            IModel · IToolExecutor · ICostTracker
+            IRepository · IKnowledgeStore
+            IHistoryStore · IAgent · IHook+HookContext"]
+        MDL["数据模型
+            Message · ToolCall · Session · ModeConfig
+            ChoiceCard · ChangeScore · ExecutionMode
+            ConversationState · exceptions.py"]
+        PM["PromptManager
+            5 角色按需懒加载
+            developer(核心) · reviewer(对抗)
+            tester · architect · documenter"]
+        CAS["Casbin 权限
+            model.conf + policy.csv
+            审批分类: file(带diff) / terminal / git / test
+            三档: allow(直接) / ask(弹卡) / deny(禁止)"]
     end
 
-    subgraph INFRASTRUCTURE ["🔧 基础设施层 · 具体实现"]
+    subgraph INFRASTRUCTURE["🔧 基础设施层 · 具体实现"]
         direction TB
-        MA["模型适配<br/>openai_adapter.py<br/>anthropic.py·local.py"]
-        TOOLS["工具执行 (4 组)"]
-        T1["edit/<br/>tool_file·tool_lint<br/>tool_change_review<br/>tool_change_score"]
-        T2["search/<br/>tool_search<br/>tool_ask_choice"]
-        T3["system/<br/>tool_bash·tool_task<br/>tool_extract_archive"]
-        T4["mcp/<br/>mcp_loader<br/>tool_mcp_manager<br/>(mcp-auto-install)"]
-        OTHER["其他基础设施<br/>Sandbox(Docker)·Repository(SQLAlchemy)<br/>CostTracker·PermissionChecker<br/>Terminal(用户PTY)·BackgroundTasks<br/>HookService 实现(hooks.py)"]
+        MA["模型适配(多种)
+            openai_adapter.py · anthropic.py · local.py"]
+        TOOLS["工具执行(按功能分组)"]
+        TE["📝 edit/ : 文件编辑+审查
+            tool_file · tool_change_review
+            tool_lint(Ruff) · tool_change_score"]
+        TS["🔍 search/ : 搜索+选择题
+            tool_search · tool_ask_choice"]
+        TY["⚡ system/ : bash+任务+解压
+            tool_bash · tool_task · tool_extract_archive"]
+        TM["🔌 mcp/ : MCP加载+管理
+            mcp_loader · tool_mcp_manager(基于mcp-auto-install)"]
+        O1["Sandbox(Docker隔离) · Repository(SQLAlchemy)
+            CostTracker · PermissionChecker(allow/ask/deny)
+            Terminal(用户PTY) · BackgroundTasks
+            HookService实现(hooks.py)"]
     end
 
-    subgraph DI ["💉 依赖注入容器"]
-        DI1["Container.configure()"]
-        DI2["装配: IModel·IToolExecutor·ICostTracker·IRepository<br/>IHistoryStore(NoOp)·PolicyService·PromptManager<br/>IKnowledgeStore(NoOp)·GraphFactory<br/>SuggestionEngine·HookService"]
-        DI3["create_agent() → IAgent"]
+    subgraph DI["💉 依赖注入容器"]
+        direction TB
+        DIT["Container.configure()"]
+        DIL["装配所有依赖:"]
+        DI1["IModel · IToolExecutor · ICostTracker · IRepository"]
+        DI2["IHistoryStore(NoOp) · PolicyService · PromptManager"]
+        DI3["IKnowledgeStore(NoOp) · GraphFactory"]
+        DI4["SuggestionEngine · HookService"]
+        DIO["create_agent() → 返回 IAgent"]
     end
 
-    PRESENTATION -->|HTTP / WebSocket| INTERFACE
-    INTERFACE --> APPLICATION
+    PRESENTATION -->|HTTP / SSE / WebSocket| INTERFACE
+    INTERFACE -->|调用| APPLICATION
     APPLICATION -->|调用接口| DOMAIN
     DOMAIN -->|接口实现| INFRASTRUCTURE
-    DI -.->|注入| APPLICATION
-    DI -.->|注入| DOMAIN
-    DI -.->|注入| INFRASTRUCTURE
 
-    style PRESENTATION fill:#E3F2FD,stroke:#1565C0,color:#0D47A1,stroke-width:3px
-    style INTERFACE fill:#FFF3E0,stroke:#E65100,color:#BF360C,stroke-width:3px
-    style APPLICATION fill:#E8F5E9,stroke:#2E7D32,color:#1B5E20,stroke-width:3px
-    style DOMAIN fill:#F3E5F5,stroke:#6A1B9A,color:#4A148C,stroke-width:3px
-    style INFRASTRUCTURE fill:#FFEBEE,stroke:#C62828,color:#B71C1C,stroke-width:3px
-    style DI fill:#FFF8E1,stroke:#F57F17,color:#E65100,stroke-width:3px
+    DI -->|注入 Model 适配器| INFRASTRUCTURE
+    DI -->|注入 GraphFactory 等| APPLICATION
+    DI -->|注入接口实现| DOMAIN
+
+    style PRESENTATION fill:#BBDEFB,stroke:#1565C0,color:#0D47A1,stroke-width:3px
+    style INTERFACE fill:#FFE0B2,stroke:#E65100,color:#BF360C,stroke-width:3px
+    style APPLICATION fill:#C8E6C9,stroke:#2E7D32,color:#1B5E20,stroke-width:3px
+    style DOMAIN fill:#E1BEE7,stroke:#6A1B9A,color:#4A148C,stroke-width:3px
+    style INFRASTRUCTURE fill:#FFCDD2,stroke:#C62828,color:#B71C1C,stroke-width:3px
+    style DI fill:#FFF9C4,stroke:#F57F17,color:#E65100,stroke-width:3px
 ```
 
-> **读图方式**：从上到下 5 层 + DI 容器。箭头 = 依赖方向（Interface→Application→Domain→Infrastructure）。虚线 = DI 注入。每层独立色系便于快速定位。
+> **读图方式**：5 层分层架构 + 独立 DI 容器。箭头 = 依赖方向。DI 分别注入到 Application / Domain / Infrastructure 三层。每层独立色系：蓝(前端) → 橙(接口) → 绿(应用) → 紫(领域) → 红(基础设施) → 黄(DI)。
 
 > **来源**: `architecture-refactor.md` §2
 > **关联文档**: `folder-tree.md`（文件结构）、`architecture-guide.md`（总览）
