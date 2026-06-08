@@ -12,16 +12,18 @@
 
 ## 节点定义
 
-| 节点 | 职责 | 所属层 | 文件 |
-|------|------|--------|------|
-| `chat` | LLM 对话（所有路径起点） | Domain | `domain/agent/nodes.py` |
-| `ask_choice` | Explore：出选择题 | Domain | `domain/agent/nodes.py` |
-| `execute` | Execute：调工具（ToolNode） | Domain | `domain/agent/nodes.py` |
-| `lint` | 自动格式化 | Domain | `domain/agent/nodes.py` |
-| `change_review` | 变更审查 | Domain | `domain/agent/nodes.py` |
-| `suggestion` | 对抗建议 | Domain | `domain/agent/nodes.py` |
-| `approval` | 审批（伪装成 tool_call） | Domain | `domain/agent/nodes.py` |
-| **图构建** | 编译 StateGraph（导入 nodes + router） | **Application** | `application/services/graph_factory.py` |
+| 节点 | 职责 | 边类型 | 所属层 | 文件 |
+|------|------|--------|--------|------|
+| `chat` | LLM 对话（所有路径起点） | **条件边**（router 路由） | Domain | `domain/agent/nodes.py` |
+| `ask_choice` | Explore：出选择题 | **条件边**（router 检测 tool_call） | Domain | `domain/agent/nodes.py` |
+| `execute` | 调工具（ToolNode） | **条件边**（router 检测 tool_call） | Domain | `domain/agent/nodes.py` |
+| `lint` | 自动格式化 | **固定边**（execute → lint 自动触发） | Domain | `domain/agent/nodes.py` |
+| `change_review` | 变更审查 | **固定边**（lint → change_review 自动触发） | Domain | `domain/agent/nodes.py` |
+| `suggestion` | 对抗建议 | **固定边**（change_review → suggestion 自动触发） | Domain | `domain/agent/nodes.py` |
+| `approval` | 审批（伪装成 tool_call） | **条件边**（router 检测 pending_approval） | Domain | `domain/agent/nodes.py` |
+| **图构建** | 编译 StateGraph（导入 nodes + router） | — | **Application** | `application/services/graph_factory.py` |
+
+> **回滚（ROLLBACK）不是独立节点**：回滚由 AI 在 execute 节点内通过 `tool_bash` 调用 git 命令实现，或用户通过 `/api/rollback` API 触发 GitCheckpointManager。不需要专门的 LangGraph 节点。
 
 ## Router（路由）
 
@@ -61,6 +63,22 @@ class AgentState(TypedDict):
     test_results: str | None      # 测试结果
     git_snapshot: str | None      # Git 快照（用于回滚）
 ```
+
+### 字段生命周期
+
+| 字段 | 写入节点 | 读取节点 | 说明 |
+|------|---------|---------|------|
+| `messages` | chat, execute, approval | router, chat | AI 对话历史，所有节点可追加 |
+| `turn_id` | chat_node（每轮+1） | 全局 | 每轮对话自增，用于 checkpoint 和回滚 |
+| `persona` | PromptManager.switch | chat, suggestion | developer/reviewer/tester/architect/documenter |
+| `mode` | chat_node（AI 或用户选择） | 全局 | explore / plan / execute，决定 context 约束 |
+| `pending_approval` | approval_node | router, approval | 待审批请求，非空时 router 自动导向 approval |
+| `change_review` | change_review_node | 前端渲染 | 变更审查数据，输出后由用户逐项确认 |
+| `rejected_changes` | 前端驳回回调 | chat_node | 用户驳回的变更列表，AI 分析后提替代方案 |
+| `change_score` | change_review_node | suggestion_node | 变更评分，决定对抗建议的级别和内容 |
+| `adversarial_suggestion` | suggestion_node | 前端渲染 | 对抗建议卡片，用户勾选后执行 |
+| `test_results` | execute（AI 跑测试后） | chat_node | 测试输出，用于判断是否需要修复 |
+| `git_snapshot` | chat_node（每轮开始） | rollback | 当前工作区 Git 概览，用于回滚参考 |
 
 ## DynamicToolNode（MCP 热插拔）
 
