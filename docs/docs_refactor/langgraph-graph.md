@@ -11,34 +11,51 @@
 模式不是三种不同的图，只是三种不同的 **context 约束**（工具列表、温度、身份提示词）。
 
 ```mermaid
-flowchart TD
-    START([开始]) --> chat[chat_node<br/>LLM 对话]
+flowchart LR
+    START([开始])
 
-    chat -->|条件边: AI 调用 ask_choice 工具| ask_choice[ask_choice_node<br/>出选择题]
-    chat -->|条件边: AI 调用其他工具| execute[execute_node<br/>ToolNode]
-    chat -->|条件边: pending_approval 非空| approval[approval_node<br/>审批]
-    chat -->|默认: 无 tool_call| chat
+    subgraph 条件边 [条件边 - AI 通过 router 决定]
+        direction TB
+        chat[chat_node<br/>LLM 对话]
+        ask_choice[ask_choice_node<br/>Explore：出选择题]
+        exec[execute_node<br/>Execute：调工具]
+        appr[approval_node<br/>审批]
+    end
+
+    subgraph 固定边 [固定边 - 系统自动触发]
+        direction TB
+        lint[lint_node<br/>Ruff 自动格式化]
+        review[change_review_node<br/>变更审查]
+        suggest[suggestion_node<br/>对抗建议]
+    end
+
+    END([结束])
+
+    START --> chat
+    chat -->|AI 调用 ask_choice 工具| ask_choice
+    chat -->|AI 调用其他工具| exec
+    chat -->|pending_approval 非空| appr
+    chat -->|无 tool_call<br/>继续思考| chat
 
     ask_choice -->|AI 继续| chat
+    appr -->|用户批准/拒绝| chat
 
-    execute -->|固定边: 自动| lint[lint_node<br/>Ruff 自动修复]
-    lint -->|固定边: 自动| change_review[change_review_node<br/>变更审查]
-    change_review -->|固定边: 自动| suggestion[suggestion_node<br/>对抗建议]
-    suggestion -->|回到 AI| chat
+    exec -->|自动| lint
+    lint -->|自动| review
+    review -->|自动| suggest
+    suggest -->|回到 AI| chat
 
-    approval -->|用户[批准]/[拒绝]| chat
-
-    chat -->|AI 判断任务完成| END([结束])
+    chat -->|AI 判断任务完成| END
 
     style START fill:#4CAF50,color:#fff
     style END fill:#f44336,color:#fff
-    style chat fill:#2196F3,color:#fff
-    style ask_choice fill:#FF9800,color:#fff
-    style execute fill:#9C27B0,color:#fff
-    style lint fill:#607D8B,color:#fff
-    style change_review fill:#009688,color:#fff
-    style suggestion fill:#E91E63,color:#fff
-    style approval fill:#795548,color:#fff
+    style chat fill:#1976D2,color:#fff
+    style ask_choice fill:#F57C00,color:#fff
+    style exec fill:#7B1FA2,color:#fff
+    style appr fill:#5D4037,color:#fff
+    style lint fill:#455A64,color:#fff
+    style review fill:#00695C,color:#fff
+    style suggest fill:#C2185B,color:#fff
 ```
 
 ## 节点定义
