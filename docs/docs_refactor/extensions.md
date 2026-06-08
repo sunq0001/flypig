@@ -6,9 +6,37 @@
 
 ## MCP 协议集成
 
-通过 `mcp.json` 配置文件加载，`mcp_loader.py` 启动子进程连接 MCP 服务器，获取 tools 列表后注册到 LangGraph ToolNode。
+### 三层策略：基础配置 → AI 按需发现 → 安装
 
-**内置 MCP 注册表**：
+**第一层：基础配置（项目自带，开箱即用）**
+
+项目默认附带 `mcp.json`，预装最常用的 MCP 服务器，用户零操作即可使用：
+
+```json
+{
+  "mcpServers": {
+    "web-search": {"command": "npx", "args": ["@anthropic/mcp-server-web-search"]},
+    "fetch": {"command": "npx", "args": ["@anthropic/mcp-server-fetch"]}
+  }
+}
+```
+
+`mcp_loader.py` 启动时自动加载此文件，连接 MCP 服务器，将 tools 注册到 LangGraph ToolNode。
+
+**第二层：AI 按需发现（AI 主动询问用户）**
+
+当 AI 发现当前任务需要基础配置中没有的能力时，主动搜索内置注册表并询问用户：
+
+```
+AI: "我需要进行网页搜索来查这个 API 文档，但当前没有搜索能力。
+     找到可装的 MCP 服务器：网页搜索 (npx @anthropic/mcp-server-web-search)
+     要装吗？"
+    → 用户[批准] → 执行安装 → 写入 mcp.json → mcp_loader 热加载
+    → 用户[拒绝] → AI 换方案
+```
+
+内置注册表（预置已知的 MCP 服务器信息）：
+
 ```python
 _MCP_REGISTRY = {
     "网页搜索": {"servers": ["@anthropic/mcp-server-web-search", "brave-search"],
@@ -26,19 +54,16 @@ _MCP_REGISTRY = {
 }
 ```
 
-**v1**：AI 调用 `tool_mcp_search(requirement)` 返回注册表中匹配的 MCP 服务器信息（含安装命令），由用户手动执行安装。`tool_mcp_install` 在 v1 仅返回安装命令字符串，不自动执行。
+以 `tool_mcp_search(requirement)` 供 AI 调用，搜索注册表找到匹配的服务器。
 
-**v2（未来）**：`tool_mcp_install` 在 Docker 沙箱内自动执行安装命令，自动写入 mcp.json，mcp_loader 动态加载注册到 ToolNode。
+**第三层：安装执行**
 
-**mcp.json 配置文件**：
-```json
-{
-  "mcpServers": {
-    "web-search": {"command": "npx", "args": ["@anthropic/mcp-server-web-search"]},
-    "fetch": {"command": "npx", "args": ["@anthropic/mcp-server-fetch"]}
-  }
-}
-```
+| 版本 | 方式 | 说明 |
+|------|------|------|
+| **v1** | 提示用户手动 | `tool_mcp_install` 仅返回安装命令字符串，用户复制到终端执行 |
+| **v2（未来）** | Docker 沙箱自动 | `tool_mcp_install` 在 Docker 沙箱内自动执行，自动写入 mcp.json，mcp_loader 动态加载 |
+
+用户也可以自行编辑 `mcp.json` 添加自定义 MCP 服务器（如企业内部 API），无需通过 AI。
 
 ## 文件上传与压缩解压（§3.7.2）
 
