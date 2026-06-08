@@ -10,6 +10,37 @@
 
 模式不是三种不同的图，只是三种不同的 **context 约束**（工具列表、温度、身份提示词）。
 
+```mermaid
+flowchart TD
+    START([开始]) --> chat[chat_node<br/>LLM 对话]
+
+    chat -->|条件边: AI 调用 ask_choice 工具| ask_choice[ask_choice_node<br/>出选择题]
+    chat -->|条件边: AI 调用其他工具| execute[execute_node<br/>ToolNode]
+    chat -->|条件边: pending_approval 非空| approval[approval_node<br/>审批]
+    chat -->|默认: 无 tool_call| chat
+
+    ask_choice -->|AI 继续| chat
+
+    execute -->|固定边: 自动| lint[lint_node<br/>Ruff 自动修复]
+    lint -->|固定边: 自动| change_review[change_review_node<br/>变更审查]
+    change_review -->|固定边: 自动| suggestion[suggestion_node<br/>对抗建议]
+    suggestion -->|回到 AI| chat
+
+    approval -->|用户[批准]/[拒绝]| chat
+
+    chat -->|AI 判断任务完成| END([结束])
+
+    style START fill:#4CAF50,color:#fff
+    style END fill:#f44336,color:#fff
+    style chat fill:#2196F3,color:#fff
+    style ask_choice fill:#FF9800,color:#fff
+    style execute fill:#9C27B0,color:#fff
+    style lint fill:#607D8B,color:#fff
+    style change_review fill:#009688,color:#fff
+    style suggestion fill:#E91E63,color:#fff
+    style approval fill:#795548,color:#fff
+```
+
 ## 节点定义
 
 | 节点 | 职责 | 边类型 | 所属层 | 文件 |
