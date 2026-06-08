@@ -47,12 +47,12 @@ LangGraph StateGraph（领域层）
   │
   ├── Explore Context:
   │   子链：[分析需求 | 出选择题 | 收集答案 | 逐步收敛]
-  │   工具：仅 tool_ask_choice + search + read
+  │   工具：仅 ask_choice + search + read + write_file（限文档/配置）
   │   跳转：AI 决定下一步问什么、何时收窄、何时切换 Plan
   │
   ├── Plan Context:
   │   子链：[调研代码 | 输出方案 | 等审批 | 修订方案]
-  │   工具：仅只读（search/grep/read）+ ask_choice
+  │   工具：仅只读（search/grep/read）+ ask_choice + write_file（限文档/配置）
   │   跳转：AI 决定调研到什么程度、何时输出方案、如何回应审批
   │
   └── Execute Context:

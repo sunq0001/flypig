@@ -125,7 +125,7 @@ class DynamicToolNode:
 | 维度 | Explore Context | Plan Context | Execute Context |
 |------|:--------------:|:-----------:|:--------------:|
 | **温度** | 0.1-0.2（严谨引导） | 0.2（结构化输出） | 0.3-0.5（自由发挥） |
-| **可用工具** | `ask_choice`, `search`, `read` | `ask_choice`, `search`, `read` | 全部工具 |
+| **可用工具** | `ask_choice`, `search`, `read`, `write_file`(仅文档/配置) | `ask_choice`, `search`, `read`, `write_file`(仅文档/配置) | 全部工具 |
 | **Prompt 身份** | 需求分析师 | 规划师 | 执行者 |
 | **LangGraph 节点** | 全部条件边，AI 自行跳转 | 全部条件边，AI 自行跳转 | 全部条件边，AI 自行跳转 |
 | **Human-in-loop** | 选项点击/自定义输入 | 审批卡片 | 审批卡片（按需） |
@@ -158,7 +158,7 @@ Plan Mode Context:
      └───── ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┘
 ```
 
-**关键限制**：Plan 阶段 AI 可使用只读工具 + ask_choice，不可使用写工具（write_file, bash 命令）。
+**关键限制**：Plan 阶段 AI 可使用只读工具 + ask_choice + write_file（限文档/配置如 .md、.yaml、.json），不可修改源代码（.py、.js、.ts、.vue 等）。bash 命令仅限查询。
 
 ## Execute Mode 工作流
 

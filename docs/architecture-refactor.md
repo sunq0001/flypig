@@ -1013,7 +1013,7 @@ AI 可能直接调研大量代码 → 输出方案 → 等审批。也可能调�
 }
 ```
 
-**关键：Plan 阶段 AI 可使用只读工具 + ask_choice**（搜索、文件浏览、grep、出选择题），**不可使用写工具**（write_file、bash 命令）。
+**关键：Plan 阶段 AI 可使用只读工具 + ask_choice**（搜索、文件浏览、grep、出选择题），**不可修改源代码**。可写文档/配置文件（.md、.yaml、.json），不可修改源代码（.py、.js、.ts、.vue 等）。bash 命令仅限查询。
 
 #### 3.6.5 Execute Mode — 执行模式
 
@@ -1057,7 +1057,7 @@ Execute Mode Context:
 | 维度 | Explore Context | Plan Context | Execute Context |
 |------|:--------------:|:-----------:|:--------------:|
 | **温度** | 0.1-0.2（严谨引导） | 0.2（结构化输出） | 0.3-0.5（自由发挥） |
-| **可用工具** | `ask_choice`, `search`, `read` | `ask_choice`, `search`, `read` | 全部工具 (bash/write_file/git/test/...) |
+| **可用工具** | `ask_choice`, `search`, `read`, `write_file`(仅文档/配置) | `ask_choice`, `search`, `read`, `write_file`(仅文档/配置) | 全部工具 (bash/write_file/git/test/...) |
 | **Prompt 身份** | 需求分析师 | 规划师 | 执行者 |
 | **LangGraph 节点** | 全部条件边，AI 自行跳转 | 全部条件边，AI 自行跳转 | 全部条件边，AI 自行跳转 |
 | **核心能力** | 出选择题 → 收集需求 → 逐步收敛 | 调研代码 → 输出方案 → 等审批 | 改代码→自检→回滚→重构→任意组合 |
@@ -3719,12 +3719,12 @@ LangGraph StateGraph (领域层)
   │
   ├── Explore Context:
   │   子链: [分析需求 | 出选择题 | 收集答案 | 逐步收敛]
-  │   工具: 仅 tool_ask_choice
+  │   工具: 仅 ask_choice + search + read + write_file（限文档/配置）
   │   跳转: AI 决定下一步问什么、何时收窄、何时切换 Plan
   │
   ├── Plan Context:
   │   子链: [调研代码 | 输出方案 | 等审批 | 修订方案]
-  │   工具: 仅只读 (search/grep/read)
+  │   工具: 仅只读 (search/grep/read) + ask_choice + write_file（限文档/配置）
   │   跳转: AI 决定调研到什么程度、何时输出方案、如何回应审批
   │
   └── Execute Context:
