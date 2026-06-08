@@ -127,7 +127,9 @@ flypig/
 │       │   ├── sessions.py       ← 历史会话
 │       │   ├── health.py         ← 健康检查
 │       │   ├── upload.py         ← 文件上传 + 压缩解压
-│       │   └── rollback.py       ← Git 回滚
+│       │   ├── rollback.py       ← Git 回滚
+│       │   ├── agent.py          ← /api/agent/status + /api/agent/stop
+│       │   └── history.py        ← /api/history/search
 │       └── services/
 │           ├── sse_queue.py      ← SSE 队列抽象
 │           └── file_watcher.py   ← 文件变更监控
