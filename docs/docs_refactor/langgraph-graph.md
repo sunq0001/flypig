@@ -11,46 +11,55 @@
 模式不是三种不同的图，只是三种不同的 **context 约束**（工具列表、温度、身份提示词）。
 
 ```mermaid
-flowchart LR
+flowchart TD
     START([开始])
 
-    subgraph 条件边 [条件边 - AI 通过 router 决定]
-        direction TB
-        chat[chat_node<br/>LLM 对话]
-        ask_choice[ask_choice_node<br/>Explore：出选择题]
-        exec[execute_node<br/>Execute：调工具]
-        appr[approval_node<br/>审批]
+    subgraph LOOP [主循环 — AI 在 chat_node 中不断判断下一步]
+        direction LR
+
+        chat[chat_node]
+
+        subgraph 条件分支 [条件边 - AI 通过 router 决定]
+            ask[ask_choice_node<br/>出选择题]
+            exec[execute_node<br/>调工具]
+            appr[approval_node<br/>审批]
+        end
+
+        subgraph 自动链路 [固定边 - 工具执行后自动触发]
+            lint[lint_node<br/>格式化]
+            review[change_review_node<br/>变更审查]
+            suggest[suggestion_node<br/>对抗建议]
+        end
+
+        %% 条件分支（由 router 决定）
+        chat -- 调 ask_choice --> ask
+        chat -- 调其他工具 --> exec
+        chat -- pending_approval --> appr
+        chat -- 无 tool_call<br/>继续思考 -.->|自环| chat
+
+        %% 条件分支都回到 chat
+        ask -->|AI 继续| chat
+        appr -->|批准/拒绝| chat
+
+        %% 自动链路
+        exec -->|自动触发| lint
+        lint -->|自动触发| review
+        review -->|自动触发| suggest
+        suggest -->|回到 AI| chat
     end
 
-    subgraph 固定边 [固定边 - 系统自动触发]
-        direction TB
-        lint[lint_node<br/>Ruff 自动格式化]
-        review[change_review_node<br/>变更审查]
-        suggest[suggestion_node<br/>对抗建议]
-    end
+    END([结束 — AI 输出总结，本轮完成])
 
-    END([结束])
-
-    START --> chat
-    chat -->|AI 调用 ask_choice 工具| ask_choice
-    chat -->|AI 调用其他工具| exec
-    chat -->|pending_approval 非空| appr
-    chat -->|无 tool_call<br/>继续思考| chat
-
-    ask_choice -->|AI 继续| chat
-    appr -->|用户批准/拒绝| chat
-
-    exec -->|自动| lint
-    lint -->|自动| review
-    review -->|自动| suggest
-    suggest -->|回到 AI| chat
-
-    chat -->|AI 判断任务完成| END
+    START -->|进入循环| chat
+    chat -->|AI 认为任务完成| END
 
     style START fill:#4CAF50,color:#fff
     style END fill:#f44336,color:#fff
+    style LOOP fill:#E3F2FD,color:#1565C0,stroke:#1565C0
+    style 条件分支 fill:#FFF3E0,color:#E65100,stroke:#E65100
+    style 自动链路 fill:#E8F5E9,color:#1B5E20,stroke:#1B5E20
     style chat fill:#1976D2,color:#fff
-    style ask_choice fill:#F57C00,color:#fff
+    style ask fill:#F57C00,color:#fff
     style exec fill:#7B1FA2,color:#fff
     style appr fill:#5D4037,color:#fff
     style lint fill:#455A64,color:#fff
