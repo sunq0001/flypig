@@ -22,24 +22,20 @@ flowchart LR
     appr[approval]
     END([结束])
 
-    START --> chat
+    START -->|进入循环| chat
 
-    subgraph LOOP [循环 — AI 反复决策直到任务完成]
-        direction LR
-        chat -->|调工具| exec
-        exec -->|自动| lint -->|自动| review -->|自动| suggest
-        suggest -->|回 AI| chat
+    chat -->|调工具| exec
+    exec -->|自动| lint -->|自动| review -->|自动| suggest
+    suggest -->|回到| chat
 
-        chat -->|出题| ask -->|回 AI| chat
-        chat -->|审批| appr -->|批准/拒绝| chat
-        chat -.->|无动作 继续想| chat
-    end
+    chat -->|出题| ask -->|回到| chat
+    chat -->|审批| appr -->|批准/拒绝| chat
+    chat -.->|无动作 继续想| chat
 
-    chat -->|判断任务完成| END
+    chat -->|判断完成| END
 
     style START fill:#4CAF50,color:#fff,fontSize:14px
     style END fill:#f44336,color:#fff,fontSize:14px
-    style LOOP stroke:#FF9800,stroke-dasharray:8 4,fill:#FFF8E1,color:#E65100
     style chat fill:#1976D2,color:#fff,fontSize:14px
     style exec fill:#7B1FA2,color:#fff,fontSize:14px
     style lint fill:#455A64,color:#fff,fontSize:14px
@@ -49,7 +45,7 @@ flowchart LR
     style appr fill:#5D4037,color:#fff,fontSize:14px
 ```
 
-> **橙色虚线框 = 循环区域**。chat 是中枢：所有路径（调工具/出题/审批/继续想）最终都回到 chat。AI 在循环内反复决策，**只有判断任务完成后才跳出循环走向结束**。
+> **整个图除了「开始」和「结束」，其余全部是循环**。AI 从 chat 出发，无论走哪条路径（调工具 / 出题 / 审批 / 继续想），最终都回到 chat，反复循环。**只有 AI 判断任务完成后，才从 chat 走向结束，循环终止**。
 
 ## 节点定义
 

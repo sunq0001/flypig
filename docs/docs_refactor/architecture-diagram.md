@@ -1,4 +1,80 @@
-# 架构图
+## Mermaid 架构图
+
+```mermaid
+flowchart TD
+    subgraph PRESENTATION ["🎨 表现层 - Web Dashboard"]
+        direction TB
+        Vue["Vue 3 + Vercel AI SDK (useChat)"]
+        subgraph UI_Components ["前端组件"]
+            Chat["💬 对话面板<br/>MessageList / InputBox"]
+            Cards["📇 卡片区域<br/>ChoiceCard / ChangeReview / SuggestionCard"]
+            Terminal["🖥️ 终端面板<br/>XtermViewer / OutputViewer"]
+            Sidebar["📁 侧边栏<br/>FileTree / Dashboard"]
+        end
+    end
+
+    subgraph INTERFACE ["🔌 接口层 - Quart（唯一入口）"]
+        direction TB
+        API1["/api/chat (SSE)"] --- API2["/api/config"]
+        API3["/api/files /tree"] --- API4["/ws/pty"]
+        API5["/api/sessions"] --- API6["/api/rollback"]
+        API7["/api/health"] --- API8["/api/upload"]
+        API9["/api/history/search"] --- API10["/api/agent/status & stop"]
+    end
+
+    subgraph APPLICATION ["⚙️ 应用层 - 业务编排"]
+        direction TB
+        GF["GraphFactory<br/>build_graph()"]
+        SE["SuggestionEngine<br/>generate_suggestion()"]
+        HS["HookService<br/>register / emit"]
+        SVCS["其他服务<br/>ConfigSvc / SessionSvc / PolicySvc"]
+        CP["Checkpoint 服务<br/>GitCheckpointManager / CheckpointStore / SummaryGenerator"]
+    end
+
+    subgraph DOMAIN ["📦 领域层 - 核心逻辑"]
+        direction TB
+        LG["LangGraph<br/>state.py + nodes.py + router.py"]
+        subgraph Domain_Sub ["核心模块"]
+            IF["接口<br/>IModel / IToolExecutor / IRepository / IHook"]
+            MDL["模型<br/>Message / ChangeScore / AgentState"]
+            PM["PromptManager<br/>5 角色 prompt"]
+            CAS["Casbin 策略<br/>model.conf + policy.csv"]
+        end
+    end
+
+    subgraph INFRASTRUCTURE ["🔧 基础设施层 - 具体实现"]
+        direction TB
+        MA["模型适配<br/>openai / anthropic / local"]
+        subgraph Tools ["工具执行（按功能分组）"]
+            T1["edit/<br/>文件编辑+审查"]
+            T2["search/<br/>搜索+选择题"]
+            T3["system/<br/>bash+任务+解压"]
+            T4["mcp/<br/>自动安装+加载"]
+        end
+        INFRA_OTHER["其他<br/>Sandbox / Repository / CostTracker / Terminal"]
+    end
+
+    subgraph DI ["💉 依赖注入容器"]
+        DI_TEXT["Container.configure() → 装配全部依赖<br/>create_agent() → 返回 IAgent"]
+    end
+
+    PRESENTATION -->|HTTP / WebSocket| INTERFACE
+    INTERFACE --> APPLICATION
+    APPLICATION -->|调用接口| DOMAIN
+    DOMAIN -->|接口实现| INFRASTRUCTURE
+    DI -.->|注入依赖| APPLICATION
+    DI -.->|注入依赖| DOMAIN
+    DI -.->|注入依赖| INFRASTRUCTURE
+
+    style PRESENTATION fill:#E3F2FD,stroke:#1565C0,color:#1565C0
+    style INTERFACE fill:#FFF3E0,stroke:#E65100,color:#E65100
+    style APPLICATION fill:#E8F5E9,stroke:#2E7D32,color:#2E7D32
+    style DOMAIN fill:#F3E5F5,stroke:#6A1B9A,color:#6A1B9A
+    style INFRASTRUCTURE fill:#FFEBEE,stroke:#C62828,color:#C62828
+    style DI fill:#FFF8E1,stroke:#F57F17,color:#F57F17
+```
+
+> **读图方式**：从上到下依次为表现层 → 接口层 → 应用层 → 领域层 → 基础设施层。DI 容器横跨各层，单点装配所有依赖。箭头方向 = 依赖方向。虚线 = DI 注入。
 
 > **来源**: `architecture-refactor.md` §2
 > **关联文档**: `folder-tree.md`（文件结构）、`architecture-guide.md`（总览）
