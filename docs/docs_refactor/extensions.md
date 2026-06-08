@@ -6,7 +6,7 @@
 
 ## MCP 协议集成
 
-### 三层策略：基础配置 → AI 按需发现 → 安装
+### 三层策略：基础配置 → AI 按需发现 → 自动安装
 
 **第一层：基础配置（项目自带，开箱即用）**
 
@@ -23,47 +23,44 @@
 
 `mcp_loader.py` 启动时自动加载此文件，连接 MCP 服务器，将 tools 注册到 LangGraph ToolNode。
 
-**第二层：AI 按需发现（AI 主动询问用户）**
+**第二层 + 第三层：AI 按需发现 + 自动安装（用现成方案）**
 
-当 AI 发现当前任务需要基础配置中没有的能力时，主动搜索内置注册表并询问用户：
+不自研注册表和安装逻辑——直接使用 `mcp-auto-install`（`pip install mcp-auto-install`）。
+
+`mcp-auto-install` 是一个 MCP 服务器，让 AI 通过自然语言发现、安装和管理其他 MCP 服务器：
 
 ```
-AI: "我需要进行网页搜索来查这个 API 文档，但当前没有搜索能力。
-     找到可装的 MCP 服务器：网页搜索 (npx @anthropic/mcp-server-web-search)
-     要装吗？"
-    → 用户[批准] → 执行安装 → 写入 mcp.json → mcp_loader 热加载
-    → 用户[拒绝] → AI 换方案
+AI 遇到需要搜索网页但没装搜索能力：
+  → 调用 mcp-auto-install 提供的 install_mcp_server 工具
+  → mcp-auto-install 自动搜索官方 MCP Registry
+  → 找到 @anthropic/mcp-server-web-search
+  → 用户[批准] → 自动下载安装 + 写入 mcp.json
+  → mcp_loader 热加载 → 注册到 ToolNode
+  → AI 立即可用
 ```
 
-内置注册表（预置已知的 MCP 服务器信息）：
+| 能力 | 手写方案 | mcp-auto-install |
+|------|---------|----------------|
+| 搜索注册表 | 手写 `_MCP_REGISTRY` 字典 | 搜索**官方 MCP Registry**（registry.modelcontextprotocol.io） |
+| 安装执行 | 仅提示命令字符串 | 自动 npm/pip 安装 + 写 mcp.json |
+| 服务器范围 | 限于内置 6 个 | 官方 Registry 全部服务器 |
+| 维护成本 | 需手动更新注册表 | 社区维护，自动更新 |
 
-```python
-_MCP_REGISTRY = {
-    "网页搜索": {"servers": ["@anthropic/mcp-server-web-search", "brave-search"],
-                 "install": "npx @anthropic/mcp-server-web-search"},
-    "网页抓取": {"servers": ["@anthropic/mcp-server-fetch"],
-                 "install": "npx @anthropic/mcp-server-fetch"},
-    "OCR文字识别": {"servers": ["mcp-server-ocr"],
-                   "install": "uvx mcp-server-ocr"},
-    "GitHub集成": {"servers": ["@anthropic/mcp-server-github"],
-                   "install": "npx @anthropic/mcp-server-github"},
-    "浏览器自动化": {"servers": ["@anthropic/mcp-server-playwright"],
-                    "install": "npx @anthropic/mcp-server-playwright"},
-    "数据库查询": {"servers": ["mcp-server-sqlite", "mcp-server-postgres"],
-                  "install": "uvx mcp-server-sqlite"},
+配置方式：在 `mcp.json` 中添加 `mcp-auto-install` 作为标准 MCP 服务器：
+
+```json
+{
+  "mcpServers": {
+    "web-search": {"command": "npx", "args": ["@anthropic/mcp-server-web-search"]},
+    "fetch": {"command": "npx", "args": ["@anthropic/mcp-server-fetch"]},
+    "auto-install": {"command": "npx", "args": ["@anthropic/mcp-auto-install"]}
+  }
 }
 ```
 
-以 `tool_mcp_search(requirement)` 供 AI 调用，搜索注册表找到匹配的服务器。
+AI 就可以通过自然语言按需安装任何 MCP 服务器，无需用户手动操作。
 
-**第三层：安装执行**
-
-| 版本 | 方式 | 说明 |
-|------|------|------|
-| **v1** | 提示用户手动 | `tool_mcp_install` 仅返回安装命令字符串，用户复制到终端执行 |
-| **v2（未来）** | Docker 沙箱自动 | `tool_mcp_install` 在 Docker 沙箱内自动执行，自动写入 mcp.json，mcp_loader 动态加载 |
-
-用户也可以自行编辑 `mcp.json` 添加自定义 MCP 服务器（如企业内部 API），无需通过 AI。
+> **安全**：mcp-auto-install 安装时弹审批卡片，显示服务器信息，用户批准后才执行安装。
 
 ## 文件上传与压缩解压（§3.7.2）
 

@@ -293,6 +293,6 @@ infrastructure/tools/
 │   └── tool_extract_archive.py        # 压缩解压 + Zip Slip 防护
 ├── mcp/                               # MCP 协议工具
 │   ├── mcp_loader.py                  # MCP 加载器
-│   └── tool_mcp_manager.py            # MCP 自助安装
+│   └── tool_mcp_manager.py            # MCP 自助安装（用 mcp-auto-install 现成方案）
 └── utils.py                           # strip_ansi, _best_decode, _decode_clixml
 ```

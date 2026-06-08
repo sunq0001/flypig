@@ -143,7 +143,8 @@
 │  │ Adapter│ │  bash/file/search/task   │ │ (Docker)│ │ SQLAlchemy   │  │
 │  │(多种)  │ │  ask_choice/change_review│ │         │ │ + IHistory   │  │
 │  │        │ │  lint/change_score       │ │         │ │   Store(预留)│  │
-│  │        │ │  extract_archive/mcp_loader │ │         │ │              │  │
+│  │        │ │  extract_archive/mcp(含  │ │         │ │              │  │
+│  │        │ │  auto-install)          │ │         │ │              │  │
 │  └────────┘ └──────────────────────────┘ └─────────┘ └──────────────┘  │
 │  ┌────────┐ ┌─────────────────────┐ ┌──────────┐ ┌──────────────────┐  │
 │  │ Cost   │ │ PermissionChecker   │ │ Terminal │ │ Background +    │  │
@@ -362,7 +363,7 @@ flypig/infrastructure/
 │   ├── tool_change_score.py  # ★ 变更影响评分（3.8.9）
 │   ├── tool_ask_choice.py     # ★ Explore 选择题工具（3.6.3）
 │   ├── tool_extract_archive.py # ★ 压缩解压 + Zip Slip 防护（3.7.2）
-│   ├── tool_mcp_manager.py    # ★ MCP 自助安装（3.7.1.1）
+│   ├── tool_mcp_manager.py    # ★ MCP 自助安装（基于 mcp-auto-install 现成方案）
 │   └── utils.py             # strip_ansi, _best_decode, _decode_clixml
 │
 ├── sandbox/
@@ -1124,90 +1125,43 @@ class IToolExecutor(ABC):
 
 `mcp_loader.py` 解析 `mcp.json`，启动子进程连接 MCP 服务器，获取 tools 列表后调用 `register_tool` 注册到 LangGraph ToolNode。非必需 MCP 按需启用，不阻塞核心功能。
 
-#### 3.7.1.1 MCP 自助发现与安装（AI 驱动）
+#### 3.7.1.1 MCP 自助发现与安装（AI 驱动 + 现成方案）
 
-当用户提出一个现有工具无法满足的需求时，AI 应能自助发现并建议安装对应的 MCP 服务器。
+当用户提出一个现有工具无法满足的需求时，AI 应能自助发现并安装对应的 MCP 服务器。
 
-**实现方式**：注册两个 AI 可调用的工具：
+**不自研注册表和安装逻辑**——直接使用社区成熟方案 `mcp-auto-install`（`pip install mcp-auto-install` 或 `npx @anthropic/mcp-auto-install`）。
 
-```python
-# infrastructure/tools/tool_mcp_manager.py
+在 `mcp.json` 中配置为标准 MCP 服务器：
 
-# 内置 MCP 注册表：已知 MCP 服务器的能力清单
-_MCP_REGISTRY = {
-    "网页搜索": {
-        "servers": ["@anthropic/mcp-server-web-search", "brave-search"],
-        "capabilities": ["搜索互联网", "查文档", "找API用法"],
-        "install": "npx @anthropic/mcp-server-web-search"
-    },
-    "网页抓取": {
-        "servers": ["@anthropic/mcp-server-fetch"],
-        "capabilities": ["读取网页", "获取在线文档", "爬取API参考"],
-        "install": "npx @anthropic/mcp-server-fetch"
-    },
-    "OCR文字识别": {
-        "servers": ["mcp-server-ocr"],
-        "capabilities": ["图片转文字", "截图识别", "PDF文字提取"],
-        "install": "uvx mcp-server-ocr"
-    },
-    "GitHub集成": {
-        "servers": ["@anthropic/mcp-server-github"],
-        "capabilities": ["管理PR", "Code Review", "Issue操作"],
-        "install": "npx @anthropic/mcp-server-github"
-    },
-    "浏览器自动化": {
-        "servers": ["@anthropic/mcp-server-playwright"],
-        "capabilities": ["自动化测试", "网页截图", "视觉对比"],
-        "install": "npx @anthropic/mcp-server-playwright"
-    },
-    "数据库查询": {
-        "servers": ["mcp-server-sqlite", "mcp-server-postgres"],
-        "capabilities": ["查询数据库", "分析数据结构"],
-        "install": "uvx mcp-server-sqlite"
-    },
+```json
+{
+  "mcpServers": {
+    "web-search": {"command": "npx", "args": ["@anthropic/mcp-server-web-search"]},
+    "auto-install": {"command": "npx", "args": ["@anthropic/mcp-auto-install"]}
+  }
 }
-
-def tool_mcp_search(requirement: str) -> str:
-    """AI 调用：搜索可安装的 MCP 服务器（返回全部注册表，AI 自行判断）"""
-    lines = ["可用 MCP 服务器列表："]
-    for name, info in _MCP_REGISTRY.items():
-        lines.append(f"- {name}: {', '.join(info['capabilities'])}")
-        lines.append(f"  安装: {info['install']}")
-    return "\n".join(lines)
-
-def tool_mcp_install(server_name: str) -> str:
-    """[v2] 返回安装命令字符串（[v1] 不自动执行，仅提示用户手动）"""
-    # [v1] 仅返回安装命令，由用户手动执行
-    info = _MCP_REGISTRY.get(server_name)
-    if not info:
-        return f"未知 MCP 服务器：{server_name}"
-    return f"请手动运行安装命令：\n{info['install']}"
 ```
 
-**[v1] 交互流程**（仅提示手动安装，不自执行）：
+**交互流程**：
 
 ```
-用户: 帮我查一下这段代码的bug
-AI: 让我先搜索一下这个错误...
-    → tool_mcp_search("搜索错误信息")
-    → 返回: 需要"网页搜索" MCP 服务器
-AI: "我需要安装网页搜索 MCP 服务器来帮你查这个问题，请手动运行："
-    → 输出安装命令: `npx @anthropic/mcp-server-web-search`
-    → 用户手动在终端执行，然后刷新 mcp.json 配置
+AI 需要搜索能力但没装：
+  → 调用 auto-install 提供的 install_mcp_server 工具
+  → 搜索官方 MCP Registry 找到 @anthropic/mcp-server-web-search
+  → "我需要安装网页搜索 MCP 服务器，要装吗？"
+  → 用户[批准] → 自动安装 + 写入 mcp.json + 热加载 → 立即可用
 ```
 
-**[v2（未来）] 自动安装流程**（Docker 沙箱内安全执行）：
+**mcp-auto-install 优势**：
 
-```
-AI: "我需要安装网页搜索 MCP 服务器来帮你查这个问题，要装吗？"
-    → 审批卡片: [安装] [跳过]
-用户: [安装]
-    → tool_mcp_install 在 Docker 沙箱内执行安装命令
-    → 自动写入 mcp.json → mcp_loader 加载 → 注册到 ToolNode
-AI: 已安装，现在开始搜索...
-```
+| 维度 | 手写方案 | mcp-auto-install |
+|------|---------|----------------|
+| 注册表 | 硬编码 6 个服务器 | 搜索**官方 MCP Registry** |
+| 安装 | 仅提示命令字符串 | 自动 npm/pip 安装 |
+| 维护 | 需手动更新 | 社区维护，自动更新 |
+| 覆盖 | 6 个已知服务器 | 官方 Registry 全部 |
 
-⚠️ **安全考虑**：v2 自动安装时，安装命令在 Docker 沙箱内执行，审批卡片显示服务器来源和权限范围。v1 由用户手动执行，审批卡片显示安装命令供用户复制粘贴。
+> **安全**：安装前弹审批卡片，用户批准后才执行。
 ```
 
 #### 3.7.1.2 architect_node 触发条件
@@ -3577,7 +3531,7 @@ flypig/                           ← 项目根
 │   │   ├── tool_change_score.py ← 变更影响评分（3.8.9）
 │   │   ├── tool_extract_archive.py ← 压缩解压（3.7.2）
 │   │   ├── tool_mcp_manager.py  ← MCP 自助安装（3.7.1.1）
-│   │   ├── mcp_loader.py        ← MCP 加载器（预留）
+│   │   ├── mcp_loader.py        ← MCP 加载器（mcp-auto-install 现成方案）
 │   │   └── utils.py             ← strip_ansi, _best_decode
 │   │
 │   ├── sandbox/                 ← Docker 沙箱
@@ -3830,7 +3784,7 @@ class ToolBash:
 | 改终端管理 | `infrastructure/terminal.py` |
 | 改后台进程 buffer | `infrastructure/tools/tool_task.py` |
 | 改 MCP 集成 | `infrastructure/tools/mcp_loader.py` |
-| MCP 自助安装 | `infrastructure/tools/tool_mcp_manager.py` + `mcp.json` |
+| MCP 自助安装 | `infrastructure/tools/tool_mcp_manager.py`（调用 mcp-auto-install） |
 | DI 容器装配 | `di/container.py` |
 | LangGraph 状态机 | `domain/agent/` |
 | 工具自动注册 | `infrastructure/tools/registry.py` → `@tool()` 装饰器 |
@@ -3872,7 +3826,7 @@ class ToolBash:
 | 迁入：tool_change_review.py（3.8.7 变更审查数据生成） | 新文件 |
 | 迁入：tool_lint.py（3.8.8 代码规范自动审查，需先提 pyproject.toml 配置 ruff） | 新文件 |
 | 迁入：tool_change_score.py（3.8.9 变更影响评分） | 新文件 |
-| 迁入：tool_mcp_manager.py + mcp_loader.py（MCP 自助安装 + 加载） | 新文件 + 预留 |
+| 迁入：tool_mcp_manager.py（调用 mcp-auto-install）+ mcp_loader.py | 新文件 + 预留 |
 | 注册全部工具到 LangGraph ToolNode | 新代码 |
 
 ### Step 3：Web 层重组

@@ -42,13 +42,13 @@
 | | **重试机制** | **自研 async retry** | 业务定制 | 网络抖动自动重试，指数退避 |
 | | **监控** | **prometheus_client** | 市面方案 | Counter/Histogram/Gauge，暴露 /metrics |
 | | 选择题卡片 | **自研 tool_ask_choice** | 业务定制 | 核心 UX 模式，~20 行返回值 |
-| | MCP 协议 | **社区标准（mcp.json）** | 市面方案 | 不自研协议；[v1] 提示用户手动安装 |
+| | MCP 协议 | **mcp-auto-install（社区方案）** | 市面方案 | 不自研；基于官方 MCP Registry 自动搜索、安装、配置 |
 | | 工具路由 | **LangGraph ToolNode** | 市面方案 | 标准 LangGraph tool node |
 | **DevOps** | 容器编排 | **Docker Compose** | 市面方案 | 单机足够 |
 | | 反向代理 | **Nginx** | 市面方案 | 静态文件+SSL |
 
 ## 总结
 
-- **开源方案 ~94%** — LangGraph + Casbin + dependency-injector + Element Plus + Mermaid.js + Vercel AI SDK + Ruff + Quart + SQLAlchemy + marked + highlight.js + Docker...
-- **真正自研 ~4%** — PromptManager(~50行)、CostTracker(~30行)、GraphFactory(~80行)+SuggestionEngine(~40行)+HookService(~40行)、ChangeScore(~40行)、ChangeReview(~60行)
-- **薄包装不计入** — tool_ask_choice(~20行)、tool_lint(~20行调Ruff)、IHistoryStore(接口定义)
+- **开源方案 ~95%** — LangGraph + Casbin + dependency-injector + Element Plus + Mermaid.js + Vercel AI SDK + Ruff + Quart + SQLAlchemy + marked + highlight.js + Docker + mcp-auto-install...
+- **真正自研 ~3%** — PromptManager(~50行)、CostTracker(~30行)、GraphFactory(~80行)+SuggestionEngine(~40行)+HookService(~40行)、ChangeScore(~40行)、ChangeReview(~60行)
+- **薄包装不计入** — tool_ask_choice(~20行)、tool_lint(~20行调Ruff)、IHistoryStore(接口定义)、tool_mcp_manager(调mcp-auto-install)
