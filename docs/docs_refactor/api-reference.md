@@ -13,7 +13,8 @@
 | `/api/files` | GET | 文件列表 |
 | `/api/file` | GET | 文件内容 |
 | `/api/tree` | GET | 文件树 |
-| `/api/sessions` | GET | 历史会话 |
+| `/api/sessions` | GET | 历史会话列表 |
+| `/api/sessions/<session_id>/restore` | GET | 恢复断点：返回全部消息 + AgentState（turn_id、mode、persona），前端 `useChat({ initialMessages })` 恢复对话 |
 | `/api/health` | GET | 健康检查 |
 | `/api/upload` | POST | 文件上传 + 解压 |
 | `/api/rollback/<turn_id>` | POST | 回滚到指定 turn_id 的文件状态 |
@@ -21,16 +22,19 @@
 | `/api/history/search` | GET | 历史搜索 |
 | `/api/agent/status` | GET | Agent 运行状态（空闲/忙碌/当前任务/成本统计） |
 | `/api/agent/stop` | POST | 强制停止当前运行中的 Agent |
+| `/api/feedback/suggestion` | POST | 用户提交建议反馈（✅/❌），记录 `suggestion_id` + `adopted` |
 
 ## SSE 事件格式（/api/chat）
 
 | 事件类型 | 说明 | 触发时机 |
 |----------|------|---------|
 | `token` | 逐 token 文本 | LLM 流式输出 |
+| `reasoning` | LLM 推理过程片段 | LLM 思考中间步骤（防止用户以为卡死） |
 | `choice` | 选择题卡片 | Explore 模式 |
 | `approval` | 审批卡片 | Plan 模式确认/修改 |
-| `change_review` | 变更审查卡片 | Execute 执行后 |
-| `suggestion` | 对抗建议卡片 | 变更评分后 |
+| `change_plan` | 变更计划（改前预览，逐项批准） | AI 输出修改方案后、执行前 |
+| `change_review` | 变更后审查（对比计划与实际） | Execute 执行后 |
+| `suggestion` | 对抗建议卡片（含 `suggestion_id`） | 变更评分后 |
 | `response_end` | 结束 + usage | 本轮结束 |
 
 ```python

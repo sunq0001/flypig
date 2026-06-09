@@ -24,11 +24,12 @@
 | | 数据库 ORM | **SQLAlchemy** | 市面方案 | 事实标准，SQLite→PostgreSQL 无缝切换 |
 | | 权限策略 | **Casbin (pycasbin)** | 市面方案 | ACL/RBAC/ABAC 全支持 |
 | | 对话状态机 | **LangGraph** | 市面方案 | 原生 state machine、Checkpointer、human-in-the-loop、ToolNode |
+| | 长期记忆（P2 可选） | **LangMem** | 市面方案 | AI 主动 search/manage memory 工具；后台自动提取知识点；备选：可替换为自研 pgvector |
 | | 沙箱 | **Docker SDK** | 市面方案 | Docker 容器隔离 |
 | | 配置 | **PyYAML** | 市面方案 | yaml 解析 |
 | | 代码规范检查 | **Ruff** | 市面方案 | Rust 编写，比 flake8 快 100 倍，支持 --fix 自动修复 |
 | | 会话持久化 | **SQLAlchemy** | 市面方案 | 存储层用开源 ORM |
-| | 历史搜索预留 | **SQLite FTS5 / PostgreSQL tsvector** | 市面方案 | IHistoryStore 接口定义，实现用数据库全文索引 |
+| | 历史搜索预留 | **SQLite FTS5 → pgvector → LangMem** | 混合方案 | P0: SQLite + tag 索引；P1: LangMem 语义检索（可替换为自研 pgvector） |
 | | CostTracker | **自研（~30 行）** | 业务定制 | 定价公式高度定制，Litellm 太重 |
 | | PromptManager | **自研（~50 行）** | 业务定制 | 多角色对抗切换，无现成方案 |
 | | OrchestrationService（已拆分为三） | | | 原三职合一服务拆为 GraphFactory+SuggestionEngine+HookService |
@@ -49,6 +50,6 @@
 
 ## 总结
 
-- **开源方案 ~95%** — LangGraph + Casbin + dependency-injector + Element Plus + Mermaid.js + Vercel AI SDK + Ruff + Quart + SQLAlchemy + marked + highlight.js + Docker + mcp-auto-install...
+- **开源方案 ~95%** — LangGraph + LangMem + Casbin + dependency-injector + Element Plus + Mermaid.js + Vercel AI SDK + Ruff + Quart + SQLAlchemy + marked + highlight.js + Docker + mcp-auto-install...
 - **真正自研 ~3%** — PromptManager(~50行)、CostTracker(~30行)、GraphFactory(~80行)+SuggestionEngine(~40行)+HookService(~40行)、ChangeScore(~40行)、ChangeReview(~60行)
 - **薄包装不计入** — tool_ask_choice(~20行)、tool_lint(~20行调Ruff)、IHistoryStore(接口定义)、tool_mcp_manager(调mcp-auto-install)

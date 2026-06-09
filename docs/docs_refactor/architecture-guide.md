@@ -77,11 +77,12 @@ class ToolBash:
 | 理解三种模式（Explore/Plan/Execute）的权限 | `mode-matrix.md` |
 | 理解 LangGraph 节点、router、状态 | `langgraph-graph.md` |
 | 查看所有 API 端点和 SSE 事件格式 | `api-reference.md` |
+| 查看 SSE 事件类型（reasoning/change_plan 等） | `api-reference.md` → SSE 事件格式 |
 | 查看前端组件和架构 | `frontend-arch.md` |
 | 查看后端各层模块职责 | `backend-modules.md` |
 | 查看 subprocess 执行策略和 task_log | `subprocess-and-tools.md` |
 | 查看变更审查、Lint、对抗建议 | `adversarial-system.md` |
-| 查看 MCP、IHistoryStore 等预留接口 | `extensions.md` |
+| 查看对话存储、上下文压缩、LangMem 记忆 | `extensions.md` |
 | 查看迁移路线和 MVP 迭代 | `migration-roadmap.md` |
 | 查看数据流向 | `data-flow.md` |
 
@@ -101,7 +102,11 @@ class ToolBash:
 | 改模式配置(温度/工具) | `mode-matrix.md` → `domain/models/mode.py` |
 | 改权限规则 | `backend-modules.md` → `infrastructure/policies/` + Casbin 策略文件 |
 | 改会话持久化 | `extensions.md` → `infrastructure/repository/` |
+| 断点恢复（关掉再开继续） | `api-reference.md` → `GET /api/sessions/<id>/restore` + `SessionService.restore()` |
 | 改终端管理 | `subprocess-and-tools.md` → `infrastructure/terminal.py` |
+| 工具安全限制（路径白名单） | `subprocess-and-tools.md` → `infrastructure/tools/tool_bash.py` |
+| 敏感信息检测 | `backend-modules.md` → `domain/agent/nodes.py`（chat_node 输出前） |
+| 死循环检测 + 节点异常保护 | `langgraph-graph.md` → `domain/agent/nodes.py + router.py` |
 | DI 容器装配 | `backend-modules.md` → `di/container.py` |
 | LangGraph 节点逻辑 | `langgraph-graph.md` → `domain/agent/state.py + nodes.py + router.py + context.py` |
 | 对抗建议生成 | `backend-modules.md` → `application/services/suggestion_engine.py` |
@@ -109,4 +114,15 @@ class ToolBash:
 | 配置即代码 | `backend-modules.md` → YAML + `@dataclass ModelConfig` |
 | 数据类型规范 | `backend-modules.md` → `@dataclass` 替代 `dict` |
 | 工具自动注册 | `subprocess-and-tools.md` → `@tool()` 装饰器 |
+| 工具调用幂等性 | `subprocess-and-tools.md` → 各 `tool_*.py` 实现时注意 |
 | 文件编辑策略 | `subprocess-and-tools.md` → `FileEditStrategy` 策略模式 |
+| SQLite WAL + trace_id | `backend-modules.md` → 健壮性章节 |
+| 敏感信息检测 | `backend-modules.md` → 健壮性章节 |
+| 优雅关闭 / 工具执行追踪 | `backend-modules.md` → 健壮性章节 |
+| 对话存储与压缩 | `extensions.md`（IConversationStore + IContextPipeline）→ `infrastructure/repository/conversation_store.py` |
+| LangMem 长期记忆 | `extensions.md`（LangMem 集成）→ 注册到 ToolNode 作为 AI 可调用工具 |
+| 建议反馈记录 | `adversarial-system.md`（建议反馈记录）→ `interface/web/routes/feedback.py` → `store.update_suggestion_feedback()` |
+| 变更计划（改前预览） | `adversarial-system.md` → `change_plan` 节点，用户逐项批准后才执行 |
+| 思考过程实时推流 | `subprocess-and-tools.md` → chat_node 中 yield `reasoning` 事件 |
+| 实时停止执行 | `subprocess-and-tools.md` → `/api/agent/stop` + kill 子进程 |
+| SSE 事件类型列表 | `api-reference.md` → SSE 事件格式（含 reasoning / change_plan） |

@@ -14,23 +14,29 @@
 flowchart LR
     START([开始])
     chat[chat]
+    plan[change_plan]
     exec[execute]
     lint[lint]
     review[change_review]
     suggest[suggestion]
     ask[ask_choice]
     appr[approval]
+    stop([停止])
     END([结束])
 
     START -->|进入循环| chat
 
-    chat -->|调工具| exec
+    chat -->|输出修改方案| plan
+    plan -->|逐项批准| exec
+    plan -->|驳回| chat
+
     exec -->|自动| lint -->|自动| review -->|自动| suggest
     suggest -->|回到| chat
 
     chat -->|出题| ask -->|回到| chat
     chat -->|审批| appr -->|批准/拒绝| chat
     chat -.->|无动作 继续想| chat
+    chat -->|用户点击停止| stop
 
     chat -->|判断完成| END
 
@@ -43,6 +49,7 @@ flowchart LR
     style suggest fill:#C2185B,color:#fff,fontSize:14px
     style ask fill:#F57C00,color:#fff,fontSize:14px
     style appr fill:#5D4037,color:#fff,fontSize:14px
+    style stop fill:#D32F2F,color:#fff,fontSize:14px
 ```
 
 > **整个图除了「开始」和「结束」，其余全部是循环**。AI 从 chat 出发，无论走哪条路径（调工具 / 出题 / 审批 / 继续想），最终都回到 chat，反复循环。**只有 AI 判断任务完成后，才从 chat 走向结束，循环终止**。
@@ -52,10 +59,11 @@ flowchart LR
 | 节点 | 职责 | 边类型 | 所属层 | 文件 |
 |------|------|--------|--------|------|
 | `chat` | LLM 对话（所有路径起点） | **条件边**（router 路由） | Domain | `domain/agent/nodes.py` |
+| `change_plan` | 输出结构化变更方案，用户逐项批准后才执行 | **条件边**（AI 输出修改计划时触发） | Domain | `domain/agent/nodes.py` |
 | `ask_choice` | Explore：出选择题 | **条件边**（router 检测 tool_call） | Domain | `domain/agent/nodes.py` |
 | `execute` | 调工具（ToolNode） | **条件边**（router 检测 tool_call） | Domain | `domain/agent/nodes.py` |
 | `lint` | 自动格式化 | **固定边**（execute → lint 自动触发） | Domain | `domain/agent/nodes.py` |
-| `change_review` | 变更审查 | **固定边**（lint → change_review 自动触发） | Domain | `domain/agent/nodes.py` |
+| `change_review` | 变更后审查（对比变更计划与实际结果） | **固定边**（lint → change_review 自动触发） | Domain | `domain/agent/nodes.py` |
 | `suggestion` | 对抗建议 | **固定边**（change_review → suggestion 自动触发） | Domain | `domain/agent/nodes.py` |
 | `approval` | 审批（伪装成 tool_call） | **条件边**（router 检测 pending_approval） | Domain | `domain/agent/nodes.py` |
 | **图构建** | 编译 StateGraph（导入 nodes + router） | — | **Application** | `application/services/graph_factory.py` |
@@ -81,7 +89,57 @@ def router(state: AgentState) -> str:
         return "execute"
     if state.get("pending_approval"):
         return "approval"
-    return "chat"  # 无 tool_calls + 无审批 = AI 继续对话或总结
+    return "chat"
+```
+
+### 重复操作检测
+
+检测连续多轮完全相同操作（工具+参数+结果一致）来识别死循环：
+
+```python
+def _detect_repeated_actions(state: AgentState, max_repeat: int = 5) -> bool:
+    recent = state["messages"][-(max_repeat * 2):]
+    if len(recent) < max_repeat * 2:
+        return False
+    tool_msgs = [m for m in recent if m.get("role") == "tool"][-max_repeat:]
+    if len(tool_msgs) < max_repeat:
+        return False
+    return all(m.get("content") == tool_msgs[0].get("content") for m in tool_msgs)
+```
+
+在 `chat_node` 中调用，检测到重复操作时提示用户而非强制中止。
+
+### 节点异常保护
+
+每个节点用 try-except 包裹，防止单个节点崩溃导致整图中断：
+
+```python
+def safe_node(node_func):
+    """装饰器：节点异常时不崩图，返回错误状态"""
+    async def wrapper(state):
+        try:
+            return await node_func(state)
+        except ModelAPIError:
+            return {"messages": [AIMessage(content="模型服务暂不可用，请稍后重试")]}
+        except Exception as e:
+            return {"messages": [AIMessage(content=f"处理出错: {str(e)[:200]}")], "error": str(e)}
+    return wrapper
+```
+
+所有关键节点（chat、execute、change_review）都应用 `@safe_node`。
+
+### 并发会话隔离
+
+每个会话使用独立的 `graph.compile()` 实例，防止多会话状态污染：
+
+```python
+class GraphFactory:
+    _sessions: dict[str, CompiledStateGraph] = {}
+
+    def get_graph(self, session_id: str) -> CompiledStateGraph:
+        if session_id not in self._sessions:
+            self._sessions[session_id] = self._build_graph()
+        return self._sessions[session_id]
 ```
 
 ## AgentState（domain/agent/state.py）
@@ -90,15 +148,57 @@ def router(state: AgentState) -> str:
 class AgentState(TypedDict):
     messages: list                # 对话消息列表
     turn_id: int                  # 当前对话轮次
+    session_id: str               # 会话 ID（关联 ConversationStore）
     persona: str                  # developer/reviewer/tester/...
     mode: str                     # explore / plan / execute
     pending_approval: dict | None # 待审批请求
     change_review: dict | None    # 变更审查数据
     rejected_changes: list | None # 被用户驳回的变更
     change_score: dict | None     # 变更评分结果
-    adversarial_suggestion: dict | None  # 对抗建议卡片
+    adversarial_suggestion: dict | None  # 对抗建议卡片（含 suggestion_id）
     test_results: str | None      # 测试结果
     git_snapshot: str | None      # Git 快照（用于回滚）
+```
+
+> 新增 `session_id` 字段，用于与 ConversationStore 关联。
+
+## chat_node 集成 ContextPipeline
+
+```python
+# domain/agent/nodes.py
+from di.container import Container
+
+def chat_node(state: AgentState) -> dict:
+    pipeline = Container.get("context_pipeline")
+    store = Container.get("conversation_store")
+
+    # 1. 压缩上下文（读 store → 压缩 → 返回消息列表）
+    user_input = state["messages"][-1]["content"]
+    context = await pipeline.build(
+        store=store,
+        session_id=state["session_id"],
+        user_input=user_input,
+    )
+
+    # 2. 调 LLM
+    response = llm.invoke(context)
+    state["turn_id"] += 1
+
+    # 3. 存本轮完整记录到 store
+    await store.save_turn(
+        session_id=state["session_id"],
+        turn_id=state["turn_id"],
+        data=TurnRecord(
+            user_message=user_input,
+            ai_response=response.content,
+            # ... tool_calls, suggestions 等从 state 中取
+        ),
+    )
+
+    return {
+        "messages": [response],
+        "turn_id": state["turn_id"],
+    }
 ```
 
 ### 字段生命周期

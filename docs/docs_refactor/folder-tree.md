@@ -22,9 +22,9 @@ flypig/
 │   │   ├── imodel.py             ← IModel（context 驱动，统一 stream 接口）
 │   │   ├── itool_executor.py     ← IToolExecutor（含 MCP 动态注册）
 │   │   ├── icost_tracker.py      ← ICostTracker
-│   │   ├── irepository.py        ← IRepository（会话持久化）
 │   │   ├── iknowledge_store.py   ← IKnowledgeStore（NoOp 预留）
-│   │   ├── ihistory_store.py     ← IHistoryStore（P1 预留）
+│   │   ├── iconversation_store.py  ← IConversationStore（对话存储 + 检索）
+│   │   ├── icontext_pipeline.py   ← IContextPipeline（预 LLM 压缩）
 │   │   ├── ihook.py              ← IHook（事件钩子）
 │   │   └── iagent.py             ← IAgent
 │   │
@@ -65,7 +65,8 @@ flypig/
 │   │   ├── suggestion_engine.py  ← ★ 评分→建议映射：generate_suggestion()
 │   │   ├── hook_service.py       ← ★ 钩子管理器：register / emit
 │   │   ├── git_checkpoint_manager.py ← ★ Agent Git checkpoint 管理
-│   │   ├── checkpoint_store.py   ← ★ SQLite 映射（turn_id → commit_hash）
+│   │   ├── context_pipeline.py    ← ★ 预 LLM 上下文压缩（Truncate+Trim+Fold）
+│   │   ├── conversation_store.py  ← ★ 对话存储 SQLite（IConversationStore 实现）
 │   │   └── summary_generator.py  ← ★ 自动生成短语摘要
 │   └── dto/
 │       ├── chat_dto.py           ← 数据传输对象
@@ -108,8 +109,8 @@ flypig/
 │   │   └── pricing.py            ← 价格获取 + 缓存
 │   │
 │   ├── repository/               ← 持久化
-│   │   ├── sqlite.py             ← SQLAlchemy 持久化（IRepository 实现）
-│   │   └── history_store.py      ← NoOpHistoryStore（IHistoryStore 预留）
+│   │   ├── sqlite.py             ← SQLAlchemy 持久化（IRepository 实现，旧接口兼容）
+│   │   └── conversation_store.py ← SqliteConversationStore（IConversationStore 实现，主入口）
 │   │
 │   ├── policies/                 ← Casbin 初始化配置（基础设施层实现）
 │   │   ├── model.conf            ← Casbin 模型
@@ -132,7 +133,8 @@ flypig/
 │       │   ├── upload.py         ← 文件上传 + 压缩解压
 │       │   ├── rollback.py       ← Git 回滚
 │       │   ├── agent.py          ← /api/agent/status + /api/agent/stop
-│       │   └── history.py        ← /api/history/search
+│       │   ├── history.py        ← /api/history/search
+│       │   └── feedback.py       ← /api/feedback/suggestion（建议反馈）
 │       └── services/
 │           ├── sse_queue.py      ← SSE 队列抽象
 │           └── file_watcher.py   ← 文件变更监控
@@ -180,7 +182,7 @@ flypig/
 
 | 项目 | 原 §7 树 | 本树（统一版） | 说明 |
 |------|---------|-------------|------|
-| `domain/interfaces/` | 7 个接口文件 | **8 个**（新增 `ihistory_store.py`） | §3.9.1 明确有 IHistoryStore 接口，§7 漏了 |
+| `domain/interfaces/` | 7 个接口文件 | **8 个**（`ihistory_store.py` → `iconversation_store.py` + `icontext_pipeline.py`） | 合并 IHistoryStore + IRepository + CheckpointStore 为 IConversationStore；新增 IContextPipeline |
 | `domain/policies/` | 有 | 保留 | Casbin 权限定义（领域层） |
 | `infrastructure/policies/` | 有 | 保留 | Casbin 初始化配置（基础设施层） |
 | `chat/` 组件 | 8 个 | **11 个**（新增 MessageItem, ThinkingIndicator, ToolCallCard） | §4.3 有这三个组件，§7 漏了 |

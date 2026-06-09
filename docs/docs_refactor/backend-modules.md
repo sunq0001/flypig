@@ -17,7 +17,8 @@ flypig/interface/web/
 │   ├── upload.py       # 文件上传 + 压缩解压
 │   ├── rollback.py     # Git 回滚
 │   ├── agent.py        # /api/agent/status + /api/agent/stop
-│   └── history.py      # /api/history/search
+│   ├── history.py      # /api/history/search
+│   └── feedback.py     # /api/feedback/suggestion（建议反馈记录）
 └── services/
     ├── sse_queue.py    # SSE 队列抽象（≤40 行）
     └── file_watcher.py # 文件变更监控（≤50 行）
@@ -29,7 +30,7 @@ flypig/interface/web/
 |------|------|------|
 | `ChatService` | 接收输入 → 调用 LangGraph → 事件分发 | ≤60 |
 | `ConfigService` | Config 初始化、模型切换、API Key 管理 | ≤80 |
-| `SessionService` | 多会话创建/切换/销毁/持久化 | ≤80 |
+| `SessionService` | 多会话创建/切换/销毁/持久化 + `restore()` 恢复断点 | ≤100 |
 | `PolicyService` | Casbin 封装 | ≤80 |
 | `GraphFactory` | ★ 图构建：导入 nodes + router → 编译 StateGraph（原 OrchestrationService.build_graph()） | ≤80 |
 | `SuggestionEngine` | ★ 评分→建议映射：generate_suggestion()（原 OrchestrationService 拆分） | ≤40 |
@@ -147,7 +148,7 @@ class Container:
         model = ModelAdapter(config.default_model)      # 实现 IModel
         cost_tracker = CostTracker(config.pricing_dict) # 实现 ICostTracker
         tools = ToolExecutor(workspace_dir=config.workspace)  # 实现 IToolExecutor
-        repo = SqliteRepository(config.db_path)         # 实现 IRepository
+        repo = SqliteConversationStore("data/conversations.db")  # 实现 IConversationStore
         policy = PolicyService(config.permissions)      # 权限规则
         prompts = PromptManager()                       # 多角色 prompt
         knowledge = NoOpKnowledgeStore()                # 知识库空实现
@@ -156,6 +157,15 @@ class Container:
         )
         suggestion_engine = SuggestionEngine()
         hook_service = HookService()
+
+        # ★ 记忆 + 压缩体系
+        conversation_store = SqliteConversationStore("data/conversations.db")
+        context_pipeline = CompositePipeline(layers=[
+            TruncateResultsLayer(max_result_len=2000),
+            FoldOldTurnsLayer(max_complete_turns=15),
+            TrimMessagesLayer(budget=100_000),
+        ])
+
         cls.register("config", config, singleton=True)
         cls.register("model", model, singleton=True)
         cls.register("cost_tracker", cost_tracker, singleton=True)
@@ -164,10 +174,11 @@ class Container:
         cls.register("policy", policy, singleton=True)
         cls.register("prompts", prompts, singleton=True)
         cls.register("knowledge_store", knowledge, singleton=True)
-        cls.register("history_store", NoOpHistoryStore(), singleton=True)
         cls.register("graph_factory", graph_factory, singleton=True)
         cls.register("suggestion_engine", suggestion_engine, singleton=True)
         cls.register("hook_service", hook_service, singleton=True)
+        cls.register("conversation_store", conversation_store, singleton=True)
+        cls.register("context_pipeline", context_pipeline, singleton=True)
 
     @classmethod
     def create_agent(cls, workspace=None, hooks=None) -> "IAgent":
@@ -305,3 +316,216 @@ circuit_breaker_state = Gauge("flypig_circuit_breaker_state", "Circuit breaker s
 ```
 
 暴露端点：`/metrics`（由 prometheus_client 自动提供）。
+
+### SQLite WAL 模式
+
+LangGraph Checkpointer + ConversationStore 都使用 SQLite。多会话并发写入时，默认模式会锁表。
+
+```python
+# Checkpointer 初始化
+SqliteSaver.from_conn_string("langgraph.db?mode=wal")
+
+# ConversationStore 初始化
+engine = create_async_engine("sqlite+aiosqlite:///conversations.db?mode=wal")
+```
+
+### 全局 trace_id
+
+用 `trace_id = f"{session_id}_{turn_id}"` 串联所有日志行和工具调用：
+
+```python
+# chat_node 中生成
+trace_id = f"{state['session_id']}_{state['turn_id']}"
+
+# 所有日志、工具调用、SSE 事件都带上
+logging.info("[trace=%s] 用户输入: %s", trace_id, user_input)
+logging.info("[trace=%s] tool_call: %s(%s)", trace_id, tool_name, args)
+```
+
+| ID | 格式 | 生命周期 |
+|----|------|---------|
+| `trace_id` | `session_id_turn_id` | 一轮对话内所有操作共享 |
+| `span_id` | `trace_id_tool_index` | 每轮内每次工具调用独立 |
+
+等上 OpenTelemetry 时，直接映射为 OTEL trace_id / span_id。
+
+### 优雅关闭
+
+LangGraph Checkpointer 持久化的是**上一轮完成后**的状态。如果进程被 SIGTERM 杀死（docker restart、部署更新），正在执行的工具调用会丢失结果。
+
+**当前 MVP 阶段**：不处理，重启后用户重试即可。
+
+**SaaS 阶段**：以下表追踪工具执行状态：
+
+```sql
+CREATE TABLE tool_executions (
+    execution_id TEXT PRIMARY KEY,
+    session_id TEXT,
+    turn_id INTEGER,
+    tool_name TEXT,
+    status TEXT,           -- running / completed / failed / timeout
+    started_at TIMESTAMP,
+    finished_at TIMESTAMP
+);
+```
+
+### 敏感信息检测
+
+LLM 输出可能包含 API key、密码等敏感字符串。在 `chat_node` 返回前端前做检测：
+
+```python
+import re
+
+_SENSITIVE_PATTERNS = [
+    (r'sk-[a-zA-Z0-9]{20,}', "API Key（sk- 开头）"),
+    (r'AIza[0-9A-Za-z\-_]{35}', "Google API Key"),
+    (r'password\s*[:=]\s*["\']?[\w!@#$%^&*]+', "密码赋值"),
+    (r'-----BEGIN (RSA |EC )?PRIVATE KEY-----', "私钥"),
+]
+
+def detect_sensitive(content: str) -> list[dict]:
+    matches = []
+    for pattern, name in _SENSITIVE_PATTERNS:
+        if re.search(pattern, content, re.IGNORECASE):
+            matches.append({"type": name, "pattern": pattern})
+    return matches
+```
+
+检测结果不拦截内容，改为在前端标黄警告：
+- 前端 `MessageItem.vue` 检测到 `has_sensitive` 字段 → 消息上方加⚠️横幅
+- 不改内容，不替换，不自动删除
+- LLM 编码场景下读写密码是正常操作，设计上不能过度拦截
+
+```python
+# chat_node 返回时
+sensitive = detect_sensitive(response.content)
+if sensitive:
+    response.additional_kwargs["has_sensitive"] = True
+    response.additional_kwargs["sensitive_items"] = sensitive
+```
+
+## 中介者模式：ChatService
+
+`ChatService` 天然承担了中介者角色——它协调 `GraphFactory`、`HookService`、`SuggestionEngine`、`PolicyService` 之间的交互，但这些服务之间互不知晓对方存在：
+
+```python
+class ChatService:
+    """中介者：协调所有服务的交互"""
+
+    def __init__(self):
+        self.graph_factory = Container.get("graph_factory")
+        self.hook_service = Container.get("hook_service")
+        self.suggestion_engine = Container.get("suggestion_engine")
+        self.policy = Container.get("policy")
+        self.repository = Container.get("repository")
+
+    async def process_message(self, user_msg: str, session_id: str) -> AsyncGenerator:
+        """五步流程，中介者统一编排"""
+        # Step 1: 权限检查
+        if not await self.policy.can_chat(session_id):
+            yield PolicyBlocked()
+            return
+
+        # Step 2: 触发前置事件（中介者通知 HookService）
+        await self.hook_service.emit("chat:before", {
+            "session_id": session_id, "message": user_msg
+        })
+
+        # Step 3: 获取/构建 Graph（中介者协调 GraphFactory）
+        graph = self.graph_factory.build_graph(session_id)
+
+        # Step 4: 执行并生成建议（中介者协调 SuggestionEngine）
+        async for event in graph.astream_events({"messages": [user_msg]}):
+            if event["type"] == "on_suggestion":
+                suggestion = await self.suggestion_engine.generate(event["data"])
+                yield suggestion
+            else:
+                yield event
+
+        # Step 5: 触发完成事件
+        await self.hook_service.emit("chat:after", {"session_id": session_id})
+
+# 各服务之间没有任何直接引用：
+# GraphFactory 不知道 HookService 存在
+# SuggestionEngine 不知道 PolicyService 存在
+# 新增服务只需加一行 self.xxx = Container.get("xxx") + 在 process_message 中编排
+```
+
+**效果**：新增一个服务时，只需改 `ChatService` 一个类，其他服务不需做任何修改。
+
+## 建造者模式：AgentBuilder（预留）
+
+当前 `Container.create_agent()` 的参数不多（`workspace`、`hooks`），直接作为类方法够用。但未来若新增参数（`sandbox_config`、`custom_tool_list`、`prompt_overrides`），建议用建造者模式避免构造函数爆炸：
+
+```python
+class AgentBuilder:
+    """建造者模式：一步步配置 Agent（参数超过 8 个时启用）"""
+
+    def __init__(self):
+        self._hooks = []
+        self._workspace = None
+        self._tools = None
+        self._prompt_file = None
+        self._sandbox_enabled = False
+        self._sandbox_config = {}
+        self._max_iterations = 20
+        self._knowledge_bases = []
+
+    def with_workspace(self, path: str) -> "AgentBuilder":
+        self._workspace = path
+        return self
+
+    def with_hooks(self, hooks: list) -> "AgentBuilder":
+        self._hooks = hooks
+        return self
+
+    def with_tools(self, tools: list[str]) -> "AgentBuilder":
+        """限制 Agent 可用工具列表"""
+        self._tools = tools
+        return self
+
+    def with_sandbox(self, config: dict | None = None) -> "AgentBuilder":
+        self._sandbox_enabled = True
+        if config:
+            self._sandbox_config = config
+        return self
+
+    def with_knowledge(self, knowledge_bases: list) -> "AgentBuilder":
+        self._knowledge_bases = knowledge_bases
+        return self
+
+    def with_max_iterations(self, n: int) -> "AgentBuilder":
+        self._max_iterations = n
+        return self
+
+    async def build(self) -> "IAgent":
+        """最后一步才创建，参数校验统一在这里"""
+        if not self._workspace:
+            raise ValueError("Agent 必须指定 workspace")
+
+        model = Container.get("model")
+        tools = self._tools or await Container.get("tools").get_available_tools()
+
+        return Agent(
+            model=model,
+            tools=tools,
+            hooks=self._hooks,
+            workspace=self._workspace,
+            sandbox=SandboxConfig(**self._sandbox_config) if self._sandbox_enabled else None,
+            max_iterations=self._max_iterations,
+            knowledge_bases=self._knowledge_bases,
+        )
+
+# 使用
+agent = await (AgentBuilder()
+    .with_workspace("/var/www/stock")
+    .with_hooks([LogHook(), SsePushHook()])
+    .with_tools(["bash", "file", "search", "mcp_*"])
+    .with_sandbox({"memory": "512m", "timeout": 60})
+    .with_max_iterations(50)
+    .build())
+```
+
+**何时启用**：`Container.create_agent()` 的命名参数超过 **8 个**时，切换到 AgentBuilder。在此之前保持现状即可。
+
+> **关联文档**: `adversarial-system.md`（对抗审核）、`langgraph-graph.md`（AgentState）

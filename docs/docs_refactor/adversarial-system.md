@@ -4,17 +4,30 @@
 > **关联文档**: `mode-matrix.md`（模式权限）、`langgraph-graph.md`（相关节点）
 > 改对抗逻辑或阈值时，需同步检查 langgraph-graph.md 中的 suggestion/change_review 节点。
 
-## 变更审查（ChangeReview）
+## 变更计划（ChangePlan）——改前预览，按风险分级审核
 
-> 解决：AI 改完一批文件后用户只能「全盘接受」或「全盘拒绝」的问题。
-> 实际上用户可能：认可文件 A 的改动但不认可文件 B；认可某个函数但不认可同文件中另一处修改；对某个改动有疑虑希望 AI 解释后决定。
+> 解决：AI 改了之后用户才发现改得不对。用户应该在**改之前**就知道 AI 打算改什么、影响范围、风险等级。
+> 但每次改都让用户点批准太烦了，按风险等级决定审批方式：
 
-**触发方式**：系统在 `execute_node` 执行完毕后自动调用（作为 ToolNode 的后续节点）。AI 在每次文件变更工具调用后，LangGraph 条件边自动导向 `change_review` 节点，无需 AI 手动触发。
+| ChangeScore 等级 | 审批方式 | 用户体验 |
+|-----------------|---------|---------|
+| **TRIVIAL** | 自动执行 | 改空格/注释，用户不需要知道 |
+| **LOW** | 自动执行 + 后台记录 | 一行变量改名，事后能在历史里看到 |
+| **MEDIUM** | 非阻塞通知栏提示 | 导航栏闪一下"改了 2 个文件"，用户可点开看，不点也不影响继续聊 |
+| **HIGH** | 弹审批卡，阻塞 | 改了敏感函数、删文件，必须用户点头 |
+| **CRITICAL** | 弹审批卡 + 标红警告 | 改了安全策略、影响整个项目 |
+
+**触发方式**：AI 在 `chat_node` 中生成修改方案后，计算 ChangeScore，根据等级决定是自动执行还是等用户批准。
 
 ```
-EXECUTE（改代码）→ LINT（静默修复）→ CHANGE_REVIEW（系统自动调用）→ 用户逐项确认/驳回
-  → 被驳回的变更 → AI 分析原因 → 提出替代方案 → 重新审查
+chat_node → CHANGE_SCORE 评估
+  ├── TRIVIAL/LOW → 直接执行，后台记录
+  ├── MEDIUM → 执行 + 非阻塞通知（用户不点不影响）
+  └── HIGH/CRITICAL → CHANGE_PLAN（展示结构化变更）→ 用户批准/驳回 → 执行已批准的变更
+  → LINT → 后续流程
 ```
+
+**SSE 事件结构**（数据和原来一样，只是改为改前输出，字段名改 plan_id）：
 
 **SSE 事件结构**（完整字段）：
 ```python
@@ -317,9 +330,9 @@ def handle_adversarial_decision(state: AgentState, user_choice: dict) -> dict:
     return {"next": next_node, "phase": next_node}
 ```
 
-### IRepository 与 LangGraph Checkpointer 的职责区分
+### IConversationStore 与 LangGraph Checkpointer 的职责区分
 
-| 维度 | IRepository | LangGraph Checkpointer |
+| 维度 | IConversationStore | LangGraph Checkpointer |
 |------|------------|----------------------|
 | 存储内容 | 对话消息列表 + 成本记录 + 用户偏好 | LangGraph 状态快照（含审批挂起点） |
 | 用途 | **跨会话**：历史记录、关掉再开、会话列表 | **单会话内**：中断恢复、回滚到上一轮 |
@@ -471,3 +484,160 @@ def handle_adversarial_decision(state: AgentState, user_choice: dict) -> dict:
     next_node = actions.get(selected[0], "done")
     return {"next": next_node, "phase": next_node}
 ```
+
+## 责任链模式重构建议
+
+当前 Lint→ChangeReview→Suggestion 的固定边是 hard-coded 在 LangGraph 的图定义中的。未来若要新增审核环节（安全扫描、性能分析、版权检查），需修改 graph.py 的路由——这违反开闭原则。
+
+**责任链模式**让每个审核环节成为一个独立的 Handler，环节之间通过链式调用松耦合：
+
+```python
+from abc import ABC, abstractmethod
+
+class ReviewHandler(ABC):
+    """审核责任链节点"""
+    def __init__(self):
+        self._next = None
+
+    def set_next(self, handler: "ReviewHandler") -> "ReviewHandler":
+        self._next = handler
+        return handler  # 支持链式调用
+
+    @abstractmethod
+    async def handle(self, ctx: ReviewContext) -> ReviewResult | None:
+        """处理请求，返回 None 表示交给下一个"""
+        ...
+
+@dataclass
+class ReviewContext:
+    file_path: str
+    diff: str
+    turn_id: int
+
+@dataclass
+class ReviewResult:
+    blocked: bool = False
+    reason: str = ""
+    issues: list = field(default_factory=list)
+
+class LintHandler(ReviewHandler):
+    """语法格式检查（Ruff）"""
+    async def handle(self, ctx) -> ReviewResult | None:
+        issues = await run_ruff(ctx.file_path)
+        if not issues:
+            return None  # 没发现问题，交给下一个
+        return ReviewResult(issues=issues)
+
+class SecurityHandler(ReviewHandler):
+    """安全风险扫描"""
+    async def handle(self, ctx) -> ReviewResult | None:
+        if "rm -rf" in ctx.diff or "DROP TABLE" in ctx.diff:
+            return ReviewResult(blocked=True, reason="检测到危险操作")
+        if "eval(" in ctx.diff or "exec(" in ctx.diff:
+            return ReviewResult(issues=[{"type": "security", "detail": "动态执行代码"}])
+        return None  # 安全，交给下一个
+
+class StyleHandler(ReviewHandler):
+    """代码风格一致性检查"""
+    async def handle(self, ctx) -> ReviewResult | None:
+        # ... 检查命名规范、缩进一致性等 ...
+        return None
+
+# 使用
+chain = LintHandler()
+chain.set_next(SecurityHandler()).set_next(StyleHandler())
+
+result = await chain.handle(ReviewContext(file_path, diff))
+# result 为 None 表示全部通过，否则取最后一个有返回的 Handler 的结果
+```
+
+**效果**：加一个新审核环节 = 写一个新 Handler 类 + 一行 `.set_next(NewHandler())`，不用改 graph.py 的路由逻辑。
+
+> **关联文档**: `subprocess-and-tools.md`（ToolLint）、`langgraph-graph.md`（节点路由）
+
+---
+
+## 建议反馈记录（Minimal）
+
+> **原则**：只记录，不分析。AI 给建议 → 用户点 ✅/❌ → 写 JSONL。为未来自动调优留数据，当前完全不分析。
+
+### 1. `suggest_node` 输出携带 `suggestion_id`
+
+每张 SuggestionCard 生成一个 UUID，写入 SSE 事件：
+
+```python
+import uuid
+
+def suggest_node(state: AgentState) -> dict:
+    score = state.get("change_score")
+    if score is None:
+        return {"messages": []}
+
+    suggestion = generate_suggestion(score)
+    if not suggestion["suggestions"]:
+        return {"next": "done", "messages": []}
+
+    suggestion_id = str(uuid.uuid4())
+
+    # 不阻塞：Store 写入由 chat_node 统一调度，这里只传 ID
+    return {
+        "adversarial_suggestion": {**suggestion, "suggestion_id": suggestion_id},
+        "phase": "awaiting_adversarial_decision",
+        "messages": []
+    }
+```
+
+SSE 事件中增加 `suggestion_id` 字段：
+
+```python
+{
+    "type": "suggestion",
+    "suggestion_id": "sg_a1b2c3",
+    "summary": "你改了 3 个文件(2 个模块)",
+    "level": "HIGH",
+    "suggestions": [ ... ]
+}
+```
+
+### 2. 反馈 API（走 ConversationStore）
+
+```python
+# interface/web/routes/feedback.py
+from di.container import Container
+
+@app.post("/api/feedback/suggestion")
+async def submit_feedback(suggestion_id: str, adopted: bool):
+    store = Container.get("conversation_store")
+    await store.update_suggestion_feedback(suggestion_id, adopted)
+    return {"ok": True}
+```
+
+### 3. 前端 SuggestionCard 加 ✅/❌ 按钮
+
+在 `SuggestionCard.vue` 底部加两个按钮，调 `POST /api/feedback/suggestion`：
+
+```
+┌─────────────────────────────────────────────────┐
+│  你改了 3 个文件 (2 个模块)  [HIGH]              │
+│                                                 │
+│  ☑ 逐文件代码质量审查    ⏱ 约 2 轮对话           │
+│  ☑ 运行单元测试          ⏱ 约 30 秒              │
+│  ☐ 运行集成测试          ⏱ 约 2 分钟              │
+│  ☐ 架构评估              ⏱ 约 3 轮对话            │
+│                                                 │
+│           [✅ 采纳建议] [❌ 不需提醒]             │
+└─────────────────────────────────────────────────┘
+```
+
+> **注意**：✅/❌ 仅用于记录反馈，不影响当前对话流程。用户勾选哪些项执行是通过 `handle_adversarial_decision` 决定的，两套逻辑独立。
+
+### 4. 按 rule_name 统计采纳率（数据来自 ConversationStore）
+
+等 SaaS 用户量上来了，从 ConversationStore 里查 suggestion 反馈数据：
+
+```python
+records = await store.search("", session_id=None)
+# 过滤出有 adopted 字段的轮次，按 rule_name 分组统计
+```
+
+> **关联文档**: `api-reference.md`（SSE 事件格式 + `/api/feedback/suggestion` 端点）、`backend-modules.md`（文件夹树）

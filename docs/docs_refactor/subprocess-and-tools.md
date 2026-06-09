@@ -41,6 +41,43 @@ AI 所有命令操作统一使用 subprocess，不再有 PTY 路径。
 | **后台长任务**（python server.py, npm run dev） | 异步后台 | `subprocess.Popen(stdout=PIPE, stderr=PIPE)` + 返回 PID | AI 通过 `task_log(pid)` 工具获取实时缓存的日志 |
 | **交互式脚本**（含 input()） | 先跑再告知 | 先用 subprocess 跑，阻塞前的输出当 tool_result 喂给 AI | AI 判断后告知用户去手动终端 |
 
+### 安全限制（路径访问控制）
+
+所有文件操作默认限制在 workspace 目录内。超出时弹审批让用户决定，不硬拦截：
+
+```python
+# tool_bash.py / tool_file.py 执行前
+WORKSPACE_ROOT = Path(config.workspace).resolve()
+_SENSITIVE_PATHS = ["~/.ssh", "~/.gnupg", "/etc/shadow", "/etc/passwd"]
+
+def _check_path_access(path: str) -> str:
+    """返回 'allow' / 'ask' / 'deny'"""
+    resolved = Path(path).expanduser().resolve()
+    if str(resolved).startswith(str(WORKSPACE_ROOT)):
+        return "allow"
+    for sensitive in _SENSITIVE_PATHS:
+        if str(resolved).startswith(str(Path(sensitive).expanduser().resolve())):
+            return "deny"
+    return "ask"  # 工作区外但非敏感 → 弹审批
+```
+
+| 结果 | 行为 | 例子 |
+|------|------|------|
+| `allow` | 直接执行 | 工作区内的文件 |
+| `ask` | 弹审批卡片，用户确认后执行 | 用户说"帮我改下 `~/.bashrc`" |
+| `deny` | 直接拒绝，提示"无权访问" | `~/.ssh/id_rsa`、`/etc/shadow` |
+
+> **原则**：用户明确要求的操作走 `ask`，让用户自己决定是否信任 AI。系统只拦截明确的高危敏感路径。
+
+同时配合 Casbin 策略（已在 `backend-modules.md` 定义）：
+
+| 操作 | 策略 | 效果 |
+|------|------|------|
+| `write_file:.bashrc` | deny | AI 不能修改用户 shell 配置 |
+| `terminal:rm -rf /` | deny | 禁止全局删除 |
+| `terminal:git push --force` | ask | 弹审批才能执行 |
+| 其他未匹配 | allow | 默认允许 |
+
 ## 后台任务监控（task_log）
 
 ```python
@@ -74,6 +111,41 @@ def task_log(pid: int) -> str:
 | 命令输出 | PTY 输出 → SSE → 前端卡片 | subprocess 输出直接返回给 AI |
 | 交互式命令 | AI 检测 + PTY 注入 + 静默检测 | 交给用户，AI 提示"请手动运行" |
 | AI 的 bash 工具 | subprocess + PTY 双路径 | **仅 subprocess（单路径）** |
+
+## 实时停止执行
+
+`/api/agent/stop` 除了标记状态，还需要终止正在运行的 subprocess：
+
+```python
+@app.post("/api/agent/stop")
+async def stop_agent():
+    """终止所有正在运行的后台进程和工具调用"""
+    for pid, info in _BACKGROUND_PROCESSES.items():
+        try:
+            os.kill(pid, signal.SIGTERM)
+            await asyncio.sleep(1)
+            os.kill(pid, signal.SIGKILL)  # 强制终止
+        except ProcessLookupError:
+            pass
+    # 重置 Agent 状态
+    Container.get("agent").reset()
+    return {"ok": True, "killed_pids": list(_BACKGROUND_PROCESSES.keys())}
+```
+
+## 思考过程实时推流
+
+LLM 推理时前端需要看到推理状态，否则长时间无响应用户以为卡死。在 `chat_node` 中通过 SSE 推送推理过程：
+
+```python
+# chat_node 中
+async for chunk in llm.astream(messages):
+    if chunk.type == "reasoning":  # 思考过程
+        yield {"type": "reasoning", "content": chunk.content}
+    elif chunk.type == "text":     # 最终输出文本
+        yield {"type": "token", "content": chunk.content}
+```
+
+前端收到 `reasoning` 事件时显示在对话气泡上方，用灰字 + 斜体表示"AI 正在思考"。
 
 ## 终端面板设计
 
@@ -296,3 +368,108 @@ infrastructure/tools/
 │   └── tool_mcp_manager.py            # MCP 自助安装（用 mcp-auto-install 现成方案）
 └── utils.py                           # strip_ansi, _best_decode, _decode_clixml
 ```
+
+### 工具调用幂等性
+
+subprocess 超时后无法判断远程命令是否已执行，可能导致重复操作：
+
+```
+AI 调 bash("git commit -m 'fix'") → 超时 30s → AI 收到 TimeoutError
+→ AI 重试 → bash("git commit -m 'fix'") → 第二次成功 → 但第一次也成功了
+→ 两个重复的 commit
+```
+
+**原则**：耗时工具尽量设计为幂等：
+
+| 操作 | 是否幂等 | 说明 |
+|------|---------|------|
+| `git commit` | ❌ 不幂等 | 先检查 `git status` 是否有未提交变更 |
+| `write_file` | ✅ 幂等 | 写同样的内容 = 没变化 |
+| `npm install` | ✅ 幂等 | 重复安装不影响结果 |
+| `mkdir -p` | ✅ 幂等 | -p 参数保证 |
+| `git push` | ❌ 不幂等 | 添加 `--force-with-lease` 并在出错时告知用户 |
+
+## 命令模式：工具调用可撤销
+
+当前工具调用是"发射后不管"的——AI 执行 `write_file` 或 `bash` 后，若用户驳回变更，需要手动 git 回滚。命令模式将每个工具调用封装为 Command，让撤销成为一等公民：
+
+```python
+from abc import ABC, abstractmethod
+
+class ToolCommand(ABC):
+    """可撤销的命令"""
+    @abstractmethod
+    async def execute(self) -> ToolResult: ...
+    @abstractmethod
+    async def undo(self) -> None: ...
+
+class WriteFileCommand(ToolCommand):
+    def __init__(self, path: str, content: str):
+        self.path = path
+        self.new_content = content
+        self.backup: str | None = None
+
+    async def execute(self):
+        self.backup = await read_file_content(self.path)  # 先备份
+        await write_file(self.path, self.new_content)
+
+    async def undo(self):
+        if self.backup is not None:
+            await write_file(self.path, self.backup)
+
+class BashCommand(ToolCommand):
+    def __init__(self, cmd: str):
+        self.cmd = cmd
+        self.undo_cmd: str | None = None  # 逆向操作
+
+    async def execute(self):
+        result = await bash(self.cmd)
+        # 自动推导逆向命令（git add → git reset, mkdir → rm -r）
+        self.undo_cmd = self._infer_undo(self.cmd)
+        return result
+
+    async def undo(self):
+        if self.undo_cmd:
+            await bash(self.undo_cmd)
+
+    def _infer_undo(self, cmd: str) -> str | None:
+        """简单逆向推导，复杂操作交给 GitCheckpointManager"""
+        if cmd.startswith("git add"):
+            return cmd.replace("git add", "git reset")
+        if cmd.startswith("mkdir"):
+            return cmd.replace("mkdir", "rm -rf")
+        return None  # 无法推导 → 通知用户手动回滚
+
+class CommandHistory:
+    """执行历史栈，支持撤销到任意点"""
+    def __init__(self, max_undo=50):
+        self._history: list[ToolCommand] = []
+        self._max_undo = max_undo
+        self._position = -1
+
+    async def execute(self, cmd: ToolCommand):
+        await cmd.execute()
+        self._history = self._history[:self._position + 1]  # 清除重做栈
+        self._history.append(cmd)
+        self._position += 1
+        if len(self._history) > self._max_undo:
+            self._history.pop(0)
+
+    async def undo_last(self):
+        if self._position >= 0:
+            await self._history[self._position].undo()
+            self._position -= 1
+
+    async def undo_to(self, target_index: int):
+        """撤销到任意历史点"""
+        while self._position >= target_index:
+            await self._history[self._position].undo()
+            self._position -= 1
+```
+
+**与现有系统的关系**：
+- `CommandHistory` 的 `undo_to()` 天然对应 CheckpointStore 的 `turn_id → commit_hash` 映射
+- 用户驳回变更时 → 系统自动对关联工具调用执行 `undo()` → 再用 git 整体确认
+- 命令模式**不取代** git 回滚（严谨场景仍需 git），而是提供**更细粒度的即时撤销**
+
+> **关联文档**: `backend-modules.md`（CheckpointStore）、`adversarial-system.md`（驳回处理）

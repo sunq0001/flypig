@@ -117,28 +117,205 @@ def tool_extract_archive(archive_path: str, target_dir: str = None) -> str:
 - `.7z` 文件：py7zr >= 0.20 已有内置安全检查
 - 依赖 `zipfile`/`tarfile`（标准库）+ `py7zr`/`rarfile`（可选）
 
-## 存储抽象 + 代码知识图谱
+## 对话存储（IConversationStore）
 
-### IRepository
+> 替代原来散落的 IRepository / IHistoryStore / CheckpointStore。一份数据 + 多种查询视角。
+
+### 数据模型
 
 ```python
-class IRepository(ABC):
-    async def save_session(session) -> None: ...
-    async def load_session(session_id) -> Optional[Session]: ...
-    async def list_sessions(user, limit=20) -> List[Session]: ...
-    async def delete_session(session_id) -> None: ...
+# domain/interfaces/iconversation_store.py
+from dataclasses import dataclass, field
+from datetime import datetime
+
+@dataclass
+class SuggestionItem:
+    id: str
+    text: str
+    rule_name: str
+    adopted: bool | None       # None=未反馈, True=采纳, False=拒绝
+    feedback_timestamp: datetime | None
+
+@dataclass
+class TurnRecord:
+    """一轮对话的完整记录"""
+    session_id: str
+    turn_id: int
+    user_message: str
+    ai_response: str
+    tool_calls: list = field(default_factory=list)
+    tool_results: list = field(default_factory=list)
+    mode: str = "execute"
+    persona: str = "developer"
+    summary: str | None = None
+    cost: float = 0.0
+    timestamp: datetime = field(default_factory=datetime.utcnow)
+    tags: list = field(default_factory=list)
+    git_commit_hash: str | None = None
+    suggestions: list = field(default_factory=list)
+    change_review: dict | None = None
+    change_score: dict | None = None
 ```
 
-## IHistoryStore
+### 接口
 
-P0: IRepository（已有 SQLite）
-P1: IHistoryStore 接口 + NoOp 空实现（当前）
-P2: SQLite FTS5 全文搜索
-P3: 成本监控 + 模式检测
-P4: pgvector 向量搜索 + cross-encoder 重排
-P5: Graphify 知识图谱实体查询
+```python
+class IConversationStore(ABC):
+    """统一对话存储——只存原始数据，不压缩。压缩是 IContextPipeline 的职责。"""
 
-## IKnowledgeStore
+    @abstractmethod
+    async def save_turn(self, session_id: str, turn_id: int, data: TurnRecord): ...
+
+    @abstractmethod
+    async def get_recent_turns(self, session_id: str, limit: int = 20) -> list[TurnRecord]:
+        """最近 N 轮完整对话（给 pipeline 的原材料）"""
+
+    @abstractmethod
+    async def get_summaries(self, session_id: str, limit: int = 50) -> list[TurnRecord]:
+        """所有轮次的摘要列表（给 pipeline 拼 system prompt）"""
+
+    @abstractmethod
+    async def search(self, query: str, session_id: str | None = None) -> list[TurnRecord]:
+        """按内容/标签搜索对话"""
+
+    @abstractmethod
+    async def get_checkpoint(self, session_id: str, turn_id: int) -> str | None:
+        """获取指定轮次的 git commit_hash"""
+
+    @abstractmethod
+    async def update_suggestion_feedback(self, suggestion_id: str, adopted: bool): ...
+
+    @abstractmethod
+    async def list_sessions(self, user_id: str, limit: int = 20) -> list[SessionMeta]: ...
+
+    @abstractmethod
+    async def delete_session(self, session_id: str): ...
+```
+
+### 实现演进
+
+| 阶段 | 实现 | 存储 | 检索方式 |
+|------|------|------|---------|
+| **P0** | `SqliteConversationStore` | SQLite 单表 | `turn_id`/`timestamp` 排序 + `LIKE` 搜索 |
+| **P1** | 升级 SQLite | SQLite + FTS5 索引 | 全文搜索 + tag 精确匹配 |
+| **P2** | `PgConversationStore` | PostgreSQL + pgvector | 向量检索 + 混合搜索（SaaS 多租户） |
+
+### 存储策略
+
+原始数据**全部保留，不删**。但超过 `max_full_turns`（默认 20）的轮次：
+- `user_message` / `ai_response` / `tool_results` 清空
+- `summary` / `tags` / `suggestions` / `cost` 等元数据保留
+- 所以 `get_summaries()` 永远能拿到全部轮次的概要
+
+## 上下文压缩（IContextPipeline）
+
+> 在调 LLM 之前，把原始消息压缩到 token 预算以内。不存储，只转换。
+
+```python
+class IContextPipeline(ABC):
+    @abstractmethod
+    async def build(
+        self,
+        store: IConversationStore,
+        session_id: str,
+        user_input: str,
+        budget: int = 100_000,
+    ) -> list:
+        """返回压缩后的消息列表，直接喂给 LLM"""
+
+class ICompressLayer(ABC):
+    @abstractmethod
+    def compress(self, messages: list, budget: int) -> list: ...
+
+class CompositePipeline(IContextPipeline):
+    def __init__(self, layers: list[ICompressLayer]):
+        self.layers = layers
+
+    async def build(self, store, session_id, user_input, budget=100_000):
+        recent = await store.get_recent_turns(session_id, 20)
+        summaries = await store.get_summaries(session_id, 50)
+        messages = self._assemble(recent, summaries, user_input)
+        for layer in self.layers:
+            if count_tokens(messages) <= budget:
+                break
+            messages = layer.compress(messages, budget)
+        return messages
+```
+
+### 内置三层
+
+| 层 | 代码量 | 做什么 | 优先级 |
+|----|--------|--------|--------|
+| `TruncateResultsLayer` | ~20 行 | 工具结果 > 2000 字截断保留头尾 | 第一层 |
+| `FoldOldTurnsLayer` | ~30 行 | 最早几轮折叠成摘要，保留最近 N 轮完整 | 第二层 |
+| `TrimMessagesLayer` | 1 行 | 包装 LangGraph 的 `trim_messages` 做保底 | 第三层 |
+
+### 与 ConversationStore 的关系
+
+```
+chat_node:
+    1. pipeline.build(store, session_id, input)    ← 读 store，压缩
+    2. response = llm.invoke(compressed)
+    3. store.save_turn(session_id, turn_id, data)   ← 写 store
+```
+
+Pipeline 只读，Store 只存。职责清晰。
+
+## LangMem 集成（P2 选项）
+
+LangMem 不是 ConversationStore 的替代品，而是**额外的知识层**——AI 主动调用的工具。
+
+### 和 ConversationStore 的对比
+
+| 维度 | ConversationStore | LangMem |
+|------|-----------------|---------|
+| 存什么 | 对话记录（user_msg + tool_results） | 知识片段（"用户喜欢 FastAPI"） |
+| 谁写 | 系统自动：每轮 `save_turn()` | AI 主动调 `manage_memory()` |
+| 谁读 | Pipeline 自动读 → 压缩 → 喂 LLM | AI 主动调 `search_memory()` |
+| 写入频率 | 每轮 1 次 | AI 觉得有必要时才写 |
+| 检索 | turn_id/timestamp/summary 索引 | 向量嵌入 + 语义搜索 |
+| 数据量 | 全部对话（可能很大） | 精选知识点（轻量） |
+
+### 集成方式
+
+```python
+# 注册到 ToolNode，仅 Execute 模式可用
+from langmem import create_manage_memory_tool, create_search_memory_tool
+
+memory_tools = [
+    create_manage_memory_tool(
+        namespace=("memories",),
+        store=store_backend,  # InMemoryStore / AsyncPostgresStore
+    ),
+    create_search_memory_tool(
+        namespace=("memories",),
+        store=store_backend,
+    ),
+]
+```
+
+AI 会在对话中**自行决定**何时调用：
+
+```
+用户: "还是按上次说的那个方案"
+  AI 调 search_memory("上次说的方案") → "用户偏好 FastAPI + SQLite"
+  AI 参考后回答
+
+用户: "记住，我喜欢用 Pydantic"
+  AI 调 manage_memory("用户喜欢用 Pydantic")
+```
+
+### 实现演进
+
+| 阶段 | 方式 | 说明 |
+|------|------|------|
+| **P0（MVP）** | 不用 LangMem | ConversationStore 的 get_recent_turns 已经够用 |
+| **P1（有用户）** | LangMem + SQLite | AI 能查/存知识点，后台自动提取 |
+| **P2（向量库）** | LangMem + pgvector | 语义搜索精度大幅提升 |
+
+> LangMem 不是架构依赖。`IConversationStore.search()` 是对历史对话的全文/向量搜索，LangMem 是对"提炼后的知识片段"的搜索，两者独立。
+
+## IKnowledgeStore（代码知识图谱）
 
 ```python
 class IKnowledgeStore(ABC):

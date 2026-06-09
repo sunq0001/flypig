@@ -46,6 +46,7 @@
 │  │  GraphFactory                                                     │   │
 │  │  ├─ build_graph() → 导入 domain/agent/ 下 nodes + router         │   │
 │  │  │  + context → 编译 StateGraph（路由注册在应用层完成）            │   │
+│  │  │  流程: chat → change_plan(改前预览) → exec → review → suggest  │   │
 │  │  └─ 工具变化时重建图（DynamicGraphFactory）                        │   │
 │  └──────────────────────────────────────────────────────────────────┘   │
 │                                                                          │
@@ -54,11 +55,16 @@
 │  │  generate_suggestion(score)  │ │  register/emit   │ │ SessionSvc  │  │
 │  │  → SuggestionCard            │ │  (通用事件钩子)   │ │ PolicySvc   │  │
 │  └──────────────────────────────┘ └──────────────────┘ └─────────────┘  │
-│  ┌─────────────────┐ ┌──────────────────┐ ┌─────────────────────────┐  │
-│  │ GitCheckpoint   │ │ CheckpointStore  │ │ SummaryGenerator        │  │
-│  │ Manager         │ │ SQLite 映射表    │ │ 自动生成 ≤50 字摘要    │  │
-│  │ (Agent Git)     │ │ turn_id→hash    │ │                         │  │
-│  └─────────────────┘ └──────────────────┘ └─────────────────────────┘  │
+│  ┌─────────────────────────┐ ┌────────────────────────┐              │
+│  │  ContextPipeline        │ │  ConversationStore     │              │
+│  │  Truncate+Trim+Fold     │ │  IConversationStore    │              │
+│  │  (预 LLM 上下文压缩)     │ │  SQLite 实现           │              │
+│  └─────────────────────────┘ └────────────────────────┘              │
+│  ┌─────────────────┐ ┌──────────────────────────┐                    │
+│  │ GitCheckpoint   │ │ SummaryGenerator         │                    │
+│  │ Manager         │ │ 自动生成 ≤50 字摘要      │                    │
+│  │ (Agent Git)     │ │ （存入 ConversationStore） │                    │
+│  └─────────────────┘ └──────────────────────────┘                    │
 │                                                                          │
 ├─────────────────────────────────────────────────────────────────────────┤
 │                     DOMAIN LAYER (领域层)                                  │
@@ -75,9 +81,9 @@
 │  │  IModel(context驱动)│ │  Message, ToolCall │ │  多角色按需懒加载      ││
 │  │  IToolExecutor    │ │  Session, ModeConfig│ │  developer(核心)       ││
 │  │  ICostTracker     │ │  ChoiceCard        │ │  reviewer(对抗)        ││
-│  │  IRepository      │ │  ChangeScore       │ │  tester                ││
-│  │  IKnowledgeStore  │ │  ExecutionMode     │ │  architect             ││
-│  │  IHistoryStore    │ │  ConversationState │ │  documenter            ││
+│  │  IConversationStore│ │  ChangeScore       │ │  tester                ││
+│  │  IContextPipeline  │ │  ExecutionMode     │ │  architect             ││
+│  │  IKnowledgeStore  │ │  ConversationState │ │  documenter            ││
 │  │  IAgent / IHook   │ │  exceptions.py     │ │                        ││
 │  │  + HookContext    │ │                    │ │                        ││
 │  └───────────────────┘ └────────────────────┘ └────────────────────────┘│
@@ -92,8 +98,8 @@
 │  ┌────────┐ ┌──────────────────────────┐ ┌─────────┐ ┌──────────────┐  │
 │  │ Model  │ │  Tools（按功能分组）       │ │ Sandbox │ │ Repository   │  │
 │  │ Adapter│ │  edit/  : 文件编辑+审查    │ │ (Docker)│ │ SQLAlchemy   │  │
-│  │(多种)  │ │  search/: 搜索+选择题      │ │         │ │ + IHistory   │  │
-│  │        │ │  system/: bash+任务+解压   │ │         │ │   Store(预留)│  │
+│  │(多种)  │ │  search/: 搜索+选择题      │ │         │ │ + IConversation│  │
+│  │        │ │  system/: bash+任务+解压   │ │         │ │   Store(主入口)│  │
 │  │        │ │  mcp/   : MCP 加载器+管理  │ │         │ │              │  │
 │  └────────┘ └──────────────────────────┘ └─────────┘ └──────────────┘  │
 │  ┌────────┐ ┌─────────────────────┐ ┌──────────┐ ┌──────────────────┐  │
@@ -105,8 +111,8 @@
 ├─────────────────────────────────────────────────────────────────────────┤
 │                     DI CONTAINER (依赖注入容器)                            │
 │  Container.configure() → 装配:                                          │
-│    IModel / IToolExecutor / ICostTracker / IRepository                  │
-│    IHistoryStore(NoOp) / PolicyService / PromptManager                 │
+│    IModel / IToolExecutor / ICostTracker / IConversationStore          │
+│    IContextPipeline / PolicyService / PromptManager                    │
 │    IKnowledgeStore(NoOp) / GraphFactory / SuggestionEngine / HookService │
 │  create_agent() → 返回 IAgent (一张图统一 Graph，context 约束内 LLM 决定路径)
 └─────────────────────────────────────────────────────────────────────────┘
@@ -138,7 +144,8 @@ flowchart TD
         direction TB
         A1["GraphFactory（图构建）<br/>SuggestionEngine（对抗建议）<br/>HookService（事件钩子）"]
         A2["ConfigSvc · SessionSvc<br/>PolicySvc（Casbin）"]
-        A3["GitCheckpointManager<br/>CheckpointStore · SummaryGenerator"]
+        A3["ContextPipeline（预 LLM 压缩）<br/>GitCheckpointManager · SummaryGenerator"]
+        A4["SSE 事件:<br/>reasoning(推理过程)<br/>change_plan(改前预览)<br/>token/choice/suggestion"]
     end
     APPLICATION --> DOMAIN
 
@@ -146,7 +153,7 @@ flowchart TD
         direction TB
         D1["LangGraph 状态机<br/>state.py / nodes.py / router.py<br/>context.py / ToolNode / Checkpointer"]
         D2["AgentState<br/>messages / turn_id / mode / persona<br/>pending_approval / change_review / ..."]
-        D3["Interfaces<br/>IModel / IToolExecutor / ICostTracker<br/>IRepository / IKnowledgeStore<br/>IHistoryStore / IAgent / IHook"]
+        D3["Interfaces<br/>IModel / IToolExecutor / ICostTracker<br/>IConversationStore / IContextPipeline<br/>IKnowledgeStore / IAgent / IHook"]
         D4["Models<br/>Message / ToolCall / Session<br/>ChoiceCard / ChangeScore<br/>ExecutionMode / exceptions.py"]
         D5["PromptManager<br/>developer / reviewer / tester<br/>architect / documenter"]
         D6["Casbin 权限<br/>model.conf / policy.csv<br/>allow / ask / deny"]

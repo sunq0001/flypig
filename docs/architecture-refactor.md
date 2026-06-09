@@ -125,9 +125,9 @@
 │  │  IModel(context驱动)  │ │  Message, ToolCall │ │  多角色按需懒加载      ││
 │  │  IToolExecutor    │ │  Session, ModeConfig│ │  developer(核心)       ││
 │  │  ICostTracker     │ │  ChoiceCard        │ │  reviewer(对抗)        ││
-│  │  IRepository      │ │  ChangeScore       │ │  tester                ││
-│  │  IKnowledgeStore  │ │  PermissionRule    │ │  architect             ││
-│  │  IHistoryStore    │ │  ConversationState │ │  documenter            ││
+│  │  IConversationStore│ │  ChangeScore       │ │  tester                ││
+│  │  IContextPipeline  │ │  PermissionRule    │ │  architect             ││
+│  │  IKnowledgeStore   │ │  ConversationState │ │  documenter            ││
 │  │  IAgent / IHook   │ │  SessionSummary    │ │                        ││
 │  └───────────────────┘ └────────────────────┘ └────────────────────────┘│
 │  ┌──────────────────────────────────────────────────────────────────┐   │
@@ -155,8 +155,8 @@
 ├─────────────────────────────────────────────────────────────────────────┤
 │                     DI CONTAINER (依赖注入容器)                            │
 │  Container.configure() → 装配:                                          │
-│    IModel / IToolExecutor / ICostTracker / IRepository                  │
-│    IHistoryStore(NoOp) / PolicyService / PromptManager                 │
+│    IModel / IToolExecutor / ICostTracker / IConversationStore         │
+│    IContextPipeline / PolicyService / PromptManager                    │
 │    IKnowledgeStore(NoOp) / GraphFactory / SuggestionEngine / HookService │
 │  create_agent() → 返回 IAgent (一张图统一 Graph，context 约束内 LLM 自行决定路径)
 └─────────────────────────────────────────────────────────────────────────┘
@@ -194,7 +194,8 @@ flypig/interface/
     │   ├── upload.py        # 文件上传 + 压缩解压
     │   ├── rollback.py      # Git 回滚
     │   ├── agent.py         # /api/agent/status + /api/agent/stop
-    │   └── history.py       # /api/history/search
+    │   ├── history.py       # /api/history/search
+    │   └── feedback.py      # /api/feedback/suggestion（建议反馈）
     └── services/
         ├── sse_queue.py     # SSE 队列抽象
         └── file_watcher.py  # 文件变更监控
@@ -311,7 +312,8 @@ flypig/domain/
 │   ├── itool_executor.py    # IToolExecutor 接口
 │   ├── icost_tracker.py     # ICostTracker 接口
 │   ├── ihook.py             # IHook 接口 + HookContext 数据类（通用事件钩子）
-│   └── ihistory_store.py    # IHistoryStore 接口（3.9.1 预留）
+│   ├── iconversation_store.py  # IConversationStore 接口（对话存储 + 检索）
+│   ├── icontext_pipeline.py    # IContextPipeline 接口（预 LLM 压缩）
 │
 ├── agent/                   ← 领域层只定义节点和状态（图构建在应用层）
 │   ├── state.py             # AgentState TypedDict（纯数据，零依赖）
@@ -647,7 +649,7 @@ class Container:
         model = ModelAdapter(config.default_model)      # 实现 IModel
         cost_tracker = CostTracker(config.pricing_dict) # 实现 ICostTracker
         tools = ToolExecutor(workspace_dir=config.workspace)  # 实现 IToolExecutor
-        repo = SqliteRepository(config.db_path)         # 实现 IRepository
+        store = SqliteConversationStore("data/conversations.db")  # 实现 IConversationStore + 旧 IRepository 兼容
         policy = PolicyService(config.permissions)      # 权限规则
         prompts = PromptManager()                       # 多角色 prompt
         knowledge = NoOpKnowledgeStore()                # 知识库空实现
@@ -3566,7 +3568,8 @@ flypig/                           ← 项目根
 │       │   ├── upload.py        ← 文件上传 + 解压
 │       │   ├── rollback.py      ← Git 回滚
 │       │   ├── agent.py         ← /api/agent/status + /api/agent/stop
-│       │   └── history.py       ← /api/history/search
+│       │   ├── history.py       ← /api/history/search
+│       │   └── feedback.py      ← /api/feedback/suggestion（建议反馈）
 │       └── services/
 │           ├── sse_queue.py     ← SSE 队列抽象
 │           └── file_watcher.py  ← 文件变更监控
@@ -3914,5 +3917,21 @@ class ToolBash:
 | MCP 集成 | 先不装任何 MCP 服务器 |
 
 ---
+
+## 附录：设计模式索引
+
+本文档及其子文档中涉及的软件设计模式及其位置：
+
+| 模式 | 文档 | 适用场景 |
+|------|------|---------|
+| 概念 | 文档 | 说明 |
+|------|------|------|
+| **记忆 + 压缩** | `extensions.md` §IConversationStore + IContextPipeline + LangMem | Store 存原始对话，Pipeline 预 LLM 压缩，LangMem 做长期知识管理 |
+| **适配器模式** | `backend-modules.md` §模型适配 | 多模型切换（OpenAI/Claude/本地），统一 `IModel` 接口 |
+| **DI 容器** | `backend-modules.md` §DI Container | 单点装配所有依赖 |
+| **空对象模式** | `backend-modules.md` §DI Container | `NoOpKnowledgeStore` |
+| **观察者模式** | `backend-modules.md` §Application Layer | `HookService.register/emit` |
+| **工厂模式** | `langgraph-graph.md` §DynamicToolNode | `GraphFactory.build_graph()` |
+| **中介者模式** | `backend-modules.md` §中介者模式：ChatService | ChatService 协调各服务 |
 
 
