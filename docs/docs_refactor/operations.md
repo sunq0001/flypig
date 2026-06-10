@@ -8,11 +8,9 @@
 ## 一、阶段式演进
 
 ```text
-阶段 1（当前）：python -m flypig
-                    ↓
-阶段 2（MVP）：docker-compose (api + db)
-                    ↓
-阶段 3（SaaS）：docker-compose (api + db + redis + nginx)
+单机版：docker-compose (api + db + nginx)
+              ↓
+SaaS：  docker-compose (api + db + nginx + redis)
 ```
 
 ---
@@ -40,14 +38,6 @@ services:
       - LANGGRAPH_DB_PATH=/app/data/langgraph.db
     restart: unless-stopped
 
-  # 开发用 Vite 热更新
-  web-dev:
-    image: node:20-alpine
-    ports: ["5173:5173"]
-    volumes: ["./web/static_vite:/app"]
-    command: npx vite --host 0.0.0.0
-    profiles: ["dev"]
-
   nginx:
     image: nginx:alpine
     ports: ["80:80", "443:443"]
@@ -60,14 +50,14 @@ services:
 ### 使用方式
 
 ```bash
-# 开发
-docker compose --profile dev up
-
-# 生产
-docker compose --profile prod up -d
+# 启动
+docker compose up -d
 
 # 查看日志
 docker compose logs -f api
+
+# 更新
+docker compose pull && docker compose up -d
 ```
 
 ### 数据持久化
@@ -175,11 +165,11 @@ async def ready():
 | 组件 | 用途 | 引入时机 |
 |------|------|---------|
 | **PostgreSQL** | 替代 SQLite，支持并发读写 + pgvector 向量搜索 | 多用户并发 > 10 |
-| **Redis** | 会话缓存 + SSE 发布订阅（多实例） | 多实例部署 |
+| **Redis** | 会话缓存 + SSE 发布订阅（多实例时需要） | 多实例部署 |
 | **Prometheus + Grafana** | 监控 LLM token 消耗、API 延迟、错误率 | SaaS 上线前 |
 | **Sentry** | 错误追踪 | SaaS 上线前 |
 | **CDN** | 前端静态文件加速 | SaaS 上线前 |
 
 ---
 
-> **当前阶段（MVP）**：python -m flypig 直接运行 + 基础 Docker Compose。CI/CD 只需 lint + test。
+> **当前阶段（单机版）**：docker-compose (api + db + nginx) 一键部署。CI/CD 只需 lint + test。
