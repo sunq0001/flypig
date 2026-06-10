@@ -20,15 +20,28 @@ SaaS：  docker-compose (api + db + nginx + redis)
 ### Dockerfile
 
 ```dockerfile
-FROM python:3.12-slim
-
+# ── 第一阶段：构建前端 ──
+FROM node:20-alpine AS frontend-builder
 WORKDIR /app
+COPY web/static_vite/package.json web/static_vite/ .
+RUN npm install && npm run build
+# 产物在 /app/dist/
+
+# ── 第二阶段：Python 后端 ──
+FROM python:3.12-slim
+WORKDIR /app
+
+# 后端依赖
 COPY pyproject.toml .
 RUN pip install --no-cache-dir -e ".[prod]"
 
+# 后端代码
 COPY flypig/ ./flypig/
-EXPOSE 8321
 
+# 前端静态文件（从第一阶段复制）
+COPY --from=frontend-builder /app/dist/ ./web/static/
+
+EXPOSE 8321
 CMD ["python", "-m", "flypig"]
 ```
 
@@ -86,63 +99,6 @@ docker compose pull && docker compose up -d
 
 ---
 
-## 三、CI/CD 流水线
-
-### 阶段 1（MVP — GitHub Actions）
-
-```yaml
-# .github/workflows/ci.yml
-name: CI
-
-on: [push, pull_request]
-
-jobs:
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
-      - run: pip install ruff
-      - run: ruff check flypig/
-
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.12" }
-      - run: pip install -e ".[dev]"
-      - run: pytest tests/
-```
-
-### 阶段 2（SaaS — 自动部署）
-
-```yaml
-# .github/workflows/deploy.yml
-name: Deploy
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: docker build -t flypig-api .
-      - run: docker tag flypig-api ghcr.io/${{ github.repository }}:latest
-      - run: docker push ghcr.io/${{ github.repository }}:latest
-      - run: |
-          ssh deploy@${{ secrets.HOST }} "
-            docker pull ghcr.io/${{ github.repository }}:latest
-            docker compose --profile prod up -d
-          "
-```
-
----
-
 ## 四、环境变量
 
 | 变量 | 必填 | 说明 |
@@ -156,7 +112,7 @@ jobs:
 
 ---
 
-## 六、健康检查
+## 五、健康检查
 
 ```python
 @app.route("/health")
