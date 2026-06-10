@@ -89,47 +89,6 @@
 | 富内容图表（Mermaid/LivePreview） | 先只支持文本和 Markdown |
 | MCP 集成 | 先不装任何 MCP 服务器 |
 
-## DevOps 架构（Docker Compose）
+## DevOps 架构
 
-### 阶段式演进
-
-```
-阶段 1（当前）：python -m flypig
-                      ↓
-阶段 2（立即做）：docker-compose (api + db)
-                      ↓
-阶段 3（加服务）：docker-compose (api + db + redis + mcp)
-```
-
-### docker-compose.yml
-
-```yaml
-services:
-  api:
-    build: .
-    ports: ["8321:8321"]
-    volumes: [".:/app", "/app/__pycache__"]
-    environment:
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-    restart: unless-stopped
-
-  web:
-    image: node:20-alpine
-    ports: ["5173:5173"]
-    volumes: ["./flypig/web/static_vite:/app"]
-    command: npx vite --host 0.0.0.0
-    profiles: ["dev"]
-
-  nginx:
-    image: nginx:alpine
-    ports: ["80:80", "443:443"]
-    profiles: ["prod"]
-```
-
-### 使用方式
-
-```bash
-docker compose --profile dev up    # 开发
-docker compose --profile prod up   # 生产
-docker compose logs -f api
-```
+> **详见独立文档 `operations.md`**：Docker Compose 配置、CI/CD 流水线、环境变量、健康检查、SaaS 扩展。

@@ -82,6 +82,7 @@ class ToolBash:
 | 查看后端各层模块职责 | `backend-modules.md` |
 | 查看 subprocess 执行策略和 task_log | `subprocess-and-tools.md` |
 | 查看变更审查、Lint、对抗建议 | `adversarial-system.md` |
+| 查看 Docker Compose 部署和 CI/CD | `operations.md` |
 | 查看对话存储、上下文压缩、LangMem 记忆 | `extensions.md` |
 | 查看迁移路线和 MVP 迭代 | `migration-roadmap.md` |
 | 查看数据流向 | `data-flow.md` |
@@ -112,6 +113,7 @@ class ToolBash:
 | 对抗建议生成 | `backend-modules.md` → `application/services/suggestion_engine.py` |
 | 钩子事件注册 | `backend-modules.md` → `application/services/hook_service.py` |
 | 配置即代码 | `backend-modules.md` → YAML + `@dataclass ModelConfig` |
+| 部署 / 运维 / CI/CD | `operations.md` → Docker Compose + GitHub Actions + 环境变量 |
 | 数据类型规范 | `backend-modules.md` → `@dataclass` 替代 `dict` |
 | 工具自动注册 | `subprocess-and-tools.md` → `@tool()` 装饰器 |
 | 工具调用幂等性 | `subprocess-and-tools.md` → 各 `tool_*.py` 实现时注意 |
