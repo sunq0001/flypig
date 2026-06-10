@@ -15,7 +15,24 @@ SaaS：  docker-compose (api + db + nginx + redis)
 
 ---
 
-## 二、Docker Compose
+## 二、Docker 镜像
+
+### Dockerfile
+
+```dockerfile
+FROM python:3.12-slim
+
+WORKDIR /app
+COPY pyproject.toml .
+RUN pip install --no-cache-dir -e ".[prod]"
+
+COPY flypig/ ./flypig/
+EXPOSE 8321
+
+CMD ["python", "-m", "flypig"]
+```
+
+## 三、Docker Compose
 
 ### docker-compose.yml
 
@@ -44,7 +61,6 @@ services:
     volumes:
       - "./nginx.conf:/etc/nginx/nginx.conf:ro"
       - "./web/static:/usr/share/nginx/html:ro"
-    profiles: ["prod"]
 ```
 
 ### 使用方式
@@ -140,7 +156,7 @@ jobs:
 
 ---
 
-## 五、健康检查
+## 六、健康检查
 
 ```python
 @app.route("/health")
@@ -165,7 +181,7 @@ async def ready():
 | 组件 | 用途 | 引入时机 |
 |------|------|---------|
 | **PostgreSQL** | 替代 SQLite，支持并发读写 + pgvector 向量搜索 | 多用户并发 > 10 |
-| **Redis** | 会话缓存 + SSE 发布订阅（多实例时需要） | 多实例部署 |
+| **Redis** | SSE 事件跨实例广播（单机不需要，内存就够了） | 多实例水平扩展时 |
 | **Prometheus + Grafana** | 监控 LLM token 消耗、API 延迟、错误率 | SaaS 上线前 |
 | **Sentry** | 错误追踪 | SaaS 上线前 |
 | **CDN** | 前端静态文件加速 | SaaS 上线前 |
