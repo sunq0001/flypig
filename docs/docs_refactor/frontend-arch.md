@@ -57,9 +57,11 @@ flypig/web/static_vite/
     │   │   ├── MessageItem.vue   ← 单条消息
     │   │   ├── ThinkingIndicator.vue ← 思考中动画
     │   │   ├── ToolCallCard.vue  ← 工具调用卡片（含审批伪装）
-    │   │   ├── ChoiceCard.vue    ← Explore 选择题（单选/多选）
-    │   │   ├── ChangeReviewCard.vue ← Execute 变更审查
-    │   │   ├── SuggestionCard.vue ← 对抗建议卡片
+│   │   ├── ChoiceCard.vue    ← Explore 选择题（单选/多选）
+│   │   ├── ReasoningView.vue ← AI 推理过程显示（灰字，收到 reasoning 事件时渲染）
+│   │   ├── ChangePlanCard.vue ← 改前预览（按 risk 等级：自动/通知/审批）
+│   │   ├── ChangeReviewCard.vue ← 改后审查（对比计划与实际）
+│   │   ├── SuggestionCard.vue ← 对抗建议卡片（含 ✅/❌ 反馈按钮）
     │   │   ├── MermaidDiagram.vue  ← Mermaid 图表（缩放/下载SVG）
     │   │   ├── LivePreview.vue   ← UI 实时预览（浏览器 SFC 编译）
     │   │   └── InputBox.vue      ← 输入框
@@ -77,6 +79,7 @@ flypig/web/static_vite/
     │   │   └── ApiKeyStep.vue    ← API Key 录入
     │   │
     │   └── common/
+    │       ├── SensitiveInfoBanner.vue ← 敏感信息标黄警告（检测到 API key/密码时显示）
     │       ├── MarkdownRender.vue ← Markdown 渲染（扩展 mermaid/tree）
     │       ├── CodeBlock.vue      ← 代码块高亮（highlight.js）
     │       └── LoadingSpinner.vue ← 加载动画
@@ -104,6 +107,7 @@ flypig/web/static_vite/
 
 - UI 布局不改，只做代码模块化拆分（2500 行 index.html → 20+ .vue 组件）
 - Vercel AI SDK `useChat` 替代手写 ReadableStream
+- SSE 事件类型与组件映射：`token`→MessageItem, `reasoning`→ReasoningView, `choice`→ChoiceCard, `change_plan`→ChangePlanCard, `change_review`→ChangeReviewCard, `suggestion`→SuggestionCard
 - 终端面板 = 单面板，标签页混排（PTY 交互标签 + subprocess 只读输出标签）
 
 ## Vercel AI SDK 集成

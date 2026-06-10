@@ -86,7 +86,7 @@ AI 执行 write_file/edit_file 等文件变更
 
 ```
 用户"前面改出问题了，回到之前能运行的状态"
-  → AI 搜索 CheckpointStore 所有 summary
+  → AI 搜索 IConversationStore.get_summaries() 所有轮次摘要
     → 语义匹配找到最可能的 turn
   ├── 置信度 ≥ 80% → 直接回滚
   └── 不明确 → 出 choice_card 让用户选：

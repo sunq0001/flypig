@@ -12,9 +12,9 @@
 |------|------|
 | 安装 langgraph, langchain-core, langchain-openai | 新增依赖 |
 | 定义 LangGraph StateSchema + 接口（IModel, IToolExecutor 等） | 只加新文件 |
-| 配置 dependency-injector 容器（含 IHistoryStore 空实现占位） | 新文件 |
-| 创建 `domain/models/change_score.py` | 新文件 |
-| 创建 `domain/interfaces/ihistory_store.py`（接口 + NoOp） | 新文件 |
+| 配置 dependency-injector 容器（含 IConversationStore + IContextPipeline） | 新文件 |
+| 创建 `domain/interfaces/iconversation_store.py`（IConversationStore 接口 + NoOp） | 新文件 |
+| 创建 `domain/interfaces/icontext_pipeline.py`（IContextPipeline 接口 + 默认实现） | 新文件 |
 
 ## Step 2：工具拆包 + 注册到 ToolNode
 

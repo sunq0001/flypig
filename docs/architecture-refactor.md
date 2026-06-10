@@ -2251,217 +2251,27 @@ def handle_adversarial_decision(state: AgentState, user_choice: dict) -> dict:
 
 ### 3.9 会话持久化（续）
 
-#### 3.9.1 未来扩展：IHistoryStore — 历史记录与监控基座
+#### 3.9.1 对话存储与上下文压缩（IConversationStore + IContextPipeline）
 
-**当前状态**：只实现了基础存储（`IRepository`），以下内容**只定义接口不实现**，为未来更强的 harness 预留基座。
+> **详细接口和实现方案见 `extensions.md` §对话存储 + §上下文压缩 + §LangMem 集成。**
 
-**解决的问题**：用户说"我之前讨论的那个 JWT 的问题"，AI 需要跨会话搜索；"这个文件被改了好几次了"需要跨会话统计；"这次改的成本多少"需要汇总。当前 `IRepository` 只能按 session_id 精确加载，不支持语义搜索和统计分析。
+**演进阶段**：
 
-```python
-# domain/interfaces/ihistory_store.py
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from datetime import datetime
-
-# ─── 数据模型 ───
-
-@dataclass
-class SessionSummary:
-    """会话摘要（供搜索/列表用）"""
-    id: str
-    title: str                    # AI 自动生成的会话标题
-    preview: str                  # 首条消息预览
-    message_count: int
-    file_change_count: int
-    total_cost: float             # 本次会话总成本
-    created_at: datetime
-    last_active: datetime
-    tags: list[str]               # AI 自动提取的话题标签
-
-@dataclass
-class ChangeRecord:
-    """文件变更记录"""
-    session_id: str
-    turn_id: int
-    file_path: str
-    change_type: str              # add / modify / delete
-    diff: str                     # git diff 摘要
-    ai_reason: str                # AI 记录的变更原因
-    approved: bool                # 用户是否批准
-    cost: float                   # 此次变更的 token 成本
-
-@dataclass
-class CostSummary:
-    total_tokens: int
-    total_cost: float
-    by_model: dict                # { "deepseek-chat": cost, ... }
-    by_session: list              # top N 最贵会话
-
-@dataclass
-class PatternInsight:
-    """检测到的模式（频率/趋势）"""
-    type: str                     # "frequent_file" / "repeated_question" / "refactoring_needed"
-    target: str                   # 文件路径 / 问题描述
-    count: int                    # 出现次数
-    sessions: list[str]           # 涉及的会话 ID
-    suggestion: str               # AI 建议（如"建议重构"）
-```
-
-```python
-# domain/interfaces/ihistory_store.py (续)
-class IHistoryStore(ABC):
-    """历史记录与监控基座——所有可查询的历史数据"""
-
-    # ─── 会话管理（超越简单的列表）───
-
-    @abstractmethod
-    async def search_sessions(self, query: str) -> list[SessionSummary]:
-        """语义搜索会话
-        用户: "我之前讨论的那个JWT登录的问题"
-        AI:  搜索所有会话的 title+preview+tags，返回匹配的会话列表
-        """
-
-    @abstractmethod
-    async def get_session_timeline(self, session_id: str) -> list[dict]:
-        """按时间线获取会话的所有关键事件
-        [消息1, 工具调用A, 变更审查, 用户批准, 消息2, ...]
-        """
-
-    # ─── 变更历史（跨会话追踪）───
-
-    @abstractmethod
-    async def get_file_history(self, file_path: str) -> list[ChangeRecord]:
-        """获取某个文件在所有会话中的变更历史"""
-
-    @abstractmethod
-    async def search_changes(self, query: str) -> list[ChangeRecord]:
-        """搜索变更
-        用户: "我上次为什么改 validate_token"
-        AI:  搜索所有 ChangeRecord.ai_reason 匹配"validate_token"
-        """
-
-    # ─── 成本监控 ───
-
-    @abstractmethod
-    async def get_cost_summary(self, since: datetime | None = None) -> CostSummary:
-        """获取成本汇总"""
-
-    @abstractmethod
-    async def get_session_cost(self, session_id: str) -> float:
-        """获取单个会话的成本"""
-
-    # ─── 模式检测（为 AI 决策提供数据支撑）───
-
-    @abstractmethod
-    async def get_most_modified_files(self, limit: int = 10) -> list[FileStat]:
-        """获取修改最频繁的文件（ChangeScore 的数据来源之一）"""
-
-    @abstractmethod
-    async def get_patterns(self) -> list[PatternInsight]:
-        """检测模式：哪些文件频繁改、哪些问题反复出现、哪些需要重构"""
-
-    # ─── 追溯（决策链路）───
-
-    @abstractmethod
-    async def get_decision_trail(self, session_id: str, change_id: str) -> str:
-        """为什么在某轮做出了某个变更——追溯 AI 的决策逻辑"""
-```
-
-**实现策略**（分阶段，只做第一阶段）：
-
-| 阶段 | 实现内容 | 存储方案 | 何时做 |
-|------|---------|---------|-------|
-| **P0（立即）** | `IRepository`：会话 save/load + 基础列表 | SQLite（已有） | 重构 Step 1 |
-| **P1（架构文档标记）** | `IHistoryStore` 接口定义 + `NoOpHistoryStore` 空实现 | 不存储（返回空） | **现在定义接口，不实现** |
-| **P2（未来）** | SQLiteHistoryStore：search_sessions 用 FTS5 全文搜索 | SQLite + FTS5 | 用户有明确需求时 |
-| **P3（未来）** | 成本监控 + 模式检测 | 已有数据 + 聚合查询 | Dashboard 需要时 |
-| **P4（未来）** | 切换 PostgreSQL + 向量搜索 + 重排 | PostgreSQL + pgvector + 交叉编码器 | 跨机器、高并发时 |
-| **P5（长期）** | 知识图谱搜索 + 实体级检索（Graphify） | Graphify + Neo4j 或 SQLite 图存储 | 需要代码实体级别搜索时 |
-
-**搜索流水线的演进**：
-
-```
-P2（全文搜索）:
-  用户输入 → SQLite FTS5 关键词匹配 → 返回结果（简单，无排序）
-
-P4（向量搜索 + 重排）:
-  用户输入 → 嵌入向量检索 → 粗排 top-K → 交叉编码器重排 → 返回结果
-  └── 向量搜索（pgvector）召回候选
-  └── 重排（cross-encoder）精排 top-N
-
-P5（知识图谱增强）:
-  用户输入 → 实体识别 → 知识图谱查询 → 向量混合检索 → 重排 → 返回结果
-  └── 从输入中提取代码实体名（函数/类/文件）
-  └── Graphify 查询实体关系（谁调用了这个函数？）
-  └── 混合搜索结果 + 图谱结果 → 统一排序
-```
-
-**IHistoryStore 接口扩展（P4/P5 新增方法）：**
-
-```python
-class IHistoryStore(ABC):
-    # ... 原有方法不变 ...
-
-    # ─── P4：向量搜索 + 重排 ───
-
-    @abstractmethod
-    async def vector_search(self, query: str, top_k: int = 10) -> list[SessionSummary]:
-        """基于嵌入向量的语义搜索（需 pgvector + embedding 模型）"""
-
-    @abstractmethod
-    async def rerank(self, query: str, candidates: list) -> list:
-        """对初筛结果做交叉编码器重排，提升排序质量"""
-        # 使用 cross-encoder 模型（如 BAAI/bge-reranker-v2）
-        # 输入: query + 候选列表 → 输出: 重新排序的列表
-
-    # ─── P5：知识图谱查询 ───
-
-    @abstractmethod
-    async def search_code_entities(self, query: str) -> list[EntityResult]:
-        """搜索代码实体（函数/类/变量），返回精确位置
-        用户: "validate_token 函数在哪里？"
-        返回: {entity: "validate_token", type: "function", 
-               file: "src/auth.py", line: 42, 
-               dependencies: ["jwt.decode", "expires_at"]}
-        """
-
-    @abstractmethod
-    async def get_entity_graph(self, entity_name: str) -> dict:
-        """获取某个实体的依赖关系图谱
-        输入: "login_user"
-        输出: 调用链（谁调用了它？它调用了谁？）
-        """
-```
-
-**如何使用**：
-
-```python
-# 用户说了"之前那个JWT的事":
-# 1. AI 调用 tool_history_search("JWT 登录")
-# 2. IHistoryStore.search_sessions() → 返回匹配会话列表
-# 3. AI 看到会话标题和摘要 → 告诉用户"找到了，是 session_5，关于 JWT 登录改造"
-# 4. 用户说"对，继续" → 加载 session_5 的消息到当前对话
-
-# AI 改文件前:
-# 1. 调用 IHistoryStore.get_file_history("src/auth.py")
-# 2. 发现 auth.py 已经改过 8 次了
-# 3. ChangeScore 据此加分（频繁改动的文件 → 建议重构或架构评估）
-```
-
-**涉及改动**：
-
-| 文件 | 改动 |
-|------|------|
-| `domain/interfaces/ihistory_store.py` | **新增**：IHistoryStore 接口 + 数据模型（含 P4/P5 扩展方法） |
-| `infrastructure/repository/history_store.py` | **新增**：NoOpHistoryStore 空实现（仅占位，不存数据） |
-| `di/container.py` | 注册 `IHistoryStore` → `NoOpHistoryStore` |
-| `infrastructure/tools/tool_history_search.py` | **新增**：AI 调用的历史搜索工具（可选，P2 实现） |
-| `infrastructure/tools/tool_rerank.py` | **可选 P4**：交叉编码器重排 |
-| `infrastructure/tools/tool_graphify_query.py` | **可选 P5**：Graphify 知识图谱查询 |
-
-**⚠️ 明确说明**：当前只**定义接口 + 空实现**，不存储任何额外数据。现有 `IRepository` 的会话存储完全不受影响。等需要跨会话搜索时再实现 SQLite 版本。
+| 阶段 | 说明 |
+|---------|------|
+| **P0（当前）** | `IConversationStore` + `IContextPipeline` + `SqliteConversationStore` |
+| **P1（有用户）** | SQLite FTS5 全文搜索（IConversationStore.search） |
+| **P2（向量库）** | LangMem 或自研 pgvector 实现语义检索 |
 
 ---
+
+
+
+
+
+
+
+
 
 
 
@@ -3476,7 +3286,8 @@ flypig/                           ← 项目根
 │   │   ├── imodel.py            ← IModel（模式无关，统一 stream 接口）
 │   │   ├── itool_executor.py    ← IToolExecutor
 │   │   ├── icost_tracker.py     ← ICostTracker
-│   │   ├── irepository.py       ← IRepository + IHistoryStore（3.9.1 预留）
+│   │   ├── iconversation_store.py  ← IConversationStore（对话存储 + 检索，含 checkpoint / suggestion_feedback）
+│   │   ├── icontext_pipeline.py   ← IContextPipeline（预 LLM 上下文压缩）
 │   │   ├── iknowledge_store.py  ← IKnowledgeStore（NoOp 预留）
 │   │   ├── ihook.py             ← IHook（事件钩子）
 │   │   └── iagent.py            ← IAgent
@@ -3544,8 +3355,8 @@ flypig/                           ← 项目根
 │   │   └── pricing.py           ← 价格获取 + 缓存
 │   │
 │   ├── repository/
-│   │   ├── sqlite.py            ← SQLAlchemy 持久化（IRepository 实现）
-│   │   └── history_store.py     ← NoOpHistoryStore（IHistoryStore 预留）
+│   │   ├── sqlite.py             ← SQLAlchemy 持久化（原有兼容）
+│   │   └── conversation_store.py ← SqliteConversationStore（IConversationStore 实现，主入口）
 │   │
 │   ├── policies/
 │   │   ├── model.conf           ← Casbin 模型
@@ -3814,9 +3625,9 @@ class ToolBash:
 |------|------|
 | 安装 langgraph, langchain-core, langchain-openai | 新增依赖 |
 | 定义 LangGraph StateSchema + 接口（IModel, IToolExecutor 等） | 只加新文件 |
-| 配置 dependency-injector 容器（含 IHistoryStore 空实现占位） | 新文件 |
-| 创建 `domain/models/change_score.py`（ChangeScore 数据类） | 新文件 |
-| 创建 `domain/interfaces/ihistory_store.py`（IHistoryStore 接口 + NoOp 空实现） | 新文件（只接口不实现） |
+| 配置 dependency-injector 容器（含 IConversationStore + IContextPipeline） | 新文件 |
+| 创建 `domain/interfaces/iconversation_store.py`（IConversationStore 接口 + NoOp） | 新文件 |
+| 创建 `domain/interfaces/icontext_pipeline.py`（IContextPipeline 接口 + 默认实现） | 新文件 |
 
 ### Step 2：工具拆包 + 注册到 ToolNode
 
