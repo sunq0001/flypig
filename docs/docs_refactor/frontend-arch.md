@@ -1,7 +1,7 @@
 # 前端架构
 
 > **来源**: `architecture-refactor.md` §4
-> **关联文档**: `api-reference.md`（SSE 事件格式）
+> **关联文档**: `api-reference.md`（SSE 事件格式）、`usage-tracking.md`（response_end 用量数据）
 > 新增组件或改 SSE 消费时，需同步检查 api-reference.md。
 
 ## 技术栈
@@ -108,6 +108,7 @@ flypig/web/static_vite/
 - UI 布局不改，只做代码模块化拆分（2500 行 index.html → 20+ .vue 组件）
 - Vercel AI SDK `useChat` 替代手写 ReadableStream
 - SSE 事件类型与组件映射：`token`→MessageItem, `reasoning`→ReasoningView, `choice`→ChoiceCard, `change_plan`→ChangePlanCard, `change_review`→ChangeReviewCard, `suggestion`→SuggestionCard
+- `response_end` 事件携带本轮用量数据（tokens/cache_hit_rate/cost/duration），`MessageItem` 底部渲染一行用量摘要
 - 终端面板 = 单面板，标签页混排（PTY 交互标签 + subprocess 只读输出标签）
 
 ## Vercel AI SDK 集成

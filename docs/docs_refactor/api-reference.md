@@ -1,7 +1,7 @@
 # API 参考
 
 > **来源**: `architecture-refactor.md` §3.1, §3.8.2-3.8.5, §8.3
-> **关联文档**: `frontend-arch.md`（前端消费）、`data-flow.md`（数据流）
+> **关联文档**: `frontend-arch.md`（前端消费）、`data-flow.md`（数据流）、`usage-tracking.md`（用量查询端点）
 > 新增端点或改 SSE 事件格式时，需同步检查 frontend-arch.md 和 data-flow.md。
 
 ## REST 端点
@@ -22,6 +22,10 @@
 | `/api/history/search` | GET | 历史搜索 |
 | `/api/agent/status` | GET | Agent 运行状态（空闲/忙碌/当前任务/成本统计） |
 | `/api/agent/stop` | POST | 强制停止当前运行中的 Agent |
+| `/api/usage/turn/<turn_id>` | GET | 本轮用量明细（含 calls[]） |
+| `/api/usage/session/<session_id>` | GET | 当前会话汇总（total_tokens, total_cost, avg_cache_hit） |
+| `/api/usage/range?start=&end=` | GET | 时间范围统计 |
+| `/api/usage/cache-stats?days=7` | GET | 缓存命中率趋势 |
 | `/api/feedback/suggestion` | POST | 用户提交建议反馈（✅/❌），记录 `suggestion_id` + `adopted` |
 
 ## SSE 事件格式（/api/chat）
@@ -41,8 +45,15 @@
 # token 事件（逐 token 推流）
 {"type": "token", "content": "每个"}
 
-# response_end 事件
-{"type": "response_end", "usage": {"prompt_tokens": 100, "completion_tokens": 50}}
+# response_end 事件（结束 + usage）
+{"type": "response_end", "usage": {
+    "prompt_tokens": 2300,
+    "completion_tokens": 800,
+    "reasoning_tokens": 80,
+    "cache_hit_rate": 45.5,
+    "cost": 0.012,
+    "duration_ms": 12300
+}}
 
 # choice 事件（Explore 模式）
 {

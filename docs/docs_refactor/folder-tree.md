@@ -1,7 +1,7 @@
 # 项目文件夹树（统一标准）
 
 > **来源**: 全文档提取（`architecture-refactor.md` §3.1-§10）
-> **关联文档**: `architecture-guide.md`（总览）、`backend-modules.md`（模块职责）
+> **关联文档**: `architecture-guide.md`（总览）、`backend-modules.md`（模块职责）、`usage-tracking.md`（usage/ 模块）
 > **本树是唯一标准**，所有内联文件夹树以此为准。改结构时只需改这里，其他地方删掉冗余树。
 
 ---
@@ -21,10 +21,10 @@ flypig/
 │   ├── interfaces/               ← 抽象接口
 │   │   ├── imodel.py             ← IModel（context 驱动，统一 stream 接口）
 │   │   ├── itool_executor.py     ← IToolExecutor（含 MCP 动态注册）
-│   │   ├── icost_tracker.py      ← ICostTracker
 │   │   ├── iknowledge_store.py   ← IKnowledgeStore（NoOp 预留）
 │   │   ├── iconversation_store.py  ← IConversationStore（对话存储 + 检索）
 │   │   ├── icontext_pipeline.py   ← IContextPipeline（预 LLM 压缩）
+│   │   ├── iusage_tracker.py     ← IUsageTracker（用量追踪接口）
 │   │   ├── ihook.py              ← IHook（事件钩子）
 │   │   └── iagent.py             ← IAgent
 │   │
@@ -67,6 +67,7 @@ flypig/
 │   │   ├── git_checkpoint_manager.py ← ★ Agent Git checkpoint 管理
 │   │   ├── context_pipeline.py    ← ★ 预 LLM 上下文压缩（Truncate+Trim+Fold）
 │   │   ├── conversation_store.py  ← ★ 对话存储 SQLite（IConversationStore 实现）
+│   │   ├── usage_tracker_service.py  ← ★ 用量追踪编排（IUsageTracker + PricingFetcher）
 │   │   └── summary_generator.py  ← ★ 自动生成短语摘要
 │   └── dto/
 │       ├── chat_dto.py           ← 数据传输对象
@@ -104,19 +105,17 @@ flypig/
 │   │   ├── manager.py            ← SandboxManager（容器生命周期）
 │   │   └── builder.py            ← Dockerfile 生成 + 镜像构建
 │   │
-│   ├── cost/
-│   │   ├── tracker.py            ← CostTracker
-│   │   └── pricing.py            ← 价格获取 + 缓存
-│   │
-│   ├── repository/               ← 持久化
-│   │   ├── sqlite.py             ← SQLAlchemy 持久化（IRepository 实现，旧接口兼容）
-│   │   └── conversation_store.py ← SqliteConversationStore（IConversationStore 实现，主入口）
+│   ├── usage/
+│   │   ├── sqlite_tracker.py     ← SqliteUsageTracker（IUsageTracker 的 SQLite 实现）
+│   │   ├── pricing.py            ← PricingFetcher（价格获取 + 缓存）
+│   │   └── hooks.py              ← UsageTrackerHook（HookService 自动记录）
 │   │
 │   ├── policies/                 ← Casbin 初始化配置（基础设施层实现）
 │   │   ├── model.conf            ← Casbin 模型
 │   │   ├── policy.csv            ← Casbin 策略
 │   │   └── casbin_setup.py       ← Casbin 初始化
 │   │
+│   ├── permission_checker.py     ← 权限检查（file/term/git/test, allow/ask/deny）
 │   ├── terminal.py               ← 用户手动 PTY（精简版，无 AI 注入）
 │   ├── hooks.py                  ← 事件钩子实现
 │   └── background.py             ← 后台任务管理
@@ -134,6 +133,7 @@ flypig/
 │       │   ├── rollback.py       ← Git 回滚
 │       │   ├── agent.py          ← /api/agent/status + /api/agent/stop
 │       │   ├── history.py        ← /api/history/search
+│       │   ├── usage.py          ← /api/usage/*（用量查询）
 │       │   └── feedback.py       ← /api/feedback/suggestion（建议反馈）
 │       └── services/
 │           ├── sse_queue.py      ← SSE 队列抽象
@@ -170,7 +170,8 @@ flypig/
 ├── mcp.json                      ← MCP 服务器配置（§3.7.1）
 ├── pyproject.toml                ← Ruff 配置 + 项目元数据（§3.8.8）
 ├── Dockerfile                    ← 应用容器化（§6）
-├── docker-compose.yml            ← Docker Compose 编排（§6）
+├── docker-compose.yml            ← Docker Compose 编排：api + nginx（§6）
+├── nginx.conf                    ← Nginx 反向代理：静态文件 + SSL 终止（§6）
 ├── model.conf                    ← Casbin 模型（根级备份）
 ├── policy.csv                    ← Casbin 策略（根级备份）
 └── langgraph.db                  ← SqliteSaver 持久化（自动生成）
@@ -182,13 +183,14 @@ flypig/
 
 | 项目 | 原 §7 树 | 本树（统一版） | 说明 |
 |------|---------|-------------|------|
-| `domain/interfaces/` | 7 个接口文件 | **8 个**（`ihistory_store.py` → `iconversation_store.py` + `icontext_pipeline.py`） | 合并 IHistoryStore + IRepository + CheckpointStore 为 IConversationStore；新增 IContextPipeline |
+| `domain/interfaces/` | 7 个接口文件 | **8 个**（新增 `iusage_tracker.py`；`ihistory_store.py` → `iconversation_store.py` + `icontext_pipeline.py`） | 合并 IHistoryStore + IRepository + CheckpointStore 为 IConversationStore；新增 IContextPipeline + IUsageTracker |
 | `domain/policies/` | 有 | 保留 | Casbin 权限定义（领域层） |
 | `infrastructure/policies/` | 有 | 保留 | Casbin 初始化配置（基础设施层） |
 | `chat/` 组件 | 8 个 | **11 个**（新增 MessageItem, ThinkingIndicator, ToolCallCard） | §4.3 有这三个组件，§7 漏了 |
 | `composables/` | 7 个 | 7 个 | 一致 |
 | `lib/` | `sfc-compiler.js` | **`sfc-compiler.js`** | §4.3 写的是 `ai-config.js`，已修正为 `sfc-compiler.js` |
 | `infrastructure/policies/` 根级备份 | 无 | **新增** `model.conf`, `policy.csv` 根级备份 | Casbin 策略根级和 infra 级双重保障 |
+| Nginx 配置 | 无 | **新增** `nginx.conf` | Docker Compose 中 nginx 反向代理需要此配置文件 |
 | 前端组件顺序 | 部分无序 | **按层排序** | layout→sidebar→editor→chat→terminal→init→common |
 
-**结论**：统一树相比 §7 共修正了 **4 处遗漏/不一致**，无功能缺失。
+**结论**：统一树相比 §7 共修正了 **5 处遗漏/不一致**，无功能缺失。

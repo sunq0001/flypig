@@ -1,7 +1,7 @@
 # 技术栈
 
 > **来源**: `architecture-refactor.md` §3.12
-> **关联文档**: `architecture-guide.md`（总览）、`folder-tree.md`（文件结构）
+> **关联文档**: `architecture-guide.md`（总览）、`folder-tree.md`（文件结构）、`usage-tracking.md`（成本追踪取代方案）
 > **核心原则**：能用成熟开源的绝不自研。
 
 ## 技术选型明细
@@ -30,7 +30,7 @@
 | | 代码规范检查 | **Ruff** | 市面方案 | Rust 编写，比 flake8 快 100 倍，支持 --fix 自动修复 |
 | | 会话持久化 | **SQLAlchemy** | 市面方案 | 存储层用开源 ORM |
 | | 历史搜索预留 | **SQLite FTS5 → pgvector → LangMem** | 混合方案 | P0: SQLite + tag 索引；P1: LangMem 语义检索（可替换为自研 pgvector） |
-| | CostTracker | **自研（~30 行）** | 业务定制 | 定价公式高度定制，Litellm 太重 |
+| | IUsageTracker | **薄包装（~80 行 SQLite CRUD）** | 薄包装 | turn/call 级 token/cost/缓存；LangFuse/Helicone 等现成方案都要独立服务部署，单用户场景太重 |
 | | PromptManager | **自研（~50 行）** | 业务定制 | 多角色对抗切换，无现成方案 |
 | | OrchestrationService（已拆分为三） | | | 原三职合一服务拆为 GraphFactory+SuggestionEngine+HookService |
 | **工具** | bash 执行 | **subprocess（标准库）** | 市面方案 | Python 内置，无 PTY |
@@ -51,5 +51,5 @@
 ## 总结
 
 - **开源方案 ~95%** — LangGraph + LangMem + Casbin + dependency-injector + Element Plus + Mermaid.js + Vercel AI SDK + Ruff + Quart + SQLAlchemy + marked + highlight.js + Docker + mcp-auto-install...
-- **真正自研 ~3%** — PromptManager(~50行)、CostTracker(~30行)、GraphFactory(~80行)+SuggestionEngine(~40行)+HookService(~40行)、ChangeScore(~40行)、ChangeReview(~60行)
-- **薄包装不计入** — tool_ask_choice(~20行)、tool_lint(~20行调Ruff)、IHistoryStore(接口定义)、tool_mcp_manager(调mcp-auto-install)
+- **真正自研 ~3%** — PromptManager(~50行)、GraphFactory(~80行)+SuggestionEngine(~40行)+HookService(~40行)、ChangeScore(~40行)、ChangeReview(~60行)
+- **薄包装不计入** — IUsageTracker(~80行 SQLite CRUD，替换 LangFuse/Helicone 等重型方案)、tool_ask_choice(~20行)、tool_lint(~20行调Ruff)、IHistoryStore(接口定义)、tool_mcp_manager(调mcp-auto-install)

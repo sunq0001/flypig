@@ -96,7 +96,7 @@ class Coder:
 | 双模型架构 | ✅ ArchitectCoder | ❌ | P3 |
 | TUI 界面 | ❌ 纯 CLI | ✅ Textual TUI | FlyPig 领先 |
 | Tool Calling | ✅ Function Calling | ✅ function_call | 持平 |
-| 成本追踪 | ❌ | ✅ CostTracker | FlyPig 领先 |
+| 成本追踪 | ❌ | ✅ IUsageTracker（取代 CostTracker） | FlyPig 领先 |
 
 ---
 
@@ -284,7 +284,7 @@ TUI 界面         ██░░░    ████░          █████
 | 方面 | FlyPig 优势 | 说明 |
 |------|------------|------|
 | **TUI 界面** | Textual 比 ratatui 更灵活 | 三栏四区域 + 拖拽，用户已认可 |
-| **成本追踪** | CostTracker 完整 | Aider 和 DeepSeek TUI 都没有 |
+| **成本追踪** | IUsageTracker（取代 CostTracker）完整 | Aider 和 DeepSeek TUI 都没有 |
 | **Windows 适配** | 完整 Windows 命令转换 | Aider 仅限 Unix |
 | **沙箱隔离** | Docker 沙箱（开发中） | 两个对手都没有 |
 | **钩子系统** | 6 生命周期事件钩子 | 两个对手都没有 |

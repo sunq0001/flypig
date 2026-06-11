@@ -1,7 +1,7 @@
 # 后端模块
 
 > **来源**: `architecture-refactor.md` §3.1-3.5, §3.10
-> **关联文档**: `langgraph-graph.md`（AgentState）、`subprocess-and-tools.md`（工具执行）
+> **关联文档**: `langgraph-graph.md`（AgentState）、`subprocess-and-tools.md`（工具执行）、`usage-tracking.md`（用量追踪）
 
 ## Interface Layer — 用户界面适配
 
@@ -18,6 +18,7 @@ flypig/interface/web/
 │   ├── rollback.py     # Git 回滚
 │   ├── agent.py        # /api/agent/status + /api/agent/stop
 │   ├── history.py      # /api/history/search
+│   ├── usage.py        # /api/usage/*（用量查询）
 │   └── feedback.py     # /api/feedback/suggestion（建议反馈记录）
 └── services/
     ├── sse_queue.py    # SSE 队列抽象（≤40 行）
@@ -38,12 +39,13 @@ flypig/interface/web/
 | `GitCheckpointManager` | ★ Agent Git checkpoints 管理（init/commit/restore） | ≤80 |
 | `CheckpointStore` | ★ SQLite 映射表（turn_id → commit_hash → summary） | ≤60 |
 | `SummaryGenerator` | ★ 根据本轮交互生成 ≤50 字摘要 | ≤40 |
+| `UsageTrackerService` | ★ 用量追踪：通过 HookService 自动记录 turn/call 级 token、cost、缓存 | ≤60 |
 
 ## Domain Layer — 核心领域逻辑
 
 ```
 flypig/domain/
-├── interfaces/         # IModel, IToolExecutor, ICostTracker, IHook+HookContext, IHistoryStore
+├── interfaces/         # IModel, IToolExecutor, IHook+HookContext, IHistoryStore
 ├── agent/              # state.py, nodes.py, router.py, context.py（领域层只定义逻辑）
 ├── models/             # Message, Session, ChangeScore, ExecutionMode
 ├── prompt_manager.py   # 多角色 prompt 懒加载
@@ -59,7 +61,7 @@ flypig/domain/
 ├── model/              # openai_adapter.py, anthropic.py, local.py
 ├── tools/              # executor.py + edit/search/system/mcp 四组（详见 folder-tree.md）
 ├── sandbox/            # config, path_validator, manager, builder
-├── cost/               # CostTracker + pricing
+├── usage/              # ★ IUsageTracker（取代原 ICostTracker）+ SqliteUsageTracker + PricingFetcher + UsageTrackerHook
 ├── repository/         # SQLAlchemy + IHistoryStore NoOp
 ├── policies/           # Casbin（model.conf + policy.csv + setup）
 ├── terminal.py         # 用户手动 PTY（精简版，无 AI 注入）
@@ -146,7 +148,6 @@ class Container:
         """一劳永逸地装配所有依赖"""
         config = Config()
         model = ModelAdapter(config.default_model)      # 实现 IModel
-        cost_tracker = CostTracker(config.pricing_dict) # 实现 ICostTracker
         tools = ToolExecutor(workspace_dir=config.workspace)  # 实现 IToolExecutor
         repo = SqliteConversationStore("data/conversations.db")  # 实现 IConversationStore
         policy = PolicyService(config.permissions)      # 权限规则
@@ -168,7 +169,6 @@ class Container:
 
         cls.register("config", config, singleton=True)
         cls.register("model", model, singleton=True)
-        cls.register("cost_tracker", cost_tracker, singleton=True)
         cls.register("tools", tools, singleton=True)
         cls.register("repository", repo, singleton=True)
         cls.register("policy", policy, singleton=True)
@@ -179,6 +179,13 @@ class Container:
         cls.register("hook_service", hook_service, singleton=True)
         cls.register("conversation_store", conversation_store, singleton=True)
         cls.register("context_pipeline", context_pipeline, singleton=True)
+
+        # ★ 用量追踪
+        usage_tracker = SqliteUsageTracker("data/usage.db")   # 实现 IUsageTracker
+        pricing_fetcher = PricingFetcher()
+        usage_hook = UsageTrackerHook(usage_tracker, pricing_fetcher)
+        cls.register("usage_tracker", usage_tracker, singleton=True)
+        cls.register("pricing_fetcher", pricing_fetcher, singleton=True)
 
     @classmethod
     def create_agent(cls, workspace=None, hooks=None) -> "IAgent":

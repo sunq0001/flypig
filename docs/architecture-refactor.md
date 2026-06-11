@@ -124,7 +124,7 @@
 │  │  Interfaces       │ │  Models            │ │  PromptManager         ││
 │  │  IModel(context驱动)  │ │  Message, ToolCall │ │  多角色按需懒加载      ││
 │  │  IToolExecutor    │ │  Session, ModeConfig│ │  developer(核心)       ││
-│  │  ICostTracker     │ │  ChoiceCard        │ │  reviewer(对抗)        ││
+│  │  IConversationStore│ │  ChoiceCard        │ │  reviewer(对抗)        ││
 │  │  IConversationStore│ │  ChangeScore       │ │  tester                ││
 │  │  IContextPipeline  │ │  PermissionRule    │ │  architect             ││
 │  │  IKnowledgeStore   │ │  ConversationState │ │  documenter            ││
@@ -155,7 +155,7 @@
 ├─────────────────────────────────────────────────────────────────────────┤
 │                     DI CONTAINER (依赖注入容器)                            │
 │  Container.configure() → 装配:                                          │
-│    IModel / IToolExecutor / ICostTracker / IConversationStore         │
+│    IModel / IToolExecutor / IUsageTracker / IConversationStore         │
 │    IContextPipeline / PolicyService / PromptManager                    │
 │    IKnowledgeStore(NoOp) / GraphFactory / SuggestionEngine / HookService │
 │  create_agent() → 返回 IAgent (一张图统一 Graph，context 约束内 LLM 自行决定路径)
@@ -310,7 +310,6 @@ flypig/domain/
 │   ├── __init__.py
 │   ├── imodel.py            # IModel 接口（模式无关的 stream 调用）
 │   ├── itool_executor.py    # IToolExecutor 接口
-│   ├── icost_tracker.py     # ICostTracker 接口
 │   ├── ihook.py             # IHook 接口 + HookContext 数据类（通用事件钩子）
 │   ├── iconversation_store.py  # IConversationStore 接口（对话存储 + 检索）
 │   ├── icontext_pipeline.py    # IContextPipeline 接口（预 LLM 压缩）
@@ -375,10 +374,12 @@ flypig/infrastructure/
 │   ├── manager.py           # SandboxManager（容器生命周期）
 │   └── builder.py           # Dockerfile 生成 + 镜像构建
 │
-├── cost/
+├── usage/
 │   ├── __init__.py
-│   ├── tracker.py           # CostTracker
-│   └── pricing.py           # 价格获取 + 缓存
+│   ├── iusage_tracker.py    # IUsageTracker 接口（取代原 ICostTracker）
+│   ├── sqlite_tracker.py    # SqliteUsageTracker
+│   ├── pricing.py           # PricingFetcher 价格获取 + 缓存
+│   └── hooks.py             # UsageTrackerHook（通过 HookService 自动记录）
 │
 ├── terminal.py              # [KEPT] 用户独立终端管理（xterm.js 后端）
 ├── hooks.py                 # 事件钩子实现
@@ -647,9 +648,8 @@ class Container:
         """一劳永逸地装配所有依赖"""
         config = Config()
         model = ModelAdapter(config.default_model)      # 实现 IModel
-        cost_tracker = CostTracker(config.pricing_dict) # 实现 ICostTracker
         tools = ToolExecutor(workspace_dir=config.workspace)  # 实现 IToolExecutor
-        store = SqliteConversationStore("data/conversations.db")  # 实现 IConversationStore + 旧 IRepository 兼容
+        store = SqliteConversationStore("data/conversations.db")  # 实现 IConversationStore
         policy = PolicyService(config.permissions)      # 权限规则
         prompts = PromptManager()                       # 多角色 prompt
         knowledge = NoOpKnowledgeStore()                # 知识库空实现
@@ -2263,6 +2263,25 @@ def handle_adversarial_decision(state: AgentState, user_choice: dict) -> dict:
 | **P1（有用户）** | SQLite FTS5 全文搜索（IConversationStore.search） |
 | **P2（向量库）** | LangMem 或自研 pgvector 实现语义检索 |
 
+#### 3.9.2 用量追踪系统（IUsageTracker）
+
+> **详细接口和实现方案见 `usage-tracking.md`。**
+
+独立的时序型用量追踪系统，与 `IConversationStore` 解耦。记录每轮每次 LLM 调用的模型、工具、Token、缓存命中、耗时、费用。
+
+| 表 | 每条对应 | 记录数/轮 |
+|----|---------|----------|
+| `turn_usage` | 1 条聚合（model, total_tokens, total_cost, cache_hit_rate） | 1 |
+| `call_usage` | 每条 LLM→tool→LLM 内部循环 | N（N ≥ 1） |
+| `model_pricing` | 每天每个模型的单价快照 | 按需 |
+
+**关键设计**：
+- 通过 `HookService` 自动记录，业务代码零侵入
+- 在线获取模型单价（DeepSeek 官方，每日首次连接+跨午夜刷新）
+- 记录 `reasoning_tokens`（区分思考 vs 输出）
+- `call_usage.status` 记录 `success`/`error`/`retry`
+- 数据滚动仅弹窗提示用户，不做自动清理
+
 ---
 
 
@@ -2476,7 +2495,7 @@ state = PromptManager.switch(state, "reviewer", {"files_changed": 5})
 | | 配置 | **PyYAML** | 市面方案 | yaml 解析 |
 | | **会话持久化** | **SQLAlchemy** | 市面方案 | 存储层用开源 ORM，业务逻辑—就是 SQL |
 | | **历史搜索预留** | **SQLite FTS5 / PostgreSQL tsvector** | 市面方案 | IHistoryStore 接口定义，实现用数据库全文索引 |
-| | **CostTracker** | **自研（~30 行）** | 业务定制 | 定价公式高度定制，无通用替代；Litellm 太重 |
+| | **成本追踪** | **IUsageTracker（~80 行 SQLite CRUD）** | 薄包装 | LangFuse/Helicone 等现成方案都要独立服务部署，单用户场景太重；薄 SQLite 包装够用 |
 | | **PromptManager** | **自研（~50 行）** | 业务定制 | 多角色对抗切换，无现成方案 |
 | | **GraphFactory** | **自研（~80 行）** | 业务定制 | 导入 domain/agent 节点编译 StateGraph |
 | | **SuggestionEngine** | **自研（~40 行）** | 业务定制 | ChangeScore → 对抗建议卡片映射 |
@@ -2495,7 +2514,7 @@ state = PromptManager.switch(state, "reviewer", {"files_changed": 5})
 
 **总结**（修正后）：
 - **开源方案 ~94%** — LangGraph + Casbin + dependency-injector + Element Plus + Mermaid.js + Vercel AI SDK + **Aider(编辑引擎)** + **tree-sitter(结构化编辑)** + Ruff + Quart + SQLAlchemy + marked + highlight.js + Docker...
-- **真正自研 ~4%** — 多角色 PromptManager(~50行)、CostTracker(~30行)、GraphFactory(~80行)+SuggestionEngine(~40行)+HookService(~40行)、ChangeScore(~40行)、ChangeReview(~60行)。这些是业务核心逻辑，确实没有现成方案替代。
+- **真正自研 ~3%** — 多角色 PromptManager(~50行)、GraphFactory(~80行)+SuggestionEngine(~40行)+HookService(~40行)、ChangeScore(~40行)、ChangeReview(~60行)。这些是业务核心逻辑，确实没有现成方案替代。
 - **薄包装不计入** — tool_ask_choice(~20行返回值)、tool_lint(~20行调Ruff CLI)、IHistoryStore(接口定义)、git diff 解析。这些都是标准库/开源工具的薄包装，不算真正的自研。
 
 ---
@@ -2529,7 +2548,7 @@ state = PromptManager.switch(state, "reviewer", {"files_changed": 5})
   Streaming — 逐 token 输出（与 Vercel AI SDK 天然对接）
 
   LangGraph 一套框架覆盖了 Agent 循环的 80%。
-  剩下的 20%（PromptManager、CostTracker）用 Python 代码补上即可。
+  剩下的 20%（PromptManager、IUsageTracker）用 Python 代码补上即可。
                               | 基础设施
                               v
                       基础设施（可替换层）
@@ -2551,7 +2570,7 @@ state = PromptManager.switch(state, "reviewer", {"files_changed": 5})
 | 审批流程 | 自研 approval_request + SSE | **LangGraph interrupt** 原生支持 | 大幅减少 |
 | 对话状态机 | 自研 ConversationState enum | **LangGraph StateSchema** 类型安全 | 大幅减少 |
 | tool_bash/grep/file | 自研每个工具函数 | 自研（LangGraph 不提供具体工具） | 不变 |
-| CostTracker | 自研 | 自研 | 不变 |
+| IUsageTracker（取代 CostTracker） | 自研 | 自研（取代 CostTracker） | 不变 |
 | PromptManager | 自研 | 自研 | 不变 |
 | API 路由 | Quart 手写 | Quart/FastAPI | 不变 |
 | 前端 UI | Vue 3 + Vercel AI SDK | Vue 3 + Vercel AI SDK | 不变 |
@@ -3285,7 +3304,6 @@ flypig/                           ← 项目根
 │   ├── interfaces/              ← 接口定义
 │   │   ├── imodel.py            ← IModel（模式无关，统一 stream 接口）
 │   │   ├── itool_executor.py    ← IToolExecutor
-│   │   ├── icost_tracker.py     ← ICostTracker
 │   │   ├── iconversation_store.py  ← IConversationStore（对话存储 + 检索，含 checkpoint / suggestion_feedback）
 │   │   ├── icontext_pipeline.py   ← IContextPipeline（预 LLM 上下文压缩）
 │   │   ├── iknowledge_store.py  ← IKnowledgeStore（NoOp 预留）
@@ -3350,13 +3368,14 @@ flypig/                           ← 项目根
 │   ├── sandbox/                 ← Docker 沙箱
 │   │   ├── config.py, path_validator.py, manager.py, builder.py
 │   │
-│   ├── cost/
-│   │   ├── tracker.py           ← CostTracker
-│   │   └── pricing.py           ← 价格获取 + 缓存
+│   ├── usage/
+│   │   ├── iusage_tracker.py    ← IUsageTracker（取代原 ICostTracker）
+│   │   ├── sqlite_tracker.py    ← SqliteUsageTracker
+│   │   ├── pricing.py           ← PricingFetcher（价格获取 + 缓存）
+│   │   └── hooks.py             ← UsageTrackerHook（HookService 自动记录）
 │   │
-│   ├── repository/
-│   │   ├── sqlite.py             ← SQLAlchemy 持久化（原有兼容）
-│   │   └── conversation_store.py ← SqliteConversationStore（IConversationStore 实现，主入口）
+│   ├── conversation_store.py    ← SqliteConversationStore（IConversationStore SQLite 实现）
+│   │
 │   │
 │   ├── policies/
 │   │   ├── model.conf           ← Casbin 模型
@@ -3594,7 +3613,7 @@ class ToolBash:
 | **改选择题逻辑** | `infrastructure/tools/tool_ask_choice.py` |
 | **改模式配置(温度/工具)** | `domain/models/mode.py` (ExecutionMode 枚举) |
 | 改权限规则 | Casbin 策略文件 |
-| 改会话持久化 | `infrastructure/repository/` |
+| 改会话持久化 | `infrastructure/conversation_store.py` |
 | 改终端管理 | `infrastructure/terminal.py` |
 | 改后台进程 buffer | `infrastructure/tools/tool_task.py` |
 | 改 MCP 集成 | `infrastructure/tools/mcp_loader.py` |
@@ -3614,6 +3633,7 @@ class ToolBash:
 | 配置即代码 | YAML 配置文件 + `@dataclass ModelConfig` | `backend-modules.md` |
 | 数据类替代 dict | 所有跨层传递数据用 `@dataclass` | `backend-modules.md` |
 | 策略模式 | 文件编辑三种方案统一 `FileEditStrategy` + `EditResult` | `subprocess-and-tools.md` |
+| 时序追踪 | IUsageTracker：按 Call 记录 Token/Cost/缓存命中，独立于 IConversationStore | `usage-tracking.md` |
 
 ## 十、分步迁移路线
 
@@ -3744,5 +3764,6 @@ class ToolBash:
 | **观察者模式** | `backend-modules.md` §Application Layer | `HookService.register/emit` |
 | **工厂模式** | `langgraph-graph.md` §DynamicToolNode | `GraphFactory.build_graph()` |
 | **中介者模式** | `backend-modules.md` §中介者模式：ChatService | ChatService 协调各服务 |
+| **时序追踪** | `usage-tracking.md` 全部 | 独立于 IConversationStore 的用量追踪，1 Turn × N Call 的记录模型 |
 
 
