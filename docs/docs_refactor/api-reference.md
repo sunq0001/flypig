@@ -175,8 +175,8 @@ def rollback_to_turn(turn_id: int, session_id: str):
 Agent Git 使用隐藏目录 `.flypig_checkpoints/`，通过 `--git-dir` 和 `--work-tree` 操作：
 
 ```bash
-# 初始化 Agent Git
-git init --separate-git-dir=.flypig_checkpoints/.git .
+# 首次使用时自动初始化（GitCheckpointManager 自动完成，无需手动执行）
+git --git-dir=.flypig_checkpoints/.git --work-tree=. init --separate-git-dir=.flypig_checkpoints/.git .
 
 # 每次 checkpoint
 git --git-dir=.flypig_checkpoints/.git --work-tree=. add -A
@@ -240,6 +240,38 @@ data: {"session_id": "abc123"}
 - 重新加载文件树
 - 刷新已打开的文件内容
 - 当前编辑文件如有变化，提示"文件已被回滚，是否重新加载？"
+
+### 自然语言回滚精度优化（P2 规划）
+
+三层兜底策略，不追求一次猜对：
+
+**第一层：结构化摘要**
+SummaryGenerator 产出结构化元数据而非纯文本：
+
+```python
+@dataclass
+class CheckpointMeta:
+    title: str                    # 简短标题
+    tags: list[str]               # 标签
+    files_changed: list[str]      # 变更文件列表
+    dialogue_type: str | None     # file_change / ask_choice / discussion
+```
+
+用户说"回到改 auth 之前" -> tags + files_changed 直接匹配。
+
+**第二层：变更时间线**
+多匹配时不弹选择题，展示结构化时间线：
+
+```
+  1. turn_5 · 新增 login 函数参数校验     · 10 分钟前
+  2. turn_3 · 重构 auth 模块              · 30 分钟前
+  3. turn_1 · 创建 auth.py               · 1 小时前
+```
+
+**第三层：兜底**
+匹配不到时提示用户换描述或手动输入 turn_id。
+
+**P0 阶段保持当前方案不变**，以上在需要时再实现。
 
 ## 审批分类
 

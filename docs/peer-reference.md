@@ -287,7 +287,7 @@ TUI 界面         ██░░░    ████░          █████
 | **成本追踪** | IUsageTracker（取代 CostTracker）完整 | Aider 和 DeepSeek TUI 都没有 |
 | **Windows 适配** | 完整 Windows 命令转换 | Aider 仅限 Unix |
 | **沙箱隔离** | Docker 沙箱（开发中） | 两个对手都没有 |
-| **钩子系统** | 6 生命周期事件钩子 | 两个对手都没有 |
+| **钩子系统** | 6+ 事件 + cancellable 拦截 | 两个对手都没有 |
 | **Python 生态** | pip install 即用 | Aider 也是 Python，DeepSeek TUI 需 Rust 编译 |
 
 ---

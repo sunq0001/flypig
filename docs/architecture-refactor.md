@@ -276,31 +276,102 @@ class SuggestionEngine:
         # 见 adversarial-system.md generate_suggestion() 完整实现
 ```
 
-**HookService：**
+**HookService —— 统一运行时编排入口：**
+
+所有运行时行为（权限检查、用量追踪、SSE 推送、审批触发、循环检测、日志）都通过 HookService 统一编排，不各自独立调用。
 
 ```python
 @dataclass
 class HookContext:
-    event_type: str         # "pre_agent_run" / "post_tool_call" / "sse_output" / ...
+    event_type: str
     timestamp: float
     data: dict
     state: dict | None = None
 
+@dataclass
+class HookResult:
+    """可取消钩子的返回值"""
+    denied: bool = False              # 拒绝执行
+    reason: str | None = None         # 拒绝原因
+    modified_data: dict | None = None # 修改后的参数
+    ask_user: bool = False            # 需要用户确认
+
+class IHook(ABC):
+    """钩子接口——通知型返回 None，可取消型返回 HookResult"""
+    @abstractmethod
+    async def on_event(self, ctx: HookContext) -> HookResult | None: ...
+
 class HookService:
-    """通用钩子管理器——业务场景决定何时触发"""
+    """通用钩子管理器"""
 
-    _hooks: dict[str, list[IHook]] = {}
-
-    @classmethod
-    def register(cls, event_type: str, hook: IHook):
-        cls._hooks.setdefault(event_type, []).append(hook)
+    _hooks: dict[str, list[tuple[int, IHook]]] = {}  # (priority, hook)
 
     @classmethod
-    async def emit(cls, event_type: str, data: dict, state=None):
+    def register(cls, event_type: str, hook: IHook, priority: int = 0):
+        """数字越大越先执行"""
+        cls._hooks.setdefault(event_type, []).append((priority, hook))
+        cls._hooks[event_type].sort(key=lambda x: -x[0])
+
+    @classmethod
+    async def emit(cls, event_type: str, data: dict, state=None, cancellable=False) -> HookResult:
         ctx = HookContext(event_type=event_type, timestamp=time.time(), data=data, state=state)
-        for hook in cls._hooks.get(event_type, []):
-            await hook.on_event(ctx)
+        for _, hook in cls._hooks.get(event_type, []):
+            if cancellable:
+                result = await hook.on_event(ctx)
+                if result and (result.denied or result.modified_data or result.ask_user):
+                    return result  # 拦截链——有一个拒绝就停
+            else:
+                await hook.on_event(ctx)  # 通知型，不关心返回值
+        return HookResult()
 ```
+
+**事件类型与内置钩子映射：**
+
+| 事件 | cancellable | 注册的钩子 | 作用 |
+|------|-----------|-----------|------|
+| `chat:before` | ❌ | UsageTracker | 初始化 TurnUsage |
+| `chat:after` | ❌ | UsageTracker | 聚合写入 usage.db |
+| `tool:before` | ✅ | PermissionChecker | Casbin 判断 allow/ask/deny |
+| `tool:before` | ✅ | UsageTracker | 记录 CallUsage |
+| `tool:after` | ❌ | UsageTracker | 补充 token/cost/cache |
+| `tool:after` | ❌ | LoopGuard | 检测重复操作，推通知 |
+| `sse:output` | ❌ | SsePush | 推送给前端 |
+
+**PermissionChecker 作为内置钩子：**
+
+```python
+@hook("tool:before", priority=100)  # 安全检查优先执行
+class PermissionChecker:
+    async def on_event(self, ctx: HookContext) -> HookResult:
+        tool = ctx.data.get("tool_name", "")
+        params = ctx.data.get("tool_args", {})
+        decision = check_casbin(tool, params)  # allow / ask / deny
+        if decision == "deny":
+            return HookResult(denied=True, reason=f"{tool} 被策略禁止")
+        if decision == "ask":
+            return HookResult(ask_user=True, reason=f"执行 {tool}({params}) 需要确认")
+        return HookResult()  # allow
+```
+
+**审批卡片走 `ask_user` 返回值前端消费：**
+
+```python
+# ChatService 中
+result = await hook_service.emit("tool:before", data, cancellable=True)
+if result.denied:
+    yield {"type": "tool_result", "content": f"拒绝: {result.reason}"}
+    return
+if result.ask_user:
+    yield {"type": "approval", "reason": result.reason, "tool": tool, "params": params}
+    # 等待用户批准后再执行工具（通过 SSE 恢复挂起状态）
+    approved = await wait_for_user_approval()
+    if not approved:
+        yield {"type": "tool_result", "content": "用户拒绝"}
+        return
+# 执行工具...
+```
+
+**注意事项：** 基础设施初始化（DI 装配、Casbin 策略加载、Agent Git 初始化）不走 HookService，它们是启动时一次性的工作，不是运行时事件。`LoopGuard` 检测到重复操作后也只推通知，不自行终止——用户决定是否停止（`/api/agent/stop`）。
 
 ### 3.3 Domain Layer — 核心领域逻辑
 
