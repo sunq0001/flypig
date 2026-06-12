@@ -3609,6 +3609,7 @@ LangGraph StateGraph (领域层)
   ▼
 SSE 事件流 → Vercel AI SDK 自动渲染
   ├── type: "token"                → 普通文本流式渲染
+  ├── type: "task_update"          → 任务看板变更（add/update）
   ├── type: "choice"               → Explore 选择题卡片
   ├── type: "approval"             → Plan 审批卡片
   ├── type: "change_review"        → Execute 变更审查卡片（3.8.7）

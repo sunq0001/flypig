@@ -93,6 +93,7 @@ flypig/
 │   │   ├── system/               ← 系统工具
 │   │   │   ├── tool_bash.py          ← subprocess 命令（无 PTY）
 │   │   │   ├── tool_task.py          ← task_status + task_list + task_log
+│   │   │   ├── tool_task_manager.py  ← 任务看板：add_task / update_task
 │   │   │   └── tool_extract_archive.py ← 压缩解压 + Zip Slip 防护（§3.7.2）
 │   │   ├── mcp/                  ← MCP 协议工具
 │   │   │   ├── mcp_loader.py         ← MCP 加载器
@@ -134,6 +135,7 @@ flypig/
 │       │   ├── agent.py          ← /api/agent/status + /api/agent/stop
 │       │   ├── history.py        ← /api/history/search
 │       │   ├── usage.py          ← /api/usage/*（用量查询）
+│       │   ├── tasks.py          ← /api/tasks/*（任务看板 CRUD + 搜索）
 │       │   └── feedback.py       ← /api/feedback/suggestion（建议反馈）
 │       └── services/
 │           ├── sse_queue.py      ← SSE 队列抽象
@@ -156,7 +158,7 @@ flypig/
 │           │   └── base.css
 │           ├── components/
 │           │   ├── layout/       ← MainLayout, ResizeHandle, StatusBar
-│           │   ├── sidebar/      ← Sidebar, FileTree, FileTreeNode, Dashboard
+│           │   ├── sidebar/      ← Sidebar, FileTree, FileTreeNode, Dashboard, TaskBoard
 │           │   ├── editor/       ← EditorArea, EditorTabs, MonacoEditor
 │           │   ├── chat/         ← ChatPanel, MessageList, InputBox,
 │           │   │                   ChoiceCard, ChangeReviewCard, SuggestionCard,

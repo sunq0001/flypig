@@ -427,6 +427,104 @@ const sandboxHtml = computed(() => `
 | 功能修改 | "把这个按钮挪到左边" | 修改代码 + 实时更新预览 | 实时看到效果 |
 | 代码反馈 | 用户编辑代码块 | AI 看到代码差异后给出建议 | 代码 + 建议文本 |
 
+## TaskBoard 任务看板
+
+AI 拆解用户需求后生成结构化的任务清单，贯穿整个会话、跨会话可检索。
+
+### 数据模型
+
+```sql
+CREATE TABLE task_items (
+    id TEXT PRIMARY KEY,            -- "task_001"
+    session_id TEXT NOT NULL,
+    parent_task TEXT,                -- 父任务 ID（支持嵌套拆解）
+    title TEXT NOT NULL,             -- "实现 login API"
+    status TEXT DEFAULT 'todo',      -- todo / in_progress / done / cancelled
+    priority TEXT DEFAULT 'medium',  -- high / medium / low
+    tags TEXT,                       -- JSON 数组 ["auth", "backend"]
+    created_at TIMESTAMP,
+    updated_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    turn_id INTEGER                  -- 哪个 turn 创建的
+);
+CREATE INDEX idx_task_session ON task_items(session_id);
+CREATE INDEX idx_task_status ON task_items(status);
+```
+
+### API 端点
+
+| 端点 | 方法 | 说明 |
+|------|------|------|
+| `/api/tasks?session_id=xxx` | GET | 获取当前会话全部任务（按时间倒序） |
+| `/api/tasks/search?q=xxx&status=xxx` | GET | 跨会话搜索任务（按标题/标签匹配） |
+| `/api/tasks` | POST | AI 调用 tool_add_task 时写入 |
+| `/api/tasks/<id>` | PATCH | AI 调 tool_update_task 更新状态 |
+| `/api/tasks/stats` | GET | 统计：未完成/进行中/已完成 数量（Dashboard 用） |
+
+### AI 交互方式
+
+AI 通过两个工具操作任务（`tool_task_manager.py`）：
+
+```python
+# AI 调用的工具
+def tool_add_task(title: str, parent: str | None = None, tags: list[str] | None = None) -> str:
+    """添加任务到看板"""
+
+def tool_update_task(task_id: str, status: str) -> str:
+    """更新任务状态: todo / in_progress / done / cancelled"""
+```
+
+对话中的自然交互：
+
+```
+用户: "实现用户登录模块，需要 users 表、login API、注册页面"
+  AI 拆解 → tool_add_task("创建 users 表", tags=["数据库"])
+           → tool_add_task("实现 login API", tags=["auth", "backend"])
+           → tool_add_task("实现注册页面", tags=["前端", "auth"])
+  → SSE 推送 task_update 事件 → TaskBoard 渲染
+
+AI 开始做 "实现 login API"
+  → tool_update_task("task_002", status="in_progress")
+  → SSE 推送 → TaskBoard 实时更新
+
+用户切换会话做另一件事
+  → 第二天回来 → Dashboard 显示 "3 个未完成任务"
+  → 点进会话 → TaskBoard 还在
+```
+
+### 检索与筛选
+
+TaskBoard 侧边栏支持：
+
+```
+┌──────────────────────┐
+│ 🔍 搜索任务...       │  ← 按标题/标签全文搜索
+│                      │
+│ [全部] [待办] [进行] [完成]  ← 状态筛选
+│                      │
+│ ☑️ 创建 users 表     │
+│ 🔄 实现 login API    │  ← 当前进行中
+│ ⬜ 注册页面           │
+│ ⬜ 接入 JWT           │
+│                      │
+│ 📅 昨天               │  ← 按时间分组
+│ ✅ 用户表设计         │
+└──────────────────────┘
+```
+
+跨会话搜索：`GET /api/tasks/search?q=login` 返回匹配的任务及所属 session 信息，方便用户找到"之前在哪个会话里讨论了 login 相关任务"。
+
+### 涉及的新增/修改文件
+
+| 文件 | 说明 |
+|------|------|
+| `infrastructure/tools/tool_task_manager.py` | AI 调用的 add_task / update_task 工具 |
+| `interface/web/routes/tasks.py` | REST 查询端点 |
+| `components/sidebar/TaskBoard.vue` | 侧边栏任务看板 |
+| `components/chat/TaskListCard.vue` | 对话流中的任务列表卡片 |
+| `IConversationStore` | 新增 task CRUD 方法 |
+| SSE 事件 | 新增 `task_update` 事件类型 |
+
 ## 拆分前后对比
 
 | 指标 | 当前（index.html） | 重构后（组件化） |

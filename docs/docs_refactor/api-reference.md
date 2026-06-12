@@ -22,6 +22,11 @@
 | `/api/history/search` | GET | 历史搜索 |
 | `/api/agent/status` | GET | Agent 运行状态（空闲/忙碌/当前任务/成本统计） |
 | `/api/agent/stop` | POST | 强制停止当前运行中的 Agent |
+| `/api/tasks?session_id=` | GET | 当前会话任务列表 |
+| `/api/tasks/search?q=&status=` | GET | 跨会话搜索任务 |
+| `/api/tasks` | POST | 添加任务（AI 调用） |
+| `/api/tasks/<id>` | PATCH | 更新任务状态 |
+| `/api/tasks/stats` | GET | 任务统计（Dashboard 用） |
 | `/api/usage/turn/<turn_id>` | GET | 本轮用量明细（含 calls[]） |
 | `/api/usage/session/<session_id>` | GET | 当前会话汇总（total_tokens, total_cost, avg_cache_hit） |
 | `/api/usage/range?start=&end=` | GET | 时间范围统计 |
@@ -34,6 +39,7 @@
 |----------|------|---------|
 | `token` | 逐 token 文本 | LLM 流式输出 |
 | `reasoning` | LLM 推理过程片段 | LLM 思考中间步骤（防止用户以为卡死） |
+| `task_update` | 任务状态变更 | AI 调 tool_add_task / tool_update_task 时推送 |
 | `choice` | 选择题卡片 | Explore 模式 |
 | `approval` | 审批卡片 | Plan 模式确认/修改 |
 | `change_plan` | 变更计划（改前预览，逐项批准） | AI 输出修改方案后、执行前 |
