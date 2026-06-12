@@ -204,6 +204,130 @@ class Container:
     def get(cls, name): ...
 ```
 
+## 可测试性（TDD + DI）
+
+### 设计原则：TDD 适配而非 TDD 严格
+
+AI Agent 项目的测试不能一刀切。核心逻辑分两类：
+
+| 可 TDD | 不可 TDD |
+|--------|---------|
+| 纯函数：router.py、ChangeScore、HookResult、dataclass | LLM 调用：chat_node、graph.astream_events |
+| 确定性工具：tool_search、tool_file、tool_lint | LangGraph 编排 |
+| Hook 实现：PermissionChecker、UsageTracker | SSE 推送、前端渲染 |
+| 数据类：TurnUsage、CallUsage、CheckpointMeta | 初始化流程 |
+
+**策略**：纯函数用 TDD，LLM 部分用集成测试（录真实响应或 mock LLM）。
+
+### 依赖注入与可测试
+
+当前 `Container.get()` 全局访问无法在测试中 mock。改为**参数注入 + 默认值**：
+
+```python
+# 方案 A（推荐）：参数注入，测试时传递 mock
+async def chat_node(state, hook_service: IHook = None):
+    hook = hook_service or Container.get("hook_service")
+    # 测试时：chat_node(state, hook_service=MockHook())
+
+# 方案 B：Container 支持 override
+class Container:
+    _overrides: dict[str, Any] = {}
+
+    @classmethod
+    def override(cls, name, mock_instance):
+        """测试时覆盖依赖"""
+        cls._overrides[name] = mock_instance
+
+    @classmethod
+    def get(cls, name):
+        if name in cls._overrides:
+            return cls._overrides[name]
+        return cls._instances[name]
+
+    @classmethod
+    def reset_overrides(cls):
+        """每次测试后清理"""
+        cls._overrides.clear()
+```
+
+**MVP 阶段可用方案 B**（最简单，不改任何函数签名）。正式版切到方案 A + `dependency-injector` 的 scope 管理。
+
+### 测试目录结构
+
+```
+flypig/
+├── tests/
+│   ├── unit/                    ← 纯函数单元测试
+│   │   ├── test_router.py
+│   │   ├── test_models.py       ← ChangeScore, TurnUsage 等
+│   │   ├── test_hook_service.py
+│   │   ├── test_pricing.py
+│   │   └── test_permission_checker.py
+│   ├── integration/             ← LLM 集成测试
+│   │   ├── test_chat_node.py    ← mock LLM，测编排逻辑
+│   │   ├── test_tools.py        ← 测工具执行，mock subprocess
+│   │   └── test_graph_factory.py
+│   ├── fixtures/                ← 测试数据（mock LLM 响应、checkpoint 样本）
+│   ├── conftest.py              ← 全局 fixture：Container.override 清理
+│   └── pytest.ini               ← pytest 配置
+```
+
+### conftest.py 示例
+
+```python
+# tests/conftest.py
+import pytest
+from di.container import Container
+
+@pytest.fixture(autouse=True)
+def reset_container():
+    """每个测试后清理 override，防止状态串扰"""
+    yield
+    Container.reset_overrides()
+
+@pytest.fixture
+def mock_hook_service():
+    mock = MagicMock(spec=IHook)
+    Container.override("hook_service", mock)
+    return mock
+
+@pytest.fixture
+def mock_store():
+    mock = MagicMock(spec=IConversationStore)
+    Container.override("conversation_store", mock)
+    return mock
+```
+
+### 测试编写示例
+
+```python
+# tests/unit/test_router.py
+def test_router_detects_tool_call():
+    state = AgentState(messages=[AIMessage(tool_calls=[{"name": "bash"}])])
+    result = router(state)
+    assert result == "execute"
+
+def test_router_falls_back_to_chat():
+    state = AgentState(messages=[AIMessage(content=" Hello ")])
+    result = router(state)
+    assert result == "chat"
+
+# tests/unit/test_hook_service.py  
+@pytest.mark.asyncio
+async def test_cancellable_hook_denies():
+    service = HookService()
+    service.register("tool:before", DenyAllHook(), priority=100)
+    result = await service.emit("tool:before", {"tool": "bash"}, cancellable=True)
+    assert result.denied is True
+
+# tests/integration/test_tools.py
+@patch("subprocess.run")
+def test_tool_bash(mock_run):
+    mock_run.return_value = CompletedProcess(args=[], returncode=0, stdout="ok")
+    result = tool_bash("echo hello")
+    assert "ok" in result
+```
+
 ## 健壮性
 
 ### 环形缓冲区防内存泄漏

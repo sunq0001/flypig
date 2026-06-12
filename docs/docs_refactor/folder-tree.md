@@ -171,6 +171,20 @@ flypig/
 │           │                       useCommandPalette
 │           └── lib/              ← xterm-setup.js, monaco-setup.js, sfc-compiler.js
 │
+├── tests/                        ← 单元测试 + 集成测试
+│   ├── unit/
+│   │   ├── test_router.py
+│   │   ├── test_models.py
+│   │   ├── test_hook_service.py
+│   │   ├── test_pricing.py
+│   │   └── test_permission_checker.py
+│   ├── integration/
+│   │   ├── test_chat_node.py
+│   │   ├── test_tools.py
+│   │   └── test_graph_factory.py
+│   ├── fixtures/
+│   ├── conftest.py
+│   └── pytest.ini
 ├── mcp.json                      ← MCP 服务器配置（§3.7.1）
 ├── pyproject.toml                ← Ruff 配置 + 项目元数据（§3.8.8）
 ├── Dockerfile                    ← 应用容器化（§6）

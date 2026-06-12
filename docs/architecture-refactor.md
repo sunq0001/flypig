@@ -2465,6 +2465,20 @@ async def retry(func, max_retries=2, backoff=1.0,
 
 端点 `/metrics` 由 prometheus_client 自动暴露。
 
+#### 3.10.8 可测试性
+
+> **详细测试策略和示例见 `backend-modules.md` §可测试性。**
+
+纯函数用 TDD，LLM 部分用集成测试。`Container` 提供 `override()` / `reset_overrides()` 方法支持测试 mock，`conftest.py` 自动清理。测试目录结构：
+
+```
+tests/
+├── unit/          ← 纯函数测试（router, models, hook, pricing）
+├── integration/   ← LLM 编排测试（chat_node, tools, graph）
+├── fixtures/      ← mock 响应数据
+└── conftest.py    ← Container.override 自动清理
+```
+
 ---
 
 ### 3.11 多角色 Prompt 管理（按需加载，对抗性审查）
