@@ -31,8 +31,10 @@ flypig/web/static_vite/
     ├── App.vue               ← 根组件（三栏布局 + 终端面板）
     │
     ├── style/
-    │   ├── variables.css     ← CSS 变量（主题色）
+    │   ├── variables.css     ← CSS 变量（基础色）
     │   ├── terminal-themes.css ← 终端主题系统
+    │   ├── theme-cyberpunk.css   ← 赛博朋克主题覆写
+    │   ├── theme-cute.css        ← 可爱风主题覆写
     │   └── base.css          ← 全局样式
     │
     ├── components/
@@ -82,7 +84,8 @@ flypig/web/static_vite/
     │       ├── SensitiveInfoBanner.vue ← 敏感信息标黄警告（检测到 API key/密码时显示）
     │       ├── MarkdownRender.vue ← Markdown 渲染（扩展 mermaid/tree）
     │       ├── CodeBlock.vue      ← 代码块高亮（highlight.js）
-    │       └── LoadingSpinner.vue ← 加载动画
+    │       ├── LoadingSpinner.vue ← 加载动画
+    │       └── ThemeSwitcher.vue  ← 主题切换（赛博朋克/可爱风）
     │
     ├── composables/
     │   ├── useChat.js         ← Vercel AI SDK useChat 封装（核心）
@@ -91,7 +94,8 @@ flypig/web/static_vite/
     │   ├── useFileTree.js     ← 文件树状态
     │   ├── useEditor.js       ← Monaco Editor 状态
     │   ├── useLayout.js       ← 面板拖拽分割
-    │   └── useMarkdownRender.js ← 检测 mermaid/html/vue 代码块
+    │   ├── useMarkdownRender.js ← 检测 mermaid/html/vue 代码块
+    │   └── useTheme.js        ← 主题切换（data-theme + localStorage）
     │
     └── lib/
         ├── xterm-setup.js     ← xterm.js 初始化
@@ -110,6 +114,7 @@ flypig/web/static_vite/
 - SSE 事件类型与组件映射：`token`→MessageItem, `reasoning`→ReasoningView, `choice`→ChoiceCard, `change_plan`→ChangePlanCard, `change_review`→ChangeReviewCard, `suggestion`→SuggestionCard
 - `response_end` 事件携带本轮用量数据（tokens/cache_hit_rate/cost/duration），`MessageItem` 底部渲染一行用量摘要
 - 终端面板 = 单面板，标签页混排（PTY 交互标签 + subprocess 只读输出标签）
+- **主题切换**：基于 CSS 变量（`data-theme` 属性），不换 UI 库。每个主题对应一个 CSS 文件覆盖变量色值 + 图标色调。通过 `ThemeSwitcher.vue` + `useTheme.js` 切换，选择持久化到 `localStorage`。初始提供默认 / 赛博朋克 / 可爱风三种主题。
 
 ## Vercel AI SDK 集成
 

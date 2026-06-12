@@ -151,6 +151,8 @@ flypig/
 │           ├── style/
 │           │   ├── variables.css
 │           │   ├── terminal-themes.css
+│           │   ├── theme-cyberpunk.css
+│           │   ├── theme-cute.css
 │           │   └── base.css
 │           ├── components/
 │           │   ├── layout/       ← MainLayout, ResizeHandle, StatusBar
@@ -162,9 +164,10 @@ flypig/
 │           │   │                   ThinkingIndicator, ToolCallCard
 │           │   ├── terminal/     ← TerminalPanel, TerminalTab, XtermViewer, OutputViewer
 │           │   ├── init/         ← InitWizard, WorkspaceStep, ModelStep, ApiKeyStep
-│           │   └── common/       ← MarkdownRender, CodeBlock, LoadingSpinner
+│           │   └── common/       ← MarkdownRender, CodeBlock, LoadingSpinner,
+│           │                       ThemeSwitcher
 │           ├── composables/      ← useChat, useMessages, useTerminal, useFileTree,
-│           │                       useEditor, useLayout, useMarkdownRender
+│           │                       useEditor, useLayout, useMarkdownRender, useTheme
 │           └── lib/              ← xterm-setup.js, monaco-setup.js, sfc-compiler.js
 │
 ├── mcp.json                      ← MCP 服务器配置（§3.7.1）
