@@ -109,6 +109,7 @@ flypig/web/static_vite/
 
 ## 关键设计
 
+- **入口流程**：首次启动 → `InitWizard`（工作区选择/模型选择/API Key 录入）→ 配置持久化到本地 → 进入主界面。配置存在时跳过向导直接进主界面。
 - UI 布局不改，只做代码模块化拆分（2500 行 index.html → 20+ .vue 组件）
 - Vercel AI SDK `useChat` 替代手写 ReadableStream
 - SSE 事件类型与组件映射：`token`→MessageItem, `reasoning`→ReasoningView, `choice`→ChoiceCard, `change_plan`→ChangePlanCard, `change_review`→ChangeReviewCard, `suggestion`→SuggestionCard

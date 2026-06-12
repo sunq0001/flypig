@@ -6,7 +6,14 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
-│                                          PRESENTATION LAYER (Web Dashboard)                                            │
+│                                              PRESENTATION LAYER (Web Dashboard)                                        │
+│                                                                                                                       │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐  首次启动/未配置时显示       │
+│  │  InitWizard（初始化向导）                                                             │                              │
+│  │  ├─ Step 1: WorkspaceStep  ← 选择已有工作区 or 新建                                   │                              │
+│  │  ├─ Step 2: ModelStep     ← 选择模型（DeepSeek / Qwen / Claude ...）                 │                              │
+│  │  └─ Step 3: ApiKeyStep    ← 录入 API Key（持久化到本地配置）                          │                              │
+│  └─────────────────────────────────────────────────────────────────────────────────────┘                              │
 │                                                                                                                       │
 │  ┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐   │
 │  │                          Vue 3 + Vercel AI SDK (useChat) + Monaco Editor + xterm.js                              │   │
@@ -130,11 +137,12 @@
 flowchart TD
     subgraph PRESENTATION["🎨 表现层"]
         direction TB
-        P0["Vue 3 + Vercel AI SDK (useChat)<br/>+ Monaco Editor + xterm.js"]
-        P1["💬 对话面板<br/>MessageList / MessageItem / ThinkingIndicator<br/>InputBox / Markdown / Mermaid / LivePreview"]
-        P2["📇 卡片区域<br/>ChoiceCard / ChangeReview<br/>SuggestionCard / ToolCallCard"]
-        P3["🖥️ 终端面板<br/>XtermViewer / OutputViewer / TerminalTab"]
-        P4["📁 侧边栏<br/>FileTree / 未来Dashboard"]
+        P0["InitWizard（初始化向导）<br/>WorkspaceStep / ModelStep / ApiKeyStep<br/>→ 配置存在时自动跳过"]
+        P1["Vue 3 + Vercel AI SDK (useChat)<br/>+ Monaco Editor + xterm.js"]
+        P2["💬 对话面板<br/>MessageList / MessageItem / ThinkingIndicator<br/>InputBox / Markdown / Mermaid / LivePreview"]
+        P3["📇 卡片区域<br/>ChoiceCard / ChangeReview<br/>SuggestionCard / ToolCallCard"]
+        P4["🖥️ 终端面板<br/>XtermViewer / OutputViewer / TerminalTab"]
+        P5["📁 侧边栏<br/>FileTree / ThemeSwitcher / 未来Dashboard"]
     end
     PRESENTATION -->|"SSE<br/>+<br/>WS"| INTERFACE
 
