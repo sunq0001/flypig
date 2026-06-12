@@ -482,11 +482,34 @@ logging.info("[trace=%s] tool_call: %s(%s)", trace_id, tool_name, args)
 
 ### 优雅关闭
 
-LangGraph Checkpointer 持久化的是**上一轮完成后**的状态。如果进程被 SIGTERM 杀死（docker restart、部署更新），正在执行的工具调用会丢失结果。
+LangGraph Checkpointer 持久化的是**上一轮完成后**的状态。如果进程被 SIGTERM 杀死（docker restart、部署更新），正在执行的工具调用会丢失结果——用户那轮对话内容全部丢失，已修改的文件也可能没来得及 checkpoint。
 
-**当前 MVP 阶段**：不处理，重启后用户重试即可。
+#### 解决方案：turn:checkpoint 钩子
 
-**SaaS 阶段**：以下表追踪工具执行状态：
+每完成一个工具调用就 persist 一次当前状态，而不是等整轮结束：
+
+```python
+# HookService 注册
+@hook("tool:after", priority=50)
+class TurnCheckpointHook:
+    """每调完一个工具就 checkpoint 一次"""
+
+    async def on_event(self, ctx: HookContext):
+        store = Container.get("conversation_store")
+        state = ctx.state  # 当前 AgentState
+        await store.save_checkpoint(
+            session_id=state["session_id"],
+            turn_id=state["turn_id"],
+            partial=True,  # 标记为"未完成轮次"
+            messages=state["messages"],
+        )
+```
+
+恢复时检测到 `partial=True` 的轮次，提示用户"上一轮未正常结束，是否继续？"
+
+#### 工具执行追踪表
+
+以下表追踪每个工具调用的生命周期（SaaS 阶段启用）：
 
 ```sql
 CREATE TABLE tool_executions (
@@ -499,6 +522,8 @@ CREATE TABLE tool_executions (
     finished_at TIMESTAMP
 );
 ```
+
+**MVP 阶段**：启用 `TurnCheckpointHook`，不做工具级追踪。SaaS 阶段再加 `tool_executions` 表做全量审计。
 
 ### 敏感信息检测
 

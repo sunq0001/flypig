@@ -335,6 +335,7 @@ class HookService:
 | `tool:before` | ✅ | UsageTracker | 记录 CallUsage |
 | `tool:after` | ❌ | UsageTracker | 补充 token/cost/cache |
 | `tool:after` | ❌ | LoopGuard | 检测重复操作，推通知 |
+| `tool:after` | ❌ | TurnCheckpoint | 每调完一个工具 persist 一次（防崩溃丢状态） |
 | `sse:output` | ❌ | SsePush | 推送给前端 |
 
 **PermissionChecker 作为内置钩子：**
