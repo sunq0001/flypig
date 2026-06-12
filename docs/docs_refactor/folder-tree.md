@@ -156,7 +156,7 @@ flypig/
 │           │   └── base.css
 │           ├── components/
 │           │   ├── layout/       ← MainLayout, ResizeHandle, StatusBar
-│           │   ├── sidebar/      ← Sidebar, FileTree, FileTreeNode
+│           │   ├── sidebar/      ← Sidebar, FileTree, FileTreeNode, Dashboard
 │           │   ├── editor/       ← EditorArea, EditorTabs, MonacoEditor
 │           │   ├── chat/         ← ChatPanel, MessageList, InputBox,
 │           │   │                   ChoiceCard, ChangeReviewCard, SuggestionCard,
@@ -165,9 +165,10 @@ flypig/
 │           │   ├── terminal/     ← TerminalPanel, TerminalTab, XtermViewer, OutputViewer
 │           │   ├── init/         ← InitWizard, WorkspaceStep, ModelStep, ApiKeyStep
 │           │   └── common/       ← MarkdownRender, CodeBlock, LoadingSpinner,
-│           │                       ThemeSwitcher
+│           │                       ThemeSwitcher, CommandPalette
 │           ├── composables/      ← useChat, useMessages, useTerminal, useFileTree,
-│           │                       useEditor, useLayout, useMarkdownRender, useTheme
+│           │                       useEditor, useLayout, useMarkdownRender, useTheme,
+│           │                       useCommandPalette
 │           └── lib/              ← xterm-setup.js, monaco-setup.js, sfc-compiler.js
 │
 ├── mcp.json                      ← MCP 服务器配置（§3.7.1）

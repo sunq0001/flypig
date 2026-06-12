@@ -41,10 +41,11 @@ flypig/web/static_vite/
     │   ├── layout/
     │   │   ├── MainLayout.vue    ← 三栏布局容器
     │   │   ├── ResizeHandle.vue  ← 拖拽分割条
-    │   │   └── StatusBar.vue     ← 状态栏
+    │   │   └── StatusBar.vue     ← 状态栏（模型/用量/主题）
     │   │
     │   ├── sidebar/
     │   │   ├── Sidebar.vue       ← 侧边栏容器
+    │   │   ├── Dashboard.vue     ← 首页（最近工作区/快速开始/用量统计）
     │   │   ├── FileTree.vue      ← 递归文件树
     │   │   └── FileTreeNode.vue  ← 单个节点
     │   │
@@ -81,11 +82,12 @@ flypig/web/static_vite/
     │   │   └── ApiKeyStep.vue    ← API Key 录入
     │   │
     │   └── common/
-    │       ├── SensitiveInfoBanner.vue ← 敏感信息标黄警告（检测到 API key/密码时显示）
+    │       ├── SensitiveInfoBanner.vue ← 敏感信息标黄警告
     │       ├── MarkdownRender.vue ← Markdown 渲染（扩展 mermaid/tree）
     │       ├── CodeBlock.vue      ← 代码块高亮（highlight.js）
-    │       ├── LoadingSpinner.vue ← 加载动画
-    │       └── ThemeSwitcher.vue  ← 主题切换（赛博朋克/可爱风）
+    │       ├── LoadingSpinner.vue ← 加载动画 / 骨架屏
+    │       ├── ThemeSwitcher.vue  ← 主题切换（赛博朋克/可爱风）
+    │       └── CommandPalette.vue ← Ctrl+K 命令面板
     │
     ├── composables/
     │   ├── useChat.js         ← Vercel AI SDK useChat 封装（核心）
@@ -95,7 +97,8 @@ flypig/web/static_vite/
     │   ├── useEditor.js       ← Monaco Editor 状态
     │   ├── useLayout.js       ← 面板拖拽分割
     │   ├── useMarkdownRender.js ← 检测 mermaid/html/vue 代码块
-    │   └── useTheme.js        ← 主题切换（data-theme + localStorage）
+    │   ├── useTheme.js        ← 主题切换（data-theme + localStorage）
+    │   └── useCommandPalette.js ← Ctrl+K 命令面板（搜索/切换模型/主题）
     │
     └── lib/
         ├── xterm-setup.js     ← xterm.js 初始化
@@ -107,9 +110,78 @@ flypig/web/static_vite/
     └── ...                     ← server.py 读取此目录，零改动
 ```
 
-## 关键设计
+## 竞品对标
 
-- **入口流程**：首次启动 → `InitWizard`（工作区选择/模型选择/API Key 录入）→ 配置持久化到本地 → 进入主界面。配置存在时跳过向导直接进主界面。
+核心竞争策略：**功能深度不输大厂 + 个性化风格完胜**。以下体验细节是拉开差距的关键：
+
+### 1. Welcome / Dashboard 首页
+
+InitWizard 之后（或配置存在时）不直接进三栏布局，先展示一个**Dashboard 首页**：
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  FlyPig                                       🤖 🌗 🔧 │
+│                                                         │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │  最近工作区    │  │  快速开始     │  │  使用统计     │  │
+│  │  my-project  │  │  📂 打开项目  │  │  今日 2300   │  │
+│  │  stock-app   │  │  ✨ 新建项目  │  │  tokens      │  │
+│  │  blog        │  │  📖 快速教程  │  │  ¥0.012     │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+│                                                         │
+│  [点击任意工作区进入对话]                                 │
+└─────────────────────────────────────────────────────────┘
+```
+
+- 组件：`Dashboard.vue`（放在 `sidebar/` 或独立视图）
+- 展示最近工作区、快速操作、用量概览
+- 没有"光秃秃直接进编辑器"的生硬感
+
+### 2. StatusBar 增强
+
+底部的 `StatusBar.vue` 不再只是一个状态文字，改为信息丰富的状态栏：
+
+```
+│ 💬 chat  🤖 DeepSeek  ⚡ call: 4  📥 1.5K  📤 0.8K  💰 ¥0.012  🌗 主题 │
+```
+
+从左到右：当前模式 / 当前模型 / 本轮用量 / 主题切换快捷入口
+
+### 3. Command Palette（命令面板）
+
+`Ctrl+K` 或 `Cmd+K` 唤出类似 VS Code 的命令面板：
+
+```
+┌─────────────────────────────────────┐
+│ > 搜索命令...                       │
+│                                     │
+│  📂 打开工作区                       │
+│  🤖 切换模型                        │
+│  🎨 切换主题                        │
+│  📊 查看用量统计                     │
+│  📖 帮助 / 快速教程                  │
+│  ⚙️ 设置                            │
+└─────────────────────────────────────┘
+```
+
+- 组件：`CommandPalette.vue`（放在 `common/`，全局 `Ctrl+K` 唤醒）
+- 给用户的"高级感"——做 AI 工具的公司都有这个
+
+### 4. 流畅动画
+
+CSS 过渡 + `vue-transition` 覆盖以下场景：
+
+| 场景 | 效果 | 组件 |
+|------|------|------|
+| 消息出现 | fade-in + slide-up | MessageItem |
+| 卡片出现 | scale-in + shadow 呼吸 | ChoiceCard / SuggestionCard |
+| 状态切换 | 柔和 transition | ThemeSwitcher |
+| 加载中 | 骨架屏（Skeleton） | ThinkingIndicator 替代方案 |
+| 工具调用 | 胶囊式进度条 | ToolCallCard |
+
+### 5. 关键设计总结
+
+- **入口流程**：首次启动 → `InitWizard`（工作区/模型/API Key 三步）→ `Dashboard` 首页 → 进入主界面。配置存在时跳过向导直接进 Dashboard。
 - UI 布局不改，只做代码模块化拆分（2500 行 index.html → 20+ .vue 组件）
 - Vercel AI SDK `useChat` 替代手写 ReadableStream
 - SSE 事件类型与组件映射：`token`→MessageItem, `reasoning`→ReasoningView, `choice`→ChoiceCard, `change_plan`→ChangePlanCard, `change_review`→ChangeReviewCard, `suggestion`→SuggestionCard
