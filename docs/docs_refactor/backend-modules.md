@@ -264,7 +264,7 @@ flypig/
 ```python
 # tests/conftest.py
 import pytest
-from di.container import Container
+from core.container import Container
 
 @pytest.fixture(autouse=True)
 def reset_container():

@@ -48,14 +48,25 @@
 | 事件类型 | 说明 | 触发时机 |
 |----------|------|---------|
 | `token` | 逐 token 文本 | LLM 流式输出 |
-| `reasoning` | LLM 推理过程片段 | LLM 思考中间步骤（防止用户以为卡死） |
-| `task_update` | 任务状态变更 | AI 调 tool_add_task / tool_update_task 时推送。action: add(新任务) / update(状态变更) |
+| `reasoning` | LLM 推理过程片段 | LLM 思考中间步骤 |
+| `task_update` | 任务状态变更 | AI 调 tool_add_task / tool_update_task |
+| `tasks_restored` | 回溯时任务快照 | 回溯到某 turn |
 | `choice` | 选择题卡片 | Explore 模式 |
-| `approval` | 审批卡片 | Plan 模式确认/修改 |
-| `change_plan` | 变更计划（改前预览，逐项批准） | AI 输出修改方案后、执行前 |
-| `change_review` | 变更后审查（对比计划与实际） | Execute 执行后 |
-| `suggestion` | 对抗建议卡片（含 `suggestion_id`） | 变更评分后 |
+| `approval` | 审批卡片 | Plan 模式 |
+| `change_plan` | 变更计划（改前预览） | AI 输出修改方案后 |
+| `change_review` | 变更后审查 | Execute 执行后 |
+| `suggestion` | 对抗建议卡片 | 变更评分后 |
 | `response_end` | 结束 + usage | 本轮结束 |
+| `code_exec` | ★ 代码即时执行结果 | AI 输出 python/js 代码块时触发沙箱执行 |
+| `inline_preview` | ★ HTML 实时预览 | AI 输出 html 代码块时自动 iframe 渲染 |
+| `chart` | ★ 图表渲染 | AI 返回 ECharts option JSON |
+| `data_table` | ★ 数据表格 | AI 查询数据库后返回结构化行数据 |
+| `command` | ★ 命令预览 + 确认 | AI 生成 bash 命令时 |
+| `file_preview` | ★ 文件预览（Excel/PDF/Word/PPT） | AI 写/读取文件后 |
+| `dashboard` | ★ 实时仪表盘 | 后台状态变更事件 |
+| `memory_hint` | ★ 记忆气泡 | AI 引用历史对话内容时 |
+
+> ★ = 新增（详见 `chat-ux.md` 富交互组件清单 + SSE 事件映射表）
 
 
 ```python
@@ -84,6 +95,55 @@
 # tasks_restored 事件（回溯到某 turn 后推送任务快照）
 {"type": "tasks_restored", "tasks": [
     {"id": "task_001", "title": "重构 auth 路由", "status": "pending", "created_turn": 5},
+    ...
+], "turn_id": 2}
+
+# ── ★ 新增富交互事件格式 ──
+
+# code_exec — 代码即时执行结果
+{"type": "code_exec", "code": "sum(range(1, 101))", "lang": "python",
+ "output": {"type": "text", "content": "5050"}}
+# output.type 可选: "text" / "image" / "video" / "audio" / "html"
+# 后端自动检测 temp_dir 下的文件后缀判断类型
+
+# inline_preview — HTML 实时预览
+{"type": "inline_preview", "html": "<!DOCTYPE html>...", "height": 400}
+
+# chart — 图表渲染（ECharts option JSON）
+{"type": "chart", "option": {
+    "xAxis": {"data": ["茅台", "腾讯", "阿里"]},
+    "yAxis": {},
+    "series": [{"type": "bar", "data": [28.5, 18.2, 22.1]}]
+}}
+
+# data_table — 数据表格
+{"type": "data_table",
+ "columns": [{"key": "name", "label": "名称"}, {"key": "pe", "label": "PE"}],
+ "rows": [{"name": "茅台", "pe": 28.5}, {"name": "腾讯", "pe": 18.2}],
+ "highlight_rows": [0],  # AI 高亮的行号
+ "caption": "前 10 名中 PE 最高的已标红"}
+
+# command — 命令预览 + 一键确认
+{"type": "command", "command": "pip install flask && python -m http.server 8080",
+ "description": "启动开发服务器", "safe": true}
+
+# file_preview — 文件预览
+{"type": "file_preview", "path": "report.xlsx",
+ "format": "xlsx", "highlight": {"sheet": "Sheet1", "range": "A1:D10"},
+ "caption": "这是你要的销售数据，前 10 行已高亮"}
+
+# file_preview — PDF 预览
+{"type": "file_preview", "path": "contract.pdf",
+ "format": "pdf", "highlight": {"page": 3, "paragraph": 2},
+ "caption": "第三页第二条是违约条款"}
+
+# memory_hint — 记忆气泡
+{"type": "memory_hint",
+ "hint": "我记得你之前说过喜欢深色主题，所以这次帮你用了暗色方案"}
+
+# dashboard — 仪表盘数据
+{"type": "dashboard", "tokens": {"used": 12450, "limit": 20000},
+ "tasks": {"active": 3}, "latency": 245, "disk": 45}
     {"id": "task_002", "title": "新增 JWT 中间件", "status": "in_progress", "created_turn": 5}
 ], "turn_id": 5}
 

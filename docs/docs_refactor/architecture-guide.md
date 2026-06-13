@@ -77,8 +77,10 @@ class ToolBash:
 | 理解三种模式（Explore/Plan/Execute）的权限 | `mode-matrix.md` |
 | 理解 LangGraph 节点、router、状态 | `langgraph-graph.md` |
 | 查看所有 API 端点和 SSE 事件格式 | `api-reference.md` |
+| 查看对话框交互设计和组件 | `frontend-arch.md` + `chat-ux.md` |
+| 查看所有富交互组件清单和情绪价值设计 | `chat-ux.md` |
 | 查看 SSE 事件类型（reasoning/change_plan 等） | `api-reference.md` → SSE 事件格式 |
-| 查看前端组件和架构 | `frontend-arch.md` |
+| 查看前端架构和技术栈 | `frontend-arch.md` |
 | 查看后端各层模块职责 | `backend-modules.md` |
 | 查看 subprocess 执行策略和 task_log | `subprocess-and-tools.md` |
 | 查看变更审查、Lint、对抗建议 | `adversarial-system.md` |
@@ -90,6 +92,8 @@ class ToolBash:
 | 查看崩溃恢复/日志/数据迁移 | `resilience.md` |
 | 查看许可激活/自动更新（P2 预留） | `resilience.md` → P1/P2 预留接口 |
 | 查看导出/模型 fallback（P1 预留） | `resilience.md` → P1/P2 预留接口 |
+| 查看开发者工具链规范 | `migration-roadmap.md` → Step 0 + `tech-stack.md` → 文档层次 |
+| 查看 docstring 风格规范 | `migration-roadmap.md` → Step 0（Google 风格 + Ruff D + interrogate） |
 
 ## 快速定位：AI 应该看哪个文件
 
@@ -113,7 +117,7 @@ class ToolBash:
 | 工具安全限制（路径白名单） | `subprocess-and-tools.md` → `infrastructure/tools/tool_bash.py` |
 | 敏感信息检测 | `backend-modules.md` → `domain/agent/nodes.py`（chat_node 输出前） |
 | 死循环检测 + 节点异常保护 | `langgraph-graph.md` → `domain/agent/nodes.py + router.py` |
-| DI 容器装配 | `backend-modules.md` → `di/container.py` |
+| DI 容器装配 | `backend-modules.md` → `core/container.py` |
 | LangGraph 节点逻辑 | `langgraph-graph.md` → `domain/agent/state.py + nodes.py + router.py + context.py` |
 | 对抗建议生成 | `backend-modules.md` → `application/services/suggestion_engine.py` |
 | 钩子事件注册 | `backend-modules.md` → `application/services/hook_service.py` |

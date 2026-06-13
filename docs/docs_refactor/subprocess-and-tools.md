@@ -346,6 +346,16 @@ class ToolExecutor:
         return {name: cls() for name, cls in _TOOL_REGISTRY.items()}
 ```
 
+**扩展步骤（加一个新后端工具）**：
+
+```
+1. 在 infrastructure/tools/ 对应分组目录下新建 tool_xxx.py
+2. 用 @tool 装饰器注册:
+     @tool(name="my_tool", description="...")
+     def my_tool(args): ...
+3. 不需要改前端 — 自动注册到 ToolNode，AI 自行决定是否调用
+```
+
 ## 工具文件列表（按功能分组）
 
 > 完整工具文件树见 `folder-tree.md` → `flypig/infrastructure/tools/`。

@@ -25,10 +25,10 @@
 │  │  │  ThinkingIndicator      │  │  SuggestionCard              │  │  TerminalTab             │                   │   │
 │  │  │  InputBox               │  │  ToolCallCard                │  │                          │                   │   │
 │  │  │  Markdown/Mermaid       │  │  (工具调用/审批)               │  │                          │                   │   │
-│  │  │  LivePreview            │  │                              │  │                          │                   │   │
+│  │  │  InlinePreview          │  │                              │  │                          │                   │   │
 │  │  └──────────────────────────┘  └──────────────────────────────┘  └──────────────────────────┘                   │   │
 │  │  ┌───────────────────────────────────────────────────────────────────────────────────────────────────┐         │   │
-│  │  │  侧边栏: 文件树(FileTree)  |  未来Dashboard(监控/成本)                                          │         │   │
+│  │  │  侧边栏: 文件树(FileTree) | Dashboard | TaskBoard                                          │         │   │
 │  │  └───────────────────────────────────────────────────────────────────────────────────────────────────┘         │   │
 │  └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘   │
 │                                                                      │ SSE (chat) + WebSocket (pty)                   │
@@ -149,9 +149,9 @@ flowchart TD
         P0["InitWizard（初始化向导）<br/>WorkspaceStep / ModelStep / ApiKeyStep<br/>→ 配置存在时自动跳过"]
         P1["Vue 3 + Vercel AI SDK (useChat)<br/>+ Monaco Editor + xterm.js"]
         P2["💬 对话面板<br/>MessageList / MessageItem / ThinkingIndicator<br/>InputBox / Markdown / Mermaid / LivePreview"]
-        P3["📇 卡片区域<br/>ChoiceCard / ChangeReview<br/>SuggestionCard / ToolCallCard"]
+        P3["📇 对话框富组件<br/>ChoiceCard / ChangeReview / SuggestionCard<br/>InlinePreview / CodeExecBlock / DataTable<br/>DiffViewer / CommandCard / FilePreview"]
         P4["🖥️ 终端面板<br/>XtermViewer / OutputViewer / TerminalTab"]
-        P5["📁 侧边栏<br/>FileTree / ThemeSwitcher / 未来Dashboard"]
+        P5["📁 侧边栏<br/>FileTree / Dashboard / TaskBoard"]
     end
     PRESENTATION -->|"SSE<br/>+<br/>WS"| INTERFACE
 
@@ -170,7 +170,7 @@ flowchart TD
         A2["ConfigSvc · SessionSvc<br/>PolicySvc（Casbin）"]
         A3["ContextPipeline（预 LLM 压缩）<br/>GitCheckpointManager · SummaryGenerator"]
         A4["ChatService（中介者编排）<br/>UsageTrackerService（用量追踪）<br/>@hook 自动记录 turn/call"]
-        A5["SSE 事件:<br/>reasoning(推理过程)<br/>change_plan(改前预览)<br/>token/choice/suggestion<br/>+ response_end 含用量摘要"]
+        A5["SSE 事件（18 种）:<br/>token/reasoning/choice/suggestion<br/>code_exec/inline_preview/chart<br/>data_table/command/file_preview<br/>+ response_end 含用量摘要"]
     end
     APPLICATION --> DOMAIN
 

@@ -11,10 +11,15 @@
 ```
 flypig/
 │
-├── __main__.py                   ← 入口点（接口选择 + DI 初始化 + 启动）
+├── __main__.py                   ← 入口点（DI 初始化 + 启动）
 │
-├── di/                           ← DI 容器
-│   └── container.py              ← dependency-injector 配置
+├── core/                         ← 应用骨架（胶水代码）
+│   ├── __init__.py
+│   ├── config.py                 ← 配置加载（从 YAML/环境变量）
+│   ├── container.py              ← dependency-injector 配置
+│   ├── logging.py                ← Loguru 初始化
+│   ├── events.py                 ← 启动/关闭事件
+│   └── app.py                    ← Quart app 工厂
 │
 ├── domain/                       ← 领域层（零外部依赖）
 │   ├── __init__.py
@@ -51,10 +56,9 @@ flypig/
 │   │   ├── architect.md          ← 重构/架构评估
 │   │   └── documenter.md         ← 文档撰写
 │   │
-│   ├── policies/                 ← Casbin 权限定义（领域层规则定义）
-│   ├── config/                   ← 配置
-│   │   ├── config.py             ← Config 加载
-│   │   └── model_registry.py     ← 模型注册表
+│   ├── config/                   ← 配置数据类（纯数据，无 IO）
+│   │   ├── config.py             ← Config dataclass
+│   │   └── model_registry.py     ← ModelRegistry dataclass
 │   └── exceptions.py             ← 统一异常
 │
 ├── application/                  ← 应用层
@@ -122,7 +126,7 @@ flypig/
 │   │   ├── pricing.py            ← PricingFetcher（价格获取 + 缓存）
 │   │   └── hooks.py              ← UsageTrackerHook（HookService 自动记录）
 │   │
-│   ├── policies/                 ← Casbin 初始化配置（基础设施层实现）
+│   ├── policies/                 ← Casbin 初始化配置
 │   │   ├── model.conf            ← Casbin 模型
 │   │   ├── policy.csv            ← Casbin 策略
 │   │   └── casbin_setup.py       ← Casbin 初始化
@@ -148,14 +152,13 @@ flypig/
 │       │   ├── usage.py          ← /api/usage/*（用量查询）
 │       │   ├── tasks.py          ← /api/tasks/*（任务看板 CRUD + 搜索）
 │       │   └── feedback.py       ← /api/feedback/suggestion（建议反馈）
-│       └── services/
-│           ├── sse_queue.py      ← SSE 队列抽象
-│           └── file_watcher.py   ← 文件变更监控
+│       ├── sse_queue.py          ← SSE 队列抽象
+│       └── file_watcher.py       ← 文件变更监控
 │
 ├── frontend/                     ← 前端源码
 │   ├── static/                   ← Vite 构建产物（自动输出，server.py 读取此目录）
 │   └── static_vite/              ← 前端源码
-│       ├── package.json          ← 含 @ai-sdk/vue, mermaid, element-plus
+│       ├── package.json          ← 含 @ai-sdk/vue, mermaid, element-plus, echarts, sheetjs
 │       ├── vite.config.js
 │       ├── index.html            ← 仅 <div id="app"> 入口
 │       └── src/
@@ -171,21 +174,36 @@ flypig/
 │           │   ├── layout/       ← MainLayout, ResizeHandle, StatusBar
 │           │   ├── sidebar/      ← Sidebar, FileTree, FileTreeNode, Dashboard, TaskBoard
 │           │   ├── editor/       ← EditorArea, EditorTabs, MonacoEditor
-│           │   ├── chat/         ← ChatPanel, MessageList, InputBox,
+│           │   ├── chat/         ← ChatPanel, MessageList, InputBox, MessageItem,
 │           │   │                   ChoiceCard, ChangeReviewCard, SuggestionCard,
-│           │   │                   MermaidDiagram, LivePreview, MessageItem,
-│           │   │                   ThinkingIndicator, ToolCallCard
-│           │   │                   TaskListCard ← 当前方案任务状态卡片
-│           │   │                   FilePreview ← 文件缩略图（图片/代码/压缩包预览）
-│           │   │                   ImagePreview ← 大图查看弹窗
+│           │   │                   InlinePreview, LivePreview, FilePreview(多类型),
+│           │   │                   DataTable, ChartView, FormGenerator, DashboardWidget,
+│           │   │                   CodeExecBlock, DiffViewer, CommandCard,
+│           │   │                   MemoryBubble, ThinkingIndicator, ToolCallCard,
+│           │   │                   TaskListCard, ImagePreview
+│           │   ├── file/         ← FilePreview 子组件（跨文件类型预览）
+│           │   │   ├── ExcelViewer.vue   ← SheetJS
+│           │   │   ├── PdfViewer.vue     ← PDF.js
+│           │   │   ├── DocxViewer.vue    ← mammoth.js
+│           │   │   └── PptxViewer.vue   ← pptxjs
 │           │   ├── terminal/     ← TerminalPanel, TerminalTab, XtermViewer, OutputViewer
 │           │   ├── init/         ← InitWizard, WorkspaceStep, ModelStep, ApiKeyStep
 │           │   └── common/       ← MarkdownRender, CodeBlock, LoadingSpinner,
-│           │                       ThemeSwitcher, CommandPalette, TaskHistoryDialog<br>│           │                       RecoveryDialog ← 崩溃恢复弹窗
+│           │                       ThemeSwitcher, CommandPalette, TaskHistoryDialog,
+│           │                       RecoveryDialog ← 崩溃恢复弹窗
 │           ├── composables/      ← useChat, useMessages, useTerminal, useFileTree,
 │           │                       useEditor, useLayout, useMarkdownRender, useTheme,
-│           │                       useCommandPalette, useTasks ← 任务状态管理<br>│           │                       useDraft ← 输入框草稿恢复<br>│           │                       useFileDrop ← 文件拖拽 + 缩略图预览
+│           │                       useCommandPalette, useTasks, useDraft, useFileDrop,
+│           │                       useEventRouter, useUxEnhancements,
+│           │                       useAchievements, useTimeTravel
 │           └── lib/              ← xterm-setup.js, monaco-setup.js, sfc-compiler.js
+│
+├── scripts/                      ← 开发辅助脚本（跨平台）
+│   ├── setup.py                  ← 环境初始化（检测平台 + 执行安装，核心逻辑）
+│   ├── setup.bat                 ← Windows 入口：`@python scripts\setup.py`
+│   ├── setup.sh                  ← Linux/Mac 入口：`python scripts/setup.py`
+│   ├── seed_data.py              ← 测试数据填充
+│   └── migrate_db.py             ← 数据库迁移脚本
 │
 ├── tests/                        ← 单元测试 + 集成测试
 │   ├── unit/
@@ -201,31 +219,30 @@ flypig/
 │   ├── fixtures/
 │   ├── conftest.py
 │   └── pytest.ini
+├── .env.example                  ← 环境变量模板
+├── Makefile                      ← 常用命令（dev/test/lint/docs/build）
 ├── mcp.json                      ← MCP 服务器配置（§3.7.1）
 ├── pyproject.toml                ← Ruff 配置 + 项目元数据（§3.8.8）
 ├── Dockerfile                    ← 应用容器化（§6）
 ├── docker-compose.yml            ← Docker Compose 编排：api + nginx（§6）
 ├── nginx.conf                    ← Nginx 反向代理：静态文件 + SSL 终止（§6）
-├── model.conf                    ← Casbin 模型（根级备份）
-├── policy.csv                    ← Casbin 策略（根级备份）
 └── langgraph.db                  ← SqliteSaver 持久化（自动生成）
 ```
 
 ---
 
-## 与 §7 原树的差异对比
+## 与旧版树的差异对比
 
-| 项目 | 原 §7 树 | 本树（统一版） | 说明 |
-|------|---------|-------------|------|
-| `domain/interfaces/` | 7 个接口文件 | **10 个**（新增 `iusage_tracker.py`, `ilicense_service.py`, `iupdate_service.py`；`ihistory_store.py` → `iconversation_store.py` + `icontext_pipeline.py`） | 合并 IHistoryStore + IRepository + CheckpointStore 为 IConversationStore；新增 IContextPipeline + IUsageTracker + ILicenseService + IUpdateService |
-| `domain/policies/` | 有 | 保留 | Casbin 权限定义（领域层） |
-| `infrastructure/policies/` | 有 | 保留 | Casbin 初始化配置（基础设施层） |
-| `chat/` 组件 | 8 个 | **11 个**（新增 MessageItem, ThinkingIndicator, ToolCallCard） | §4.3 有这三个组件，§7 漏了 |
-| `domain/conversation_state.py` | 存在（独立文件） | **已删除** | 冗余，AgentState 已在 `domain/agent/state.py` 中定义 |
-| `composables/` | 7 个 | **9 个**（新增 useTasks, useDraft） | task 状态管理和草稿恢复 |
-| `lib/` | `sfc-compiler.js` | **`sfc-compiler.js`** | §4.3 写的是 `ai-config.js`，已修正为 `sfc-compiler.js` |
-| `infrastructure/policies/` 根级备份 | 无 | **新增** `model.conf`, `policy.csv` 根级备份 | Casbin 策略根级和 infra 级双重保障 |
-| Nginx 配置 | 无 | **新增** `nginx.conf` | Docker Compose 中 nginx 反向代理需要此配置文件 |
-| 前端组件顺序 | 部分无序 | **按层排序** | layout→sidebar→editor→chat→terminal→init→common |
-
-**结论**：统一树相比 §7 共修正了 **6 处遗漏/不一致**（移除冗余的 conversation_state.py，新增 2 个接口预留），无功能缺失。
+| 项目 | 旧树 | 新树 | 说明 |
+|------|------|------|------|
+| `di/` | 存在 | **已移除** | 合入 `core/container.py` |
+| `core/` | 不存在 | **新增** | 应用骨架：配置加载、DI 容器、Loguru、app 工厂 |
+| `domain/config/config.py` | Config 加载 + 数据类混合 | **纯数据类**（加载逻辑移入 `core/config.py`） | 分层职责清晰 |
+| `domain/policies/` | 空目录（无文件） | **已移除** | Casbin 只在 `infrastructure/policies/` |
+| 根级 `model.conf`, `policy.csv` | 存在（根级备份） | **已移除** | 只有 `infrastructure/policies/` 一份，避免不一致 |
+| `interface/web/services/` | 子目录（2 个文件） | **已打平** | 文件直接放 `interface/web/` |
+| `scripts/` | 不存在 | **新增** | 开发辅助脚本（setup/seed/migrate） |
+| `.env.example` | 不存在 | **新增** | 环境变量模板 |
+| `Makefile` | 不存在 | **新增** | 跨平台常用命令 |
+| `domain/interfaces/` | 7 个接口 | 10 个 | 新增 iusage_tracker, ilicense_service, iupdate_service |
+| `chat/` 组件 | 8 个 | **20+ 个**（分组管理） | Core 6 + Rich 3 + Preview 3 + Data 4 + Code 3 + UX 2 + Task 2 |

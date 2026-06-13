@@ -1,8 +1,10 @@
 ﻿# 前端架构
 
 > **来源**: `architecture-refactor.md` §4
-> **关联文档**: `api-reference.md`（SSE 事件格式）、`usage-tracking.md`（response_end 用量数据）
-> 新增组件或改 SSE 消费时，需同步检查 api-reference.md。
+> **关联文档**: `chat-ux.md`（对话框交互设计）、`api-reference.md`（SSE 事件格式）、`folder-tree.md`（完整文件结构）
+> 对话框内的交互体验、情绪价值设计、富交互组件清单请见 `chat-ux.md`。
+
+---
 
 ## 技术栈
 
@@ -16,89 +18,26 @@
 - **vue-draggable-next** — 拖拽排序
 - **v-viewer** 或 **medium-zoom** — 图片放大预览
 
-## 目标目录（20+ .vue 组件）
+## 目标目录结构
 
 > 完整组件树、composables、lib 见 `folder-tree.md` → `flypig/frontend/static_vite/`。
-> 本节只列各组件核心设计规格，不重复文件结构。
-
-## 竞品对标
-
-核心竞争策略：**功能深度不输大厂 + 个性化风格完胜**。以下体验细节是拉开差距的关键：
-
-### 1. Welcome / Dashboard 首页
-
-InitWizard 之后（或配置存在时）不直接进三栏布局，先展示一个**Dashboard 首页**：
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│  FlyPig                                       🤖 🌗 🔧 │
-│                                                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
-│  │  最近工作区    │  │  快速开始     │  │  使用统计     │  │
-│  │  my-project  │  │  📂 打开项目  │  │  今日 2300   │  │
-│  │  stock-app   │  │  ✨ 新建项目  │  │  tokens      │  │
-│  │  blog        │  │  📖 快速教程  │  │  ¥0.012     │  │
-│  └──────────────┘  └──────────────┘  └──────────────┘  │
-│                                                         │
-│  [点击任意工作区进入对话]                                 │
-└─────────────────────────────────────────────────────────┘
+frontend/static_vite/src/
+├── main.js                     ← Vue app 挂载
+├── App.vue                     ← 根组件（三栏布局 + 终端面板）
+├── style/                      ← 5 个 CSS 文件（变量/主题/base）
+├── components/
+│   ├── layout/                 ← MainLayout, ResizeHandle, StatusBar
+│   ├── sidebar/                ← Sidebar, FileTree, TaskBoard, Dashboard
+│   ├── editor/                 ← EditorArea, EditorTabs, MonacoEditor
+│   ├── chat/                   ← ★ 全部对话框组件（见 chat-ux.md）
+│   ├── terminal/               ← TerminalPanel, XtermViewer, OutputViewer
+│   ├── init/                   ← InitWizard, WorkspaceStep, ModelStep, ApiKeyStep
+│   └── common/                 ← MarkdownRender, CodeBlock, CommandPalette 等
+├── composables/                ← useChat, useFileTree, useUxEnhancements 等
+└── lib/                        ← xterm-setup.js, monaco-setup.js, sfc-compiler.js
 ```
-
-- 组件：`Dashboard.vue`（放在 `sidebar/` 或独立视图）
-- 展示最近工作区、快速操作、用量概览
-- 没有"光秃秃直接进编辑器"的生硬感
-
-### 2. StatusBar 增强
-
-底部的 `StatusBar.vue` 不再只是一个状态文字，改为信息丰富的状态栏：
-
-```
-│ 💬 chat  🤖 DeepSeek  ⚡ call: 4  📥 1.5K  📤 0.8K  💰 ¥0.012  🌗 主题 │
-```
-
-从左到右：当前模式 / 当前模型 / 本轮用量 / 主题切换快捷入口
-
-### 3. Command Palette（命令面板）
-
-`Ctrl+K` 或 `Cmd+K` 唤出类似 VS Code 的命令面板：
-
-```
-┌─────────────────────────────────────┐
-│ > 搜索命令...                       │
-│                                     │
-│  📂 打开工作区                       │
-│  🤖 切换模型                        │
-│  🎨 切换主题                        │
-│  📊 查看用量统计                     │
-│  📖 帮助 / 快速教程                  │
-│  ⚙️ 设置                            │
-└─────────────────────────────────────┘
-```
-
-- 组件：`CommandPalette.vue`（放在 `common/`，全局 `Ctrl+K` 唤醒）
-- 给用户的"高级感"——做 AI 工具的公司都有这个
-
-### 4. 流畅动画
-
-CSS 过渡 + `vue-transition` 覆盖以下场景：
-
-| 场景 | 效果 | 组件 |
-|------|------|------|
-| 消息出现 | fade-in + slide-up | MessageItem |
-| 卡片出现 | scale-in + shadow 呼吸 | ChoiceCard / SuggestionCard |
-| 状态切换 | 柔和 transition | ThemeSwitcher |
-| 加载中 | 骨架屏（Skeleton） | ThinkingIndicator 替代方案 |
-| 工具调用 | 胶囊式进度条 | ToolCallCard |
-
-### 5. 关键设计总结
-
-- **入口流程**：首次启动 → `InitWizard`（工作区/模型/API Key 三步）→ `Dashboard` 首页 → 进入主界面。配置存在时跳过向导直接进 Dashboard。
-- UI 布局不改，只做代码模块化拆分（2500 行 index.html → 20+ .vue 组件）
-- Vercel AI SDK `useChat` 替代手写 ReadableStream
-- SSE 事件类型与组件映射：`token`→MessageItem, `reasoning`→ReasoningView, `choice`→ChoiceCard, `change_plan`→ChangePlanCard, `change_review`→ChangeReviewCard, `suggestion`→SuggestionCard
-- `response_end` 事件携带本轮用量数据（tokens/cache_hit_rate/cost/duration），`MessageItem` 底部渲染一行用量摘要
-- 终端面板 = 单面板，标签页混排（PTY 交互标签 + subprocess 只读输出标签）
-- **主题切换**：基于 CSS 变量（`data-theme` 属性），不换 UI 库。每个主题对应一个 CSS 文件覆盖变量色值 + 图标色调。通过 `ThemeSwitcher.vue` + `useTheme.js` 切换，选择持久化到 `localStorage`。初始提供默认 / 赛博朋克 / 可爱风三种主题。
 
 ## Vercel AI SDK 集成
 
@@ -115,115 +54,99 @@ CSS 过渡 + `vue-transition` 覆盖以下场景：
 | 输入框禁用/恢复 | 手动 class 切换 | 自动管理 |
 | Vue 3 兼容 | ❌ 没有 Vue 原生状态 | ✅ `@ai-sdk/vue` 提供 `useChat` composable |
 
-### useChat 封装（替换手写 SSE）
+### useChat 封装
 
 ```javascript
-// composables/useChat.js — 用 Vercel AI SDK 接管原来的 SSE 消费逻辑
+// composables/useChat.js — 用 Vercel AI SDK 接管 SSE 消费
 import { useChat } from '@ai-sdk/vue'
 
 export function useChatComposable() {
-  const {
-    messages,       // 响应式消息列表（自动管理）
-    input,          // 输入框绑定
-    handleSubmit,   // 提交处理（自动发送 + 流式接收）
-    isLoading,      // 流式进行中状态
-    error,          // 错误状态
-    stop,           // 中断生成
-    append,         // 追加消息
-    setMessages,    // 设置历史
-  } = useChat({
-    api: '/api/chat',           // 后端 SSE 端点
-    streamMode: 'stream',       // 流式模式
+  const { messages, input, handleSubmit, isLoading, error, stop, append, setMessages } = useChat({
+    api: '/api/chat',
+    streamMode: 'stream',
     headers: { 'Content-Type': 'application/json' },
-    onToolCall: (toolCall) => {  // 工具调用自动识别
-      showToolCard(toolCall)
-    },
-    onResponse: (response) => {  // 响应开始回调
-      // 清理状态
-    },
-    onError: (error) => {        // 错误回调
-      showError(error)
-    },
+    onToolCall: (toolCall) => showToolCard(toolCall),
+    onResponse: (response) => {},
+    onError: (error) => showError(error),
   })
 
   return { messages, input, handleSubmit, isLoading, error, stop, append, setMessages }
 }
 ```
 
-**关键变化**：原来要手写 ReadableStream 的 while 循环、SSE 行解析、`handleEvent` dispatch、`_startStreaming` 模拟打字——**全部删除**，让 Vercel AI SDK 一行 `useChat` 搞定。
-
-### 数据流架构（Vercel AI SDK 视角）
+### 数据流架构
 
 ```
 前端 (Vue 3)
   │
   ├── 用户输入 → InputBox.vue → useChat.handleSubmit()
   │                                   │
-  │                                   ├── POST /api/chat (body: {message, tools, ...})
+  │                                   ├── POST /api/chat
   │                                   │
   │                                   ├── 接收 SSE 流
-  │                                   │     ├── text delta  → 自动追加到 messages
+  │                                   │     ├── text delta  → messages（自动追加）
   │                                   │     ├── tool_call   → onToolCall 回调
+  │                                   │     ├── rich events → EventRouter → 对应组件
   │                                   │     └── finish      → isLoading = false
   │                                   │
   │                                   └── messages → MessageList.vue 响应式渲染
   │
   ├── MessageList.vue
   │     └── v-for="m in messages"
-  │           ├── m.role === 'user'     → 用户消息（已发送）
-  │           ├── m.role === 'assistant' → AI 回复（实时流式追加）
-  │           └── m.toolInvocations     → 工具调用卡片
+  │           ├── m.role === 'user'      → 用户消息
+  │           ├── m.role === 'assistant'  → AI 回复
+  │           └── m.richEvents           → 富交互组件（见 chat-ux.md）
   │
   └── 用户手动终端 xterm.js
-        └── WebSocket /ws/pty（与 AI 对话完全独立，互不干扰）
-        └── WebSocket 接收 workspace:updated 事件（回滚后刷新文件树和编辑器）
+        └── WebSocket /ws/pty（与 AI 对话完全独立）
 ```
 
-## 富内容渲染
+### EventRouter（新增）— 可扩展接口设计
 
-所有富内容默认内联渲染在对话流中，不弹窗、不开新页。
-
-### 两种类型
-
-| 类型 | 渲染位置 | 组件 | 说明 |
-|------|---------|------|------|
-| **内联（对话流中）** | AI 消息内，与文字混排 | MermaidDiagram, FileTreeCard | 和卡片一样嵌在消息里 |
-| **面板（独立视图）** | 侧边栏/新标签页 | ArchitectureViewer, ImpactGraph | 图表太大时打开独立面板 |
-
-### 实现细节
-
-| 内容类型 | 渲染方式 | 组件 | 交互能力 |
-|---------|---------|------|---------|
-| **文字 + Markdown** | 内联 | MarkdownRender.vue | 选中复制、代码高亮、行号 |
-| **Mermaid 图表** | 内联 | MermaidDiagram.vue (mermaid.js) | 缩放、拖动、下载 SVG |
-| **文件树** | 内联 | FileTreeCard.vue | 展开/折叠、点击跳转文件 |
-| **架构总览** | 侧边栏面板 | ArchitectureViewer.vue | 点击节点跳转模块 |
-| **变更影响图** | 侧边栏面板 | ImpactGraph.vue | 高亮受影响模块 |
-
-### MarkdownRender 扩展
+所有 SSE 富事件通过一个轻量路由器分发。**新增一个组件只需加一行映射 + 一个 .vue 文件**：
 
 ```javascript
-// composables/useMarkdownRender.js
-import { marked } from 'marked'
+// composables/useEventRouter.js — 可扩展的事件→组件映射
+// 接口约定:
+//   - 每个 event 必须有 type 字段
+//   - 组件统一 props: { data: Object }
+//   - 组件内可自定义交互（按钮/表单/iframe...）
 
-const renderer = {
-  code({ text, lang }) {
-    if (lang === 'mermaid') {
-      return `<MermaidDiagram chart="${escapeHtml(text)}" />`
-    }
-    if (lang === 'tree') {
-      return `<FileTreeCard tree="${escapeHtml(text)}" />`
-    }
-    // 默认：代码高亮
-    return `<pre><code class="hljs">${hljs.highlight(text, lang)}</code></pre>`
-  }
+const COMPONENT_MAP = {
+  code_exec:        CodeExecBlock,
+  inline_preview:   InlinePreview,
+  chart:            ChartView,
+  data_table:       DataTable,
+  command:          CommandCard,
+  change_review:    DiffViewer,
+  file_preview:     FilePreview,
+  dashboard:        DashboardWidget,
+  memory_hint:      MemoryBubble,
+  // ★ 扩展点: 新增事件类型只需加一行
+  // new_feature:   NewFeatureComponent,
 }
-marked.use({ renderer })
+
+// MessageItem.vue 中
+<template>
+  <div class="message">
+    <MarkdownRender :content="message.text" />
+    <component
+      v-for="ev in message.richEvents"
+      :is="COMPONENT_MAP[ev.type]"
+      :key="ev.type"
+      :data="ev"
+    />
+  </div>
+</template>
 ```
 
-### Mermaid 按需加载
+**扩展步骤（加一个新对话框组件）**：
 
-Mermaid 库只在首次遇到 mermaid 代码块时才动态 import，不增加首屏加载体积。
+```
+1. 后端 chat_node 中 yield {"type": "new_event", ...}
+2. 前端新建 components/chat/NewComponent.vue，接收 props: { data: Object }
+3. EventRouter 中加一行映射: new_event: NewComponent,
+```
 
 ## InitWizard 初始化向导
 
@@ -262,38 +185,11 @@ Mermaid 库只在首次遇到 mermaid 代码块时才动态 import，不增加�
     <p class="choice-hint">或者直接在下方输入框输入你的想法...</p>
   </div>
 </template>
-
-<script setup>
-const fillInput = (opt) => {
-  emit('fill-input', opt.label + (opt.desc ? ` (${opt.desc})` : ''));
-};
-const confirmMulti = () => {
-  const text = selectedLabels.value.join(' + ');
-  emit('fill-input', text);
-};
-</script>
 ```
 
-## LivePreview 组件（UI 实时预览）
+## LivePreview 组件（UI 实时渲染）
 
-AI 生成 Vue SFC 组件代码，在对话中渲染为可交互预览。工作流程：
-
-```
-AI: "我建议把文件树从左侧移到顶部导航栏"
-    ↓
-AI 生成 Vue SFC 代码在代码块中：
-  ```vue
-  <template>
-    <el-menu mode="horizontal">
-      <el-menu-item>文件</el-menu-item>
-    </el-menu>
-  </template>
-  ```
-
-用户看到两个内容：
-  1. 代码块（语法高亮，可在 Monaco 中编辑）
-  2. 代码块上方渲染组件预览（沙箱 iframe，可交互可点击）
-```
+AI 生成的 HTML/Vue SFC 代码在对话中通过 iframe 沙箱渲染为可交互预览：
 
 ```vue
 <!-- components/chat/LivePreview.vue -->
@@ -311,26 +207,9 @@ AI 生成 Vue SFC 代码在代码块中：
     </div>
   </div>
 </template>
-
-<script setup>
-const props = defineProps({ componentCode: String })
-const sandboxHtml = computed(() => `
-  <!DOCTYPE html>
-  <html>
-  <head>
-    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"><\/script>
-  </head>
-  <body>
-    <div id="app"></div>
-    <script>
-      ${compileVueSFC(props.componentCode)}
-      app.mount('#app')
-    <\/script>
-  </body>
-  </html>
-`)
-</script>
 ```
+
+**工作流程**：
 
 | 方式 | 用户输入 | AI 输出 | 用户看到 |
 |------|---------|---------|---------|
@@ -342,202 +221,69 @@ const sandboxHtml = computed(() => `
 
 > 完整设计文档见 `plan-task-system.md`。本节只写前端组件规格。
 
-AI 拆解用户需求后生成任务列表，贯穿整个会话并可回溯查看历史状态。
-所有任务通过 IConversationStore 存储，与对话消息和 checkpoint 共享 `conversations.db`。
-
 ### 组件树
 
 ```
 components/
 ├── chat/
-│   └── TaskListCard.vue       ← 对话流中展示当前方案的任务状态卡片
+│   └── TaskListCard.vue       ← 对话流中任务状态卡片
 ├── sidebar/
-│   └── TaskBoard.vue          ← 侧边栏完整任务看板（搜索+筛选+历史）
+│   └── TaskBoard.vue          ← 侧边栏任务看板
 └── common/
-    └── TaskHistoryDialog.vue  ← 单个任务状态变更历史弹窗
+    └── TaskHistoryDialog.vue  ← 任务历史弹窗
 ```
 
-### 1. TaskListCard.vue — 当前方案任务状态卡片（对话流中）
-
-AI 拆解任务后（调 `tool_add_task`），在对话消息流中插入一张任务状态卡片，实时更新。
-
-**设计稿**：
+### TaskListCard.vue — 当前方案状态卡片（对话流中）
 
 ```
 ┌─ 当前方案: 重构 auth 模块 ──────────────────┐
-│  🔄 重构 auth 路由           [进行中]        │  ← 蓝色高亮
-│  ⬜ 新增 JWT 中间件          [待办]          │  ← 灰色
-│  ~~编写 auth 测试~~          [已取消]        │  ← 删除线+灰
-│  ⚡ 修复数据库连接           [已中断]        │  ← 黄色
-│  ✅ 创建 users 表            [已完成]        │  ← 绿色
+│  🔄 重构 auth 路由           [进行中]        │
+│  ⬜ 新增 JWT 中间件          [待办]          │
+│  ~~编写 auth 测试~~          [已取消]        │
+│  ⚡ 修复数据库连接           [已中断]        │
+│  ✅ 创建 users 表            [已完成]        │
 │                                             │
 │  进度: ■■□□□  1/4 完成 · 1 中断 · 1 取消     │
 └─────────────────────────────────────────────┘
 ```
 
-**状态标识**：
+**状态标识**：pending(⬜) / in_progress(🔄) / blocked(⚡) / cancelled(删除线) / completed(✅)
 
-| 状态 | 图标 | 文字色 | 背景色 |
-|------|------|--------|--------|
-| pending | ⬜ 空心圆 | #999 | 白 |
-| in_progress | 🔄 旋转 | #1890ff | 浅蓝底 |
-| blocked | ⚡ 闪电 | #faad14 | 浅黄底 |
-| cancelled | —（`<s>` 删除线） | #bbb | 白 |
-| completed | ✅ 对勾 | #52c41a | 浅绿底 |
+**数据来源**：SSE `task_update` 事件实时更新。
 
-**数据来源**：SSE `task_update` 事件实时更新，首次加载时 `GET /api/tasks?session_id=xxx`。
+### TaskBoard.vue — 完整任务看板（侧边栏）
 
-**交互**：
-- 点击任务行 → 打开 TaskHistoryDialog
-- 点击"进行中"任务 → 自动定位到对话中对应的 turn
-- 鼠标悬停取消任务 → tooltip 显示取消原因
+侧边栏独立面板，展示当前会话全部任务，支持搜索和回溯快照：
 
-### 2. TaskBoard.vue — 完整任务看板（侧边栏）
-
-侧边栏独立面板，展示当前会话全部任务，支持搜索和回溯快照。
-
-**设计稿**：
-
-```
-┌─ 任务看板 ─────────────────────────────────┐
-│  🔍 搜索任务...        [全部▾]              │
-│                                            │
-│  📅 今天                                    │
-│  🔄 重构 auth 路由           [进行中]       │
-│  ⬜ 性能优化                 [待办]         │
-│                                            │
-│  📅 昨天                                    │
-│  ✅ 创建 users 表            [已完成]       │
-│  ⚡ 修复数据库连接           [已中断]       │
-│  ~~实现注册页面~~              [已取消]     │
-│                                            │
-│  共 5 个任务 · 1 进行中 · 2 完成 · 1 中断 · 1 取消 │
-└────────────────────────────────────────────┘
-```
-
-**功能**：
-- 搜索栏：按任务标题全文搜索
-- 状态筛选 tabs：全部 | 待办 | 进行中 | 已中断 | 已完成 | 已取消
+- 搜索栏 + 状态筛选 tabs
 - 按时间分组（今天 / 昨天 / 更早）
-- 已取消的渲染 `<s>` 删除线
-- 每个任务点击 → 打开 TaskHistoryDialog
-- 底部统计行
+- 回溯模式顶部提示栏 `🔙 已回到 turn_3 时的状态 [恢复最新]`
 
-**回溯模式**：用户回溯到某个 turn 后，TaskBoard 顶部显示提示栏：
-
-```
-🔙 已回到 turn_3 时的状态  [恢复最新]
-```
-
-此时看到的任务是 `get_tasks_at_turn(session_id, turn_3)` 的快照。
-
-### 3. TaskHistoryDialog.vue — 任务生命线（弹窗）
-
-点击任务查看完整状态变更历史。
-
-**设计稿**：
+### TaskHistoryDialog.vue — 任务生命线（弹窗）
 
 ```
 ┌─ 任务: 重构 auth 路由 ──────────────────────┐
-│                                            │
-│  🕐 turn_5  创建        → pending          │
-│  🕐 turn_5  开始做      → in_progress      │
-│  🕐 turn_6  完成        → completed        │
-│                                            │
-│  关联 checkpoint: turn_6                    │
+│  🕐 turn_5  创建        → pending           │
+│  🕐 turn_5  开始做      → in_progress       │
+│  🕐 turn_6  完成        → completed         │
+│                                              │
+│  关联 checkpoint: turn_6                     │
 │  (点击可跳转到该 turn 的回复)                 │
-└────────────────────────────────────────────┘
-```
-
-**数据来源**：`GET /api/tasks/<id>/history`
-
-**交互**：
-- 每行显示 turn_id、时间线、状态变化
-- 如果该 turn 有 checkpoint，显示为可点击链接
-- 点击 turn 行 → 定位到对话中该轮消息
-- 弹窗底部"查看相关对话"按钮 → 跳转到该会话相关位置
-
-### Dashboard 集成
-
-在 Dashboard.vue 首页添加任务概览卡片：
-
-```
-┌─ 任务概览 ────────────────────┐
-│  2 个活跃会话 · 5 个未完成任务 │
-│                               │
-│  📂 stock-app:    3 待办      │
-│  📂 my-project:   2 待办      │
-│                               │
-│  [查看全部任务 →]              │
-└──────────────────────────────┘
+└──────────────────────────────────────────────┘
 ```
 
 ### SSE 事件
 
-前端通过 SSE 事件 `task_update` 实时响应任务变更：
-
 ```javascript
 // 添加任务
-{"type": "task_update", "action": "add", "task": {
-    "id": "task_001",
-    "title": "重构 auth 路由",
-    "status": "pending",
-    "created_turn": 5
-}}
-
+{"type": "task_update", "action": "add", "task": {...}}
 // 更新状态
-{"type": "task_update", "action": "update", "task": {
-    "id": "task_001",
-    "status": "in_progress",
-    "turn_id": 6
-}}
-
+{"type": "task_update", "action": "update", "task": {...}}
 // 回溯时推送快照
 {"type": "tasks_restored", "tasks": [...], "turn_id": 2}
 ```
 
-前端 composable 封装：
-
-```javascript
-// composables/useTasks.js（新增）
-export function useTasks(sessionId) {
-  const tasks = ref([])
-
-  // 初始加载
-  onMounted(async () => {
-    const res = await fetch(`/api/tasks?session_id=${sessionId}`)
-    tasks.value = await res.json()
-  })
-
-  // SSE 实时更新
-  onSseEvent("task_update", (data) => {
-    if (data.action === "add") {
-      tasks.value.push(data.task)
-    } else if (data.action === "update") {
-      const idx = tasks.value.findIndex(t => t.id === data.task.id)
-      if (idx >= 0) tasks.value[idx] = { ...tasks.value[idx], ...data.task }
-    }
-  })
-
-  // 回溯时替换全部
-  onSseEvent("tasks_restored", (data) => {
-    tasks.value = data.tasks
-    showRestoreBanner(data.turn_id)
-  })
-
-  return { tasks }
-}
-```
-
-### 涉及的新增/修改文件
-
-| 文件 | 类型 | 说明 |
-|------|------|------|
-| `components/chat/TaskListCard.vue` | 新增 | 对话流任务状态卡片 |
-| `components/sidebar/TaskBoard.vue` | 新增 | 侧边栏任务看板（替代旧版） |
-| `components/common/TaskHistoryDialog.vue` | 新增 | 任务状态变更历史弹窗 |
-| `components/sidebar/Dashboard.vue` | 修改 | 首页添加任务概览卡片 |
-| `composables/useTasks.js` | 新增 | 任务状态管理 composable |
+---
 
 ## 拆分前后对比
 
@@ -548,4 +294,3 @@ export function useTasks(sessionId) {
 | 组件数量 | 0 | ~20 个 |
 | 全局变量 | 多个（_ptyWs, _terminal 等） | composables 按需导入 |
 | 热更新 | 无 | Vite HMR 即时生效 |
-

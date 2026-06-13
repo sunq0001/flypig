@@ -15,7 +15,7 @@
 | | 图标 | **Lucide** | 市面方案 | 轻量开源图标库 |
 | | 构建工具 | **Vite** | 市面方案 | 极速 HMR，原生 ESM |
 | | UI 组件库 | **Element Plus** | 市面方案 | 卡片、对话框、选择题、按钮全有 |
-| | 图表渲染 | **Mermaid.js** | 市面方案 | 流程图/时序图/类图，文本即图表，按需动态 import |
+| | 图表渲染 | **Mermaid.js** + **ECharts** | 市面方案 | Mermaid 用于流程图/时序图（文本即图表），ECharts 用于数据可视化柱状图/折线图/饼图 |
 | | Markdown 扩展 | **marked + highlight.js** | 市面方案 | 扩展 code block 渲染器 |
 | **后端** | Web 框架 | **Quart** | 市面方案 | ASGI，原生 WebSocket/SSE |
 | | ASGI 服务器 | **Hypercorn** | 市面方案 | 生产级 |
@@ -27,7 +27,7 @@
 | | 长期记忆（P2 可选） | **LangMem** | 市面方案 | AI 主动 search/manage memory 工具；后台自动提取知识点；备选：可替换为自研 pgvector |
 | | 沙箱 | **Docker SDK** | 市面方案 | Docker 容器隔离 |
 | | 配置 | **PyYAML** | 市面方案 | yaml 解析 |
-| | 代码规范检查 | **Ruff** | 市面方案 | Rust 编写，比 flake8 快 100 倍，支持 --fix 自动修复 |
+| | 代码规范检查 | **Ruff**（含 D 规则） | 市面方案 | Rust 编写，比 flake8 快 100 倍，支持 --fix 自动修复。`select = ["D"]` + `convention = "google"` 强制 Google 风格 docstring |
 | | 日志系统 | **loguru** | 市面方案 | 1 行初始化自带文件轮转/压缩/异步写入/彩色输出，替代 stdlib logging |
 | | 会话持久化 | **SQLAlchemy** | 市面方案 | 存储层用开源 ORM |
 | | 历史搜索预留 | **SQLite FTS5 → pgvector → LangMem** | 混合方案 | P0: SQLite + tag 索引；P1: LangMem 语义检索（可替换为自研 pgvector） |
@@ -46,6 +46,10 @@
 | | 文件上传 | **Element Plus Upload** | 市面方案 | 前端拖拽，后端接收解压 |
 | | 文件拖拽缩略图 | **vue-draggable-next + Element Plus Upload** | 市面方案 | 拖入输入框，自动预览缩略图 |
 | | 图片预览 | **medium-zoom** | 市面方案 | 点击对话中缩略图弹出大图查看 |
+| | Excel 预览 | **SheetJS (xlsx)** | 市面方案 | 浏览器内读取 workbook，按 AI 标注行列渲染 |
+| | PDF 预览 | **PDF.js** | 市面方案 | Mozilla 出品，渲染指定页码为 canvas |
+| | Word 预览 | **mammoth.js** | 市面方案 | 转 HTML 渲染，AI 定位到结论段落 |
+| | PPT 预览 | **pptxjs** | 市面方案 | 每页缩略图轮播，AI 标注页码自动切换 |
 | | 压缩解压 | **zipfile/tarfile/py7zr** | 市面方案 | 标准库 + py7zr，含 Zip Slip 防护 |
 | | OCR（P1） | **PaddleOCR** | 市面方案 | 国产中英文 OCR，比 Tesseract 效果好 |
 | | 内置搜索（P1） | **duckduckgo-search** | 市面方案 | 零配置网络搜索，无需 API Key |
@@ -55,8 +59,10 @@
 | | 选择题卡片 | **自研 tool_ask_choice** | 业务定制 | 核心 UX 模式，~20 行返回值 |
 | | MCP 协议 | **mcp-auto-install（社区方案）** | 市面方案 | 不自研；基于官方 MCP Registry 自动搜索、安装、配置 |
 | | 工具路由 | **LangGraph ToolNode** | 市面方案 | 标准 LangGraph tool node |
+| **文档** | 文档站框架 | **MkDocs + mkdocstrings** | 市面方案 | 从 Python docstring 自动生成 API 文档，与现有 Markdown 文档站一体化 |
+| | docstring 覆盖率 | **interrogate** | 市面方案 | `fail-under = 80`，保证 docstring 覆盖率 ≥ 80% |
+| | Git 钩子 | **pre-commit** | 市面方案 | ruff D + interrogate 自动校验，不达标无法 commit |
 | **DevOps** | 容器编排 | **Docker Compose** | 市面方案 | 单机足够 |
-| | 反向代理 | **Nginx** | 市面方案 | 静态文件+SSL |
 
 ## 总结
 
