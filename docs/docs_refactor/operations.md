@@ -1,7 +1,8 @@
 # 运维部署
 
 > **来源**: `architecture-refactor.md` §6
-> **关联文档**: `migration-roadmap.md`（迁移步骤）、`tech-stack.md`（技术选型）、`usage-tracking.md`（数据持久化说明）
+> **关联文档**: `migration-roadmap.md`（迁移步骤）、`tech-stack.md`（技术选型）、`usage-tracking.md`（数据持久化说明）、`resilience.md`（日志/迁移/崩溃恢复）
+> 日志系统和 Schema 迁移的完整实现详见 `resilience.md`。
 
 ---
 
@@ -23,7 +24,7 @@ SaaS：  docker-compose (api + db + nginx + redis)
 # ── 第一阶段：构建前端 ──
 FROM node:20-alpine AS frontend-builder
 WORKDIR /app
-COPY web/static_vite/package.json web/static_vite/ .
+COPY frontend/static_vite/package.json frontend/static_vite/ .
 RUN npm install && npm run build
 # 产物在 /app/dist/
 
@@ -39,7 +40,7 @@ RUN pip install --no-cache-dir -e ".[prod]"
 COPY flypig/ ./flypig/
 
 # 前端静态文件（从第一阶段复制）
-COPY --from=frontend-builder /app/dist/ ./web/static/
+COPY --from=frontend-builder /app/dist/ ./frontend/static/
 
 EXPOSE 8321
 CMD ["python", "-m", "flypig"]
@@ -56,7 +57,7 @@ CMD ["python", "-m", "flypig"]
 docker compose up -d
 
 # 终端 2：启动 Vite 开发服务器（热更新）
-cd web/static_vite
+cd frontend/static_vite
 npm install
 npm run dev    # 默认 http://localhost:5173，自动代理 API 到后端
 ```
@@ -71,7 +72,7 @@ Vite 开发服务器通过 `vite.config.js` 中的 proxy 将 `/api/*` 请求转�
 services:
   vite:
     image: node:20-alpine
-    working_dir: /app/web/static_vite
+    working_dir: /app/frontend/static_vite
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
     ports: ["5173:5173"]
     volumes:
@@ -109,7 +110,7 @@ services:
     ports: ["80:80", "443:443"]
     volumes:
       - "./nginx.conf:/etc/nginx/nginx.conf:ro"
-      - "./web/static:/usr/share/nginx/html:ro"
+      - "./frontend/static:/usr/share/nginx/html:ro"
 ```
 
 ### 使用方式
@@ -147,7 +148,8 @@ docker compose up -d
 | `FLYPIG_DB_PATH` | ❌ | 数据库路径（conversations.db） |
 | `FLYPIG_USAGE_DB_PATH` | ❌ | 用量数据库路径（usage.db，默认 /app/data/usage.db） |
 | `LANGGRAPH_DB_PATH` | ❌ | LangGraph Checkpointer 路径 |
-| `LOG_LEVEL` | ❌ | 日志级别（默认 INFO） |
+| `LOG_LEVEL` | ❌ | 日志级别（默认 INFO，--debug 时为 DEBUG） |
+| `FLYPIG_LOG_DIR` | ❌ | 日志目录（默认 ~/.flypig/logs/） |
 
 ---
 

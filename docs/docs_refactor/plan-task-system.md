@@ -521,8 +521,8 @@ AI 在对话中自然输出结构化列表时，系统可自动识别并创建�
 | `application/services/conversation_store.py` | 修改 | SqliteConversationStore 实现 task 方法 |
 | `infrastructure/tools/system/tool_task_manager.py` | 新增 | tool_add_task / tool_update_task 工具 |
 | `interface/web/routes/tasks.py` | 新增 | 7 个 REST 端点 |
-| `web/static_vite/src/components/chat/TaskListCard.vue` | 新增 | 对话流中的任务状态卡片 |
-| `web/static_vite/src/components/sidebar/TaskBoard.vue` | 新增 | 侧边栏任务看板 |
-| `web/static_vite/src/components/common/TaskHistoryDialog.vue` | 新增 | 任务状态变更历史弹窗 |
-| `web/static_vite/src/components/sidebar/Dashboard.vue` | 修改 | 首页添加任务概览卡片 |
+| `frontend/static_vite/src/components/chat/TaskListCard.vue` | 新增 | 对话流中的任务状态卡片 |
+| `frontend/static_vite/src/components/sidebar/TaskBoard.vue` | 新增 | 侧边栏任务看板 |
+| `frontend/static_vite/src/components/common/TaskHistoryDialog.vue` | 新增 | 任务状态变更历史弹窗 |
+| `frontend/static_vite/src/components/sidebar/Dashboard.vue` | 修改 | 首页添加任务概览卡片 |
 | SSE 事件 | 新增 | `task_update`（add/update）+ `tasks_restored`（回溯） |

@@ -1,7 +1,7 @@
 # 技术栈
 
 > **来源**: `architecture-refactor.md` §3.12
-> **关联文档**: `architecture-guide.md`（总览）、`folder-tree.md`（文件结构）、`usage-tracking.md`（成本追踪取代方案）
+> **关联文档**: `architecture-guide.md`（总览）、`folder-tree.md`（文件结构）、`usage-tracking.md`（成本追踪取代方案）、`resilience.md`（loguru 日志系统）
 > **核心原则**：能用成熟开源的绝不自研。
 
 ## 技术选型明细
@@ -28,17 +28,27 @@
 | | 沙箱 | **Docker SDK** | 市面方案 | Docker 容器隔离 |
 | | 配置 | **PyYAML** | 市面方案 | yaml 解析 |
 | | 代码规范检查 | **Ruff** | 市面方案 | Rust 编写，比 flake8 快 100 倍，支持 --fix 自动修复 |
+| | 日志系统 | **loguru** | 市面方案 | 1 行初始化自带文件轮转/压缩/异步写入/彩色输出，替代 stdlib logging |
 | | 会话持久化 | **SQLAlchemy** | 市面方案 | 存储层用开源 ORM |
 | | 历史搜索预留 | **SQLite FTS5 → pgvector → LangMem** | 混合方案 | P0: SQLite + tag 索引；P1: LangMem 语义检索（可替换为自研 pgvector） |
 | | IUsageTracker | **薄包装（~80 行 SQLite CRUD）** | 薄包装 | turn/call 级 token/cost/缓存；LangFuse/Helicone 等现成方案都要独立服务部署，单用户场景太重 |
 | | PromptManager | **自研（~50 行）** | 业务定制 | 多角色对抗切换，无现成方案 |
 | | OrchestrationService（已拆分为三） | | | 原三职合一服务拆为 GraphFactory+SuggestionEngine+HookService |
-| **工具** | bash 执行 | **subprocess（标准库）** | 市面方案 | Python 内置，无 PTY |
+| **工具** | Git 操作 | **GitPython** 薄封装 | 市面方案 | 裸 bash git 不可控，tool_git 结构化返回 status/diff/log/commit |
+| | 网页抓取 | **httpx + trafilatura** | 市面方案 | httpx 发请求，trafilatura HTML→纯文本（去噪比 BeautifulSoup 好），不靠 MCP fetch |
+| | 项目扫描 | **Path.rglob + collections.Counter** | **自写 ~20 行** | 标准库统计语言分布、文件类型、框架识别 |
+| | 安全计算 | **ast.literal_eval + Decimal**（或 numexpr） | **自写 ~15 行** | 避免 AI 用 bash eval 做数学运算 |
+| | 日期时间 | **datetime + pytz** | **自写 ~5 行** | 标准库，AI 需要知道当前时间/时区 |
+| | bash 执行 | **subprocess（标准库）** | 市面方案 | Python 内置，无 PTY |
 | | 文件操作 | **Aider 编辑引擎 或 git apply** | 市面方案 | 开源方案（Aider 或标准 git apply + unified diff） |
 | | 后台任务 | **subprocess.Popen + 自研 buffer** | 混合 | 标准库执行 + 自研环形缓冲区 |
 | | 代码规范检查 | **Ruff CLI** | 市面方案 | subprocess 调用 ruff --fix，自动修复 |
 | | 文件上传 | **Element Plus Upload** | 市面方案 | 前端拖拽，后端接收解压 |
+| | 文件拖拽缩略图 | **vue-draggable-next + Element Plus Upload** | 市面方案 | 拖入输入框，自动预览缩略图 |
+| | 图片预览 | **medium-zoom** | 市面方案 | 点击对话中缩略图弹出大图查看 |
 | | 压缩解压 | **zipfile/tarfile/py7zr** | 市面方案 | 标准库 + py7zr，含 Zip Slip 防护 |
+| | OCR（P1） | **PaddleOCR** | 市面方案 | 国产中英文 OCR，比 Tesseract 效果好 |
+| | 内置搜索（P1） | **duckduckgo-search** | 市面方案 | 零配置网络搜索，无需 API Key |
 | | **断路器** | **自研 @circuit_breaker** | 业务定制 | 调用连续失败 5 次自动熔断 60s |
 | | **重试机制** | **自研 async retry** | 业务定制 | 网络抖动自动重试，指数退避 |
 | | **监控** | **prometheus_client** | 市面方案 | Counter/Histogram/Gauge，暴露 /metrics |

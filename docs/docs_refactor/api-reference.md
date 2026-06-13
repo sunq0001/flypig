@@ -1,7 +1,7 @@
 # API 参考
 
 > **来源**: `architecture-refactor.md` §3.1, §3.8.2-3.8.5, §8.3
-> **关联文档**: `frontend-arch.md`（前端消费）、`data-flow.md`（数据流）、`usage-tracking.md`（用量查询端点）、`plan-task-system.md`（任务端点）
+> **关联文档**: `frontend-arch.md`（前端消费）、`data-flow.md`（数据流）、`usage-tracking.md`（用量查询端点）、`plan-task-system.md`（任务端点）、`resilience.md`（导出/恢复端点）
 > 新增端点或改 SSE 事件格式时，需同步检查 frontend-arch.md 和 data-flow.md。
 
 ## REST 端点
@@ -34,6 +34,14 @@
 | `/api/usage/range?start=&end=` | GET | 时间范围统计 |
 | `/api/usage/cache-stats?days=7` | GET | 缓存命中率趋势 |
 | `/api/feedback/suggestion` | POST | 用户提交建议反馈（✅/❌），记录 `suggestion_id` + `adopted` |
+| `/api/export/chat/<session_id>?format=markdown` | GET | ☆ P1 导出对话为 Markdown/JSON |
+| `/api/export/tasks/<session_id>` | GET | ☆ P1 导出任务列表为 JSON |
+| `/api/recovery/check` | GET | P0 检测是否有未正常结束的轮次（partial turn） |
+| `/api/recovery/resolve?action=continue|discard` | POST | P0 用户选择继续/放弃中断轮次 |
+| `/api/license/status` | GET | ☆ P2 许可状态查询 |
+| `/api/license/activate` | POST | ☆ P2 许可激活 |
+| `/api/update/check` | GET | ☆ P2 检查更新 |
+| `/api/update/install` | POST | ☆ P2 安装更新 |
 
 ## SSE 事件格式（/api/chat）
 

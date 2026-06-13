@@ -87,6 +87,9 @@ class ToolBash:
 | 查看用量追踪（Token/Cost/缓存统计） | `usage-tracking.md` |
 | 查看迁移路线和 MVP 迭代 | `migration-roadmap.md` |
 | 查看数据流向 | `data-flow.md` |
+| 查看崩溃恢复/日志/数据迁移 | `resilience.md` |
+| 查看许可激活/自动更新（P2 预留） | `resilience.md` → P1/P2 预留接口 |
+| 查看导出/模型 fallback（P1 预留） | `resilience.md` → P1/P2 预留接口 |
 
 ## 快速定位：AI 应该看哪个文件
 
@@ -103,7 +106,7 @@ class ToolBash:
 | 改变更评分逻辑 | `adversarial-system.md` → `domain/models/change_score.py` |
 | 改模式配置(温度/工具) | `mode-matrix.md` → `domain/models/mode.py` |
 | 改权限规则 | `backend-modules.md` → `infrastructure/policies/` + Casbin 策略文件 |
-| 改会话持久化 | `extensions.md` → `infrastructure/conversation_store.py` |
+| 改会话持久化 | `extensions.md` → `application/services/conversation_store.py` |
 | 改用量追踪 | `usage-tracking.md` → `infrastructure/usage/` + `SqliteUsageTracker` |
 | 断点恢复（关掉再开继续） | `api-reference.md` → `GET /api/sessions/<id>/restore` + `SessionService.restore()` |
 | 改终端管理 | `subprocess-and-tools.md` → `infrastructure/terminal.py` |
@@ -123,7 +126,7 @@ class ToolBash:
 | SQLite WAL + trace_id | `backend-modules.md` → 健壮性章节 |
 | 敏感信息检测 | `backend-modules.md` → 健壮性章节 |
 | 优雅关闭 / 工具执行追踪 | `backend-modules.md` → 健壮性章节 |
-| 对话存储与压缩 | `extensions.md`（IConversationStore + IContextPipeline）→ `infrastructure/conversation_store.py` |
+| 对话存储与压缩 | `extensions.md`（IConversationStore + IContextPipeline）→ `application/services/conversation_store.py` |
 | LangMem 长期记忆 | `extensions.md`（LangMem 集成）→ 注册到 ToolNode 作为 AI 可调用工具 |
 | 建议反馈记录 | `adversarial-system.md`（建议反馈记录）→ `interface/web/routes/feedback.py` → `store.update_suggestion_feedback()` |
 | 变更计划（改前预览） | `adversarial-system.md` → `change_plan` 节点，用户逐项批准后才执行 |

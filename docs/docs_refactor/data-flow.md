@@ -64,13 +64,18 @@ LangGraph StateGraph（领域层）
   ▼
 SSE 事件流 → Vercel AI SDK 自动渲染
   ├── type: "token"                → 普通文本流式渲染
+  ├── type: "reasoning"            → AI 推理过程（灰字斜体）
   ├── type: "choice"               → Explore 选择题卡片
   ├── type: "task_update"          → 任务状态变更（创建/更新/取消）
   ├── type: "tasks_restored"       → 回溯后的任务快照
-  ├── type: "approval"             → Plan 审批卡片
+  ├── type: "change_plan"          → 变更计划（改前预览，逐项批准）
   ├── type: "change_review"        → Execute 变更审查卡片
-  ├── type: "adversarial_suggestion" → 对抗建议卡片（ChangeScore 触发）
+  ├── type: "suggestion"           → 对抗建议卡片（SSE 事件名为 suggestion）
   └── type: "response_end"         → 结束 + usage
+
+  # approval 不走自定义 SSE 事件——伪装成 tool_call name="_ask_approval"
+  # 让 Vercel AI SDK useChat.onToolCall 原生处理
+  # 详见 api-reference.md → 审批流程
 ```
 
 ## Checkpoint 数据流
@@ -104,9 +109,42 @@ AI 执行 write_file/edit_file 等文件变更
   → 前端重新加载文件树 + 刷新编辑器内容
 ```
 
-## 终端数据流
+## 崩溃恢复数据流
 
+```python
+# 每工具调用后自动 checkpoint
+tool:after (TurnCheckpointHook)
+  └── store.save_checkpoint(session_id, turn_id, partial=True)
+       └── SQLite 写入 checkpoints.partial=1
+
+# 进程启动时恢复检测
+__main__py:
+  └── init_logging()             ← 先初始化日志
+  └── check_recovery()           ← 查 partial=True 的轮次
+       ├── 无 partial → 正常启动
+       └── 有 partial → SSE 推送 recovery 事件
+            └── 前端 RecoveryDialog:
+                 ├── [继续] → 恢复 AgentState + 提示"已恢复"
+                 └── [放弃] → 删除 partial checkpoint
 ```
+
+## 日志数据流
+
+```python
+# 初始化
+__main__.py --debug
+  └── init_logging(debug=True)
+       ├── loguru.add(file sink)    ← ~/.flypig/logs/flypig_YYYY-MM-DD.log
+       │     rotation=10MB, retention=30d
+       └── loguru.add(stderr sink)  ← 控制台带色输出
+
+# 运行时
+chat_node → logger.info("[trace={}] ...")
+tool_exec  → logger.debug("[trace={}] tool_call: {}", trace_id, tool_name, args)
+异常       → logger.exception("[trace={}] 工具异常", trace_id)
+```
+
+## 终端数据流
 用户手动终端: xterm.js → WebSocket /ws/pty → terminal.py → 真正 PTY
 AI subprocess: ChatService → LangGraph ToolNode → subprocess.communicate()
   → 结果返回 LLM + 可选在终端面板创建只读标签

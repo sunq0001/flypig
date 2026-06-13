@@ -273,10 +273,10 @@ Red（Reviewer/Tester/Architect）: 负责挑错、测试、重构建议
 介入方式：蓝方改动完成 → AI 计算评分 → 建议卡片 → 用户选择是否执行
 ```
 
-**建议卡片 SSE 事件**：
+**建议卡片 SSE 事件**（注意：SSE 事件类型名为 `suggestion`，保持在 api-reference.md 中定义的统一命名）：
 ```python
 {
-    "type": "adversarial_suggestion",
+    "type": "suggestion",
     "id": "as_3", "turn_id": 3,
     "summary": "你改了 5 个文件(2个模块)，变更幅度较大",
     "level": "HIGH",

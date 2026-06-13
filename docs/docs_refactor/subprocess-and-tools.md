@@ -348,26 +348,54 @@ class ToolExecutor:
 
 ## 工具文件列表（按功能分组）
 
-```
-infrastructure/tools/
-├── executor.py                        # ToolExecutor 主类（调度器）
-├── edit/                              # 代码编辑工具
-│   ├── tool_file.py                   # read/write/edit（Aider 或 git apply）
-│   ├── tool_change_review.py          # 变更审查数据生成
-│   ├── tool_lint.py                   # 代码规范检查（Ruff）
-│   └── tool_change_score.py           # 变更影响评分
-├── search/                            # 搜索调研工具
-│   ├── tool_search.py                 # grep + find_files
-│   └── tool_ask_choice.py             # Explore 选择题
-├── system/                            # 系统工具
-│   ├── tool_bash.py                   # subprocess 命令（无 PTY）
-│   ├── tool_task.py                   # task_status + task_list + task_log
-│   └── tool_extract_archive.py        # 压缩解压 + Zip Slip 防护
-├── mcp/                               # MCP 协议工具
-│   ├── mcp_loader.py                  # MCP 加载器
-│   └── tool_mcp_manager.py            # MCP 自助安装（用 mcp-auto-install 现成方案）
-└── utils.py                           # strip_ansi, _best_decode, _decode_clixml
-```
+> 完整工具文件树见 `folder-tree.md` → `flypig/infrastructure/tools/`。
+> 以下只列工具名称和职责，不重复文件结构。
+
+| 分组 | 工具 | 职责 |
+|------|------|------|
+| **edit** | tool_file | read/write/edit 文件（Aider 或 git apply） |
+| | tool_change_review | 变更审查数据生成 |
+| | tool_lint | 代码规范检查（Ruff） |
+| | tool_change_score | 变更影响评分 |
+| **search** | tool_search | grep + find_files |
+| | tool_web_search | ☆ P1 内置网络搜索（DuckDuckGo） |
+| | tool_ask_choice | Explore 选择题 |
+| **system** | tool_bash | subprocess 命令 |
+| | tool_git | ★ Git 操作：status/diff/log/commit/branch |
+| | tool_fetch_url | ★ 网页抓取（httpx + trafilatura） |
+| | tool_project_scan | ★ 项目扫描：树结构/语言统计 |
+| | tool_datetime | ★ 取当前时间/时区/日期计算 |
+| | tool_calc | ★ 安全数学计算 |
+| | tool_task | task_status + task_list + task_log |
+| | tool_task_manager | 任务看板 add_task / update_task |
+| | tool_ocr | ☆ P1 OCR 文字识别 |
+| | tool_extract_archive | 压缩解压（防 Zip Slip） |
+| **mcp** | mcp_loader | MCP 服务器加载器 |
+| | tool_mcp_manager | MCP 自助安装 |
+
+### 新增基础工具说明
+
+| 工具 | 为什么必备（不靠 bash/MCP） | 核心技术 |
+|------|---------------------------|---------|
+| `tool_git` | AI 每天几十次 git 操作，裸 bash git 结果混乱、idempotency 难保证 | `subprocess` 封装 git，结构化返回 status/diff/log |
+| `tool_fetch_url` | 查文档、看 API 规格，MCP fetch 需要 npx+node，单机不应依赖 | `httpx`（Python 内置兼容） |
+| `tool_project_scan` | 每次新会话第一件事就是"看看这个项目是什么"，目前靠 bash ls | `Path.rglob` + `Counter` 统计语言 |
+| `tool_datetime` | AI 经常需要知道当前时间、时区、计算日期差 | `datetime` 标准库 |
+| `tool_calc` | 让 AI 算 token 数、文件大小、日期差，它经常算错或走危险的 bash eval | `ast.literal_eval` + `Decimal` |
+
+### 新增工具实现方案分析
+
+下表说明每个工具是自写还是用现成库，以及代码量和依赖：
+
+| 工具 | 方案 | 代码量 | 依赖 |
+|------|------|--------|------|
+| `tool_datetime` | **自写** — `datetime.now()` + `pytz` 搞定 | ~5 行 | 标准库 |
+| `tool_calc` | **自写** — `ast.literal_eval` 安全求值，可选 `numexpr` 支持复杂表达式 | ~15 行 | 可选 `numexpr` |
+| `tool_project_scan` | **自写** — `Path.rglob("*")` + `Counter` 统计文件后缀分布 | ~20 行 | 标准库 |
+| `tool_git` | **`GitPython` 薄封装** — 不自己解析 git 裸输出，用成熟库做二次封装 | ~60 行 | `pip install GitPython` |
+| `tool_fetch_url` | **`httpx` + `trafilatura`** — httpx 发请求，trafilatura 把 HTML 转纯文本（去噪比 BeautifulSoup 好） | ~30 行 | `pip install httpx trafilatura` |
+
+**原则**：纯数据操作（时间/计算/扫描）自写，与外部系统交互（Git/HTTP）用成熟库封装。
 
 ### 工具调用幂等性
 

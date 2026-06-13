@@ -1,8 +1,8 @@
 # 扩展预留
 
 > **来源**: `architecture-refactor.md` §3.7, §3.9
-> **关联文档**: `backend-modules.md`（接口定义）、`subprocess-and-tools.md`（MCP 工具）、`usage-tracking.md`（用量追踪系统）、`plan-task-system.md`（任务管理系统）
-> 当前只定义接口 + 空实现，不实现具体逻辑。
+> **关联文档**: `backend-modules.md`（接口定义）、`subprocess-and-tools.md`（MCP 工具）、`usage-tracking.md`（用量追踪系统）、`plan-task-system.md`（任务管理系统）、`resilience.md`（许可/更新/导出接口）
+> 当前只定义接口 + 空实现(NoOp)，不实现具体逻辑。P1/P2 阶段再做完整实现。
 
 ## MCP 协议集成
 
@@ -396,4 +396,205 @@ class IKnowledgeStore(ABC):
     async def search_entity(name, type) -> list[EntityLocation]: ...
     async def get_entity_relations(entity_name) -> list[Relation]: ...
     async def get_file_summary(file_path) -> FileSummary: ...
+```
+
+---
+
+## 多模态与感知工具
+
+### OCR（光学字符识别）
+
+从图片中提取文字，用于扫描代码截图、PDF、白板照片等。
+
+**技术选型**：PaddleOCR（国产，中英文效果好） > Tesseract（备选）
+
+```python
+# infrastructure/tools/system/tool_ocr.py
+class ToolOCR:
+    """AI 调用的 OCR 工具"""
+
+    def __call__(self, image_path: str, lang: str = "ch+en") -> str:
+        """
+        从图片中提取文字。
+        支持: png/jpg/webp/bmp
+        返回: 提取的纯文本（含行号）
+        """
+        # P0: 将 base64 图片写入临时文件 → 调 OCR 引擎 → 返回文本
+        # P1: 流式识别大图
+        raise NotImplementedError("P1 实现，P0 走 vision 模型直接识图")
+```
+
+| 阶段 | 方案 | 说明 |
+|------|------|------|
+| **P0** | 不单独 OCR | 用 vision 模型直接看图（DeepSeek-VL / GPT-4o / Claude 3.5） |
+| **P1** | PaddleOCR | 大规模截图扫描场景，比 vision 模型便宜 100 倍 |
+| **P2** | OCR + LLM 级联 | OCR 提取 → LLM 理解上下文，处理模糊/手写场景 |
+
+### 图片理解（Vision）
+
+AI 直接看到图片内容，不走 OCR 中间层。
+
+**原理**：前端将图片转为 base64 data URL，拼接在 user message 中传给 vision 模型。
+
+```python
+# 前端 → 后端的消息格式（Vercel AI SDK 扩容）
+message = {
+    "role": "user",
+    "content": [
+        {"type": "text", "text": "这个报错是什么意思？"},
+        {"type": "image", "image": "data:image/png;base64,..."},
+    ]
+}
+```
+
+**后端处理**：
+
+```python
+# chat_node 中检测 image 类型的 content
+for part in user_message.content:
+    if part["type"] == "image":
+        # 多模态模型原生支持 → 直接传
+        # 纯文本模型 → 调 tool_ocr 提取文字替代
+        if not model_supports_vision(state["model"]):
+            text = tool_ocr(part["image"])
+            part = {"type": "text", "text": f"[图片OCR结果]:\n{text}"}
+```
+
+| 模型 | 支持视觉 | 说明 |
+|------|---------|------|
+| DeepSeek-VL2 | ✅ | 国产首选 |
+| GPT-4o | ✅ | OpenAI |
+| Claude 3.5 Sonnet | ✅ | Anthropic |
+| DeepSeek-Chat (V3) | ❌ | 纯文本，自动降级 OCR |
+| Qwen-VL | ✅ | 阿里通义千问视觉版 |
+
+### 内置搜索（非 MCP 依赖）
+
+当前搜索完全依赖 MCP `web-search` 服务器，用户需要装 `npx`。**单机软件不应该强制依赖 Node.js。**
+
+```python
+# infrastructure/tools/search/tool_web_search.py
+class ToolWebSearch:
+    """内置网络搜索，零外部依赖"""
+
+    def __call__(self, query: str, max_results: int = 5) -> str:
+        """
+        搜索网络信息。
+        策略:
+          P0: 走 searxng 自托管 或 DuckDuckGo（无需 API Key）
+          P1: 走 SerpAPI / Bing Search API（用户配置 Key）
+          P2: MCP web-search（高级功能）
+        """
+        raise NotImplementedError("P1 实现，P0 依赖 MCP web-search")
+```
+
+| 阶段 | 方案 | 依赖 | API Key 需要 |
+|------|------|------|-------------|
+| **P0** | MCP web-search（已有） | Node.js + npx | ❌ |
+| **P1** | **DuckDuckGo**（`duckduckgo-search` pip 包） | 零 | ❌ |
+| **P2** | SerpAPI / Bing Search API | 用户配置可选 | ✅ |
+
+---
+
+## P1/P2 预留接口（详见 resilience.md）
+
+当前阶段用 NoOp 实现，不侵入主流程。以下接口只为未来预留 API 形态。
+
+### ILicenseService（P2 — 许可激活）
+
+```python
+# domain/interfaces/ilicense_service.py
+class ILicenseService(ABC):
+    @abstractmethod
+    async def check_license(self) -> LicenseStatus: ...
+    @abstractmethod
+    async def activate(self, license_key: str) -> ActivationResult: ...
+    @abstractmethod
+    async def deactivate(self) -> bool: ...
+
+@dataclass
+class LicenseStatus:
+    is_valid: bool
+    license_type: str = "trial"
+    days_remaining: int = 0
+    expires_at: str | None = None
+
+@dataclass
+class ActivationResult:
+    success: bool
+    message: str
+    machine_id: str | None = None
+
+class NoOpLicenseService(ILicenseService):
+    """MVP 阶段 — 永远返回「已激活」"""
+    async def check_license(self) -> LicenseStatus:
+        return LicenseStatus(is_valid=True, license_type="pro", days_remaining=36500)
+    async def activate(self, key: str) -> ActivationResult:
+        return ActivationResult(True, "已激活（MVP 模式）", "noop-mvp")
+    async def deactivate(self) -> bool:
+        return True
+```
+
+### IUpdateService（P2 — 自动更新）
+
+```python
+# domain/interfaces/iupdate_service.py
+class IUpdateService(ABC):
+    @abstractmethod
+    async def check_update(self) -> UpdateInfo | None: ...
+    @abstractmethod
+    async def download_and_install(self, update_id: str) -> bool: ...
+    @abstractmethod
+    async def get_update_history(self) -> list[UpdateRecord]: ...
+
+@dataclass
+class UpdateInfo:
+    version: str
+    release_date: str
+    changelog: str
+    download_url: str
+    checksum: str
+    size_mb: float
+    is_forced: bool = False
+
+@dataclass
+class UpdateRecord:
+    version: str
+    installed_at: str
+    success: bool
+
+class NoOpUpdateService(IUpdateService):
+    """MVP 阶段 — 永远返回「已是最新」"""
+    async def check_update(self) -> UpdateInfo | None: return None
+    async def download_and_install(self, update_id: str) -> bool: return False
+    async def get_update_history(self) -> list[UpdateRecord]: return []
+```
+
+### ExportService（P1 — 导入导出）
+
+```python
+# application/services/export_service.py
+class ExportService:
+    """P0 只定义方法签名，全部 raise NotImplementedError"""
+    async def export_chat(self, session_id: str, format: str = "markdown") -> str:
+        raise NotImplementedError("P1 实现")
+    async def export_tasks(self, session_id: str) -> str:
+        raise NotImplementedError("P1 实现")
+    async def import_from_claude(self, path: str) -> str:
+        raise NotImplementedError("P2 实现")
+    async def import_from_codebuddy(self, path: str) -> str:
+        raise NotImplementedError("P2 实现")
+```
+
+### ModelFallbackService（P1 — 多模型自动切换）
+
+```python
+# application/services/model_fallback_service.py
+class ModelFallbackService:
+    """P0: 不切换，仅记录错误。P1: 自动 fallback 到备选模型"""
+    def get_available_models(self) -> list[str]:
+        return [Container.get("config").default_model]
+    async def fallback_if_needed(self, model_name: str, error: Exception) -> str | None:
+        logger.warning("模型 [{}] 失败: {}（P0 不自动 fallback）", model_name, error)
+        return None
 ```

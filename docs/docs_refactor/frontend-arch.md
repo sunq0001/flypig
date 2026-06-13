@@ -1,4 +1,4 @@
-# 前端架构
+﻿# 前端架构
 
 > **来源**: `architecture-refactor.md` §4
 > **关联文档**: `api-reference.md`（SSE 事件格式）、`usage-tracking.md`（response_end 用量数据）
@@ -13,102 +13,13 @@
 - Element Plus — UI 组件库
 - Mermaid.js — 图表渲染（按需加载）
 - marked + highlight.js — Markdown 渲染
+- **vue-draggable-next** — 拖拽排序
+- **v-viewer** 或 **medium-zoom** — 图片放大预览
 
 ## 目标目录（20+ .vue 组件）
 
-```
-flypig/web/static_vite/
-├── package.json
-│   dependencies: vue 3.5, ai ^4.2, @ai-sdk/vue ^1.2,
-│                 @ai-sdk/openai ^1.3, @ai-sdk/anthropic ^1.1,
-│                 xterm ^5.3, xterm-addon-fit ^0.8,
-│                 monaco-editor ^0.50
-│   devDependencies: vite ^6.0, @vitejs/plugin-vue ^5.0
-├── vite.config.js
-├── index.html                ← 仅 <div id="app"> + <script> 入口
-└── src/
-    ├── main.js               ← Vue app.createApp + mount
-    ├── App.vue               ← 根组件（三栏布局 + 终端面板）
-    │
-    ├── style/
-    │   ├── variables.css     ← CSS 变量（基础色）
-    │   ├── terminal-themes.css ← 终端主题系统
-    │   ├── theme-cyberpunk.css   ← 赛博朋克主题覆写
-    │   ├── theme-cute.css        ← 可爱风主题覆写
-    │   └── base.css          ← 全局样式
-    │
-    ├── components/
-    │   ├── layout/
-    │   │   ├── MainLayout.vue    ← 三栏布局容器
-    │   │   ├── ResizeHandle.vue  ← 拖拽分割条
-    │   │   └── StatusBar.vue     ← 状态栏（模型/用量/主题）
-    │   │
-    │   ├── sidebar/
-    │   │   ├── Sidebar.vue       ← 侧边栏容器
-    │   │   ├── Dashboard.vue     ← 首页（最近工作区/快速开始/用量统计）
-    │   │   ├── FileTree.vue      ← 递归文件树
-    │   │   └── FileTreeNode.vue  ← 单个节点
-    │   │
-    │   ├── editor/
-    │   │   ├── EditorArea.vue    ← 编辑器区域
-    │   │   ├── EditorTabs.vue    ← 文件标签页
-    │   │   └── MonacoEditor.vue  ← Monaco Editor 封装
-    │   │
-    │   ├── chat/
-    │   │   ├── ChatPanel.vue     ← 对话面板
-    │   │   ├── MessageList.vue   ← 消息列表（Vercel AI SDK 驱动）
-    │   │   ├── MessageItem.vue   ← 单条消息
-    │   │   ├── ThinkingIndicator.vue ← 思考中动画
-    │   │   ├── ToolCallCard.vue  ← 工具调用卡片（含审批伪装）
-│   │   ├── ChoiceCard.vue    ← Explore 选择题（单选/多选）
-│   │   ├── ReasoningView.vue ← AI 推理过程显示（灰字，收到 reasoning 事件时渲染）
-│   │   ├── ChangePlanCard.vue ← 改前预览（按 risk 等级：自动/通知/审批）
-│   │   ├── ChangeReviewCard.vue ← 改后审查（对比计划与实际）
-│   │   ├── SuggestionCard.vue ← 对抗建议卡片（含 ✅/❌ 反馈按钮）
-    │   │   ├── MermaidDiagram.vue  ← Mermaid 图表（缩放/下载SVG）
-    │   │   ├── LivePreview.vue   ← UI 实时预览（浏览器 SFC 编译）
-    │   │   └── InputBox.vue      ← 输入框
-    │   │
-    │   ├── terminal/
-    │   │   ├── TerminalPanel.vue ← 终端面板（单面板，标签页切换）
-    │   │   ├── TerminalTab.vue   ← 单个终端标签（PTY/只读输出）
-    │   │   ├── XtermViewer.vue   ← xterm.js 封装（用户手动 PTY）
-    │   │   └── OutputViewer.vue  ← subprocess 输出查看器（只读，无光标）
-    │   │
-    │   ├── init/
-    │   │   ├── InitWizard.vue    ← 初始化向导
-    │   │   ├── WorkspaceStep.vue ← 工作区选择
-    │   │   ├── ModelStep.vue     ← 模型选择
-    │   │   └── ApiKeyStep.vue    ← API Key 录入
-    │   │
-    │   └── common/
-    │       ├── SensitiveInfoBanner.vue ← 敏感信息标黄警告
-    │       ├── MarkdownRender.vue ← Markdown 渲染（扩展 mermaid/tree）
-    │       ├── CodeBlock.vue      ← 代码块高亮（highlight.js）
-    │       ├── LoadingSpinner.vue ← 加载动画 / 骨架屏
-    │       ├── ThemeSwitcher.vue  ← 主题切换（赛博朋克/可爱风）
-    │       └── CommandPalette.vue ← Ctrl+K 命令面板
-    │
-    ├── composables/
-    │   ├── useChat.js         ← Vercel AI SDK useChat 封装（核心）
-    │   ├── useMessages.js     ← 消息状态管理（辅助 useChat）
-    │   ├── useTerminal.js     ← 终端管理（PTY + subprocess 输出标签）
-    │   ├── useFileTree.js     ← 文件树状态
-    │   ├── useEditor.js       ← Monaco Editor 状态
-    │   ├── useLayout.js       ← 面板拖拽分割
-    │   ├── useMarkdownRender.js ← 检测 mermaid/html/vue 代码块
-    │   ├── useTheme.js        ← 主题切换（data-theme + localStorage）
-    │   └── useCommandPalette.js ← Ctrl+K 命令面板（搜索/切换模型/主题）
-    │
-    └── lib/
-        ├── xterm-setup.js     ← xterm.js 初始化
-        ├── monaco-setup.js    ← Monaco Editor 配置
-        ├── ai-config.js       ← Vercel AI SDK 配置（provider、模型映射）
-        └── sfc-compiler.js    ← 浏览器端 Vue SFC 编译（LivePreview 使用）
-
-└── static/                    ← 构建产物（vite build 输出）
-    └── ...                     ← server.py 读取此目录，零改动
-```
+> 完整组件树、composables、lib 见 `folder-tree.md` → `flypig/frontend/static_vite/`。
+> 本节只列各组件核心设计规格，不重复文件结构。
 
 ## 竞品对标
 
@@ -637,3 +548,4 @@ export function useTasks(sessionId) {
 | 组件数量 | 0 | ~20 个 |
 | 全局变量 | 多个（_ptyWs, _terminal 等） | composables 按需导入 |
 | 热更新 | 无 | Vite HMR 即时生效 |
+

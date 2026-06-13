@@ -1,7 +1,7 @@
 # LangGraph 状态图
 
 > **来源**: `architecture-refactor.md` §3.2, §3.3, §3.6.2-3.6.6, §3.8.1, §3.11
-> **关联文档**: `mode-matrix.md`（模式权限）、`adversarial-system.md`（对抗节点）
+> **关联文档**: `mode-matrix.md`（模式权限）、`adversarial-system.md`（对抗节点）、`resilience.md`（崩溃恢复/partial checkpoint）
 > 修改 router 或节点定义时，需同步检查 mode-matrix.md 中的权限矩阵。
 
 ## 一张图，统一 Graph

@@ -1,29 +1,26 @@
 # 后端模块
 
 > **来源**: `architecture-refactor.md` §3.1-3.5, §3.10
-> **关联文档**: `langgraph-graph.md`（AgentState）、`subprocess-and-tools.md`（工具执行）、`usage-tracking.md`（用量追踪）、`plan-task-system.md`（任务系统）
+> **关联文档**: `langgraph-graph.md`（AgentState）、`subprocess-and-tools.md`（工具执行）、`usage-tracking.md`（用量追踪）、`plan-task-system.md`（任务系统）、`resilience.md`（崩溃恢复/日志/迁移）
 
 ## Interface Layer — 用户界面适配
 
+> 完整文件结构见 `folder-tree.md` → `flypig/interface/web/`。本节只列路由职责。
+
 ```
-flypig/interface/web/
-├── server.py           # app 声明 + 路由注册（~50 行）
-├── routes/
-│   ├── chat.py         # /api/chat SSE 端点（≤120 行）
-│   ├── config.py       # /api/config/*（≤80 行）
-│   ├── files.py        # /api/files, /api/file, /api/tree（≤80 行）
-│   ├── sessions.py     # 历史会话路由
-│   ├── health.py       # 健康检查
-│   ├── upload.py       # 文件上传 + 压缩解压
-│   ├── rollback.py     # Git 回滚
-│   ├── agent.py        # /api/agent/status + /api/agent/stop
-│   ├── history.py      # /api/history/search
-│   ├── usage.py        # /api/usage/*（用量查询）
-│   ├── tasks.py        # /api/tasks/*（任务 CRUD + 搜索 + 回溯快照）
-│   └── feedback.py     # /api/feedback/suggestion（建议反馈记录）
-└── services/
-    ├── sse_queue.py    # SSE 队列抽象（≤40 行）
-    └── file_watcher.py # 文件变更监控（≤50 行）
+routes/
+├── chat.py         # /api/chat SSE 端点（≤120 行）
+├── config.py       # /api/config/*（≤80 行）
+├── files.py        # /api/files, /api/file, /api/tree（≤80 行）
+├── sessions.py     # 历史会话路由
+├── health.py       # 健康检查
+├── upload.py       # 文件上传 + 压缩解压
+├── rollback.py     # Git 回滚
+├── agent.py        # /api/agent/status + /api/agent/stop
+├── history.py      # /api/history/search
+├── usage.py        # /api/usage/*（用量查询）
+├── tasks.py        # /api/tasks/*（任务 CRUD + 搜索 + 回溯快照）
+└── feedback.py     # /api/feedback/suggestion（建议反馈记录）
 ```
 
 ## Application Layer — 业务编排
@@ -42,35 +39,16 @@ flypig/interface/web/
 | `SummaryGenerator` | ★ 根据本轮交互生成 ≤50 字摘要 | ≤40 |
 | `UsageTrackerService` | ★ 用量追踪：通过 HookService 自动记录 turn/call 级 token、cost、缓存 | ≤60 |
 | `TaskService` | ★ 任务管理：封装 IConversationStore 的 task CRUD（可选 Service 层） | ≤50 |
+| `ExportService` | ☆ 导入/导出服务（P1 预留，方法签名已定义） | ≤20 |
+| `ModelFallbackService` | ☆ 多模型自动 fallback（P1 预留，P0 仅记录错误） | ≤30 |
 
 ## Domain Layer — 核心领域逻辑
 
-```
-flypig/domain/
-├── interfaces/         # IModel, IToolExecutor, IHook+HookContext, IHistoryStore
-├── agent/              # state.py, nodes.py, router.py, context.py（领域层只定义逻辑）
-├── models/             # Message, Session, ChangeScore, ExecutionMode
-├── prompt_manager.py   # 多角色 prompt 懒加载
-├── prompts/            # developer.md, reviewer.md, tester.md, architect.md, documenter.md
-├── policies/           # Casbin 权限定义
-├── exceptions.py       # 统一异常
-└── config/             # config.py, model_registry.py
-```
+> 完整文件结构见 `folder-tree.md` → `flypig/domain/`。
 
 ## Infrastructure Layer — 基础设施
 
-```
-├── model/              # openai_adapter.py, anthropic.py, local.py
-├── tools/              # executor.py + edit/search/system/mcp 四组（详见 folder-tree.md）
-├── sandbox/            # config, path_validator, manager, builder
-├── usage/              # ★ IUsageTracker（取代原 ICostTracker）+ SqliteUsageTracker + PricingFetcher + UsageTrackerHook
-├── tasks/              # ★ tool_task_manager.py（tool_add_task / tool_update_task）
-├── repository/         # SQLAlchemy + IHistoryStore NoOp
-├── policies/           # Casbin（model.conf + policy.csv + setup）
-├── terminal.py         # 用户手动 PTY（精简版，无 AI 注入）
-├── hooks.py            # HookService 的具体实现（log / sse_push / notification 等）
-└── background.py       # 后台任务管理
-```
+> 完整文件结构见 `folder-tree.md` → `flypig/infrastructure/`。
 
 ## 模型适配
 
@@ -189,6 +167,12 @@ class Container:
         usage_hook = UsageTrackerHook(usage_tracker, pricing_fetcher)
         cls.register("usage_tracker", usage_tracker, singleton=True)
         cls.register("pricing_fetcher", pricing_fetcher, singleton=True)
+
+        # ★ P1/P2 预留服务（NoOp/未实现，仅证明接口存在）
+        cls.register("license_service", NoOpLicenseService(), singleton=True)
+        cls.register("update_service", NoOpUpdateService(), singleton=True)
+        cls.register("export_service", ExportService(), singleton=True)
+        cls.register("model_fallback", ModelFallbackService(), singleton=True)
 
     @classmethod
     def create_agent(cls, workspace=None, hooks=None) -> "IAgent":
@@ -487,7 +471,7 @@ logging.info("[trace=%s] tool_call: %s(%s)", trace_id, tool_name, args)
 
 LangGraph Checkpointer 持久化的是**上一轮完成后**的状态。如果进程被 SIGTERM 杀死（docker restart、部署更新），正在执行的工具调用会丢失结果——用户那轮对话内容全部丢失，已修改的文件也可能没来得及 checkpoint。
 
-#### 解决方案：turn:checkpoint 钩子
+#### 解决方案：turn:checkpoint 钩子（默认启用）
 
 每完成一个工具调用就 persist 一次当前状态，而不是等整轮结束：
 
@@ -509,6 +493,8 @@ class TurnCheckpointHook:
 ```
 
 恢复时检测到 `partial=True` 的轮次，提示用户"上一轮未正常结束，是否继续？"
+
+> 完整设计见 `resilience.md`（崩溃恢复系统）。TurnCheckpointHook 在 `ChatService.__init__()` 中默认注册，不再需要手动配置。
 
 #### 工具执行追踪表
 
@@ -576,7 +562,7 @@ class ChatService:
         self.hook_service = Container.get("hook_service")
         self.suggestion_engine = Container.get("suggestion_engine")
         self.policy = Container.get("policy")
-        self.repository = Container.get("repository")
+        self.conversation_store = Container.get("conversation_store")
 
     async def process_message(self, user_msg: str, session_id: str) -> AsyncGenerator:
         """五步流程，中介者统一编排"""
