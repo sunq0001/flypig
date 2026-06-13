@@ -1,7 +1,7 @@
 # 后端模块
 
 > **来源**: `architecture-refactor.md` §3.1-3.5, §3.10
-> **关联文档**: `langgraph-graph.md`（AgentState）、`subprocess-and-tools.md`（工具执行）、`usage-tracking.md`（用量追踪）
+> **关联文档**: `langgraph-graph.md`（AgentState）、`subprocess-and-tools.md`（工具执行）、`usage-tracking.md`（用量追踪）、`plan-task-system.md`（任务系统）
 
 ## Interface Layer — 用户界面适配
 
@@ -19,6 +19,7 @@ flypig/interface/web/
 │   ├── agent.py        # /api/agent/status + /api/agent/stop
 │   ├── history.py      # /api/history/search
 │   ├── usage.py        # /api/usage/*（用量查询）
+│   ├── tasks.py        # /api/tasks/*（任务 CRUD + 搜索 + 回溯快照）
 │   └── feedback.py     # /api/feedback/suggestion（建议反馈记录）
 └── services/
     ├── sse_queue.py    # SSE 队列抽象（≤40 行）
@@ -40,6 +41,7 @@ flypig/interface/web/
 | `CheckpointStore` | ★ SQLite 映射表（turn_id → commit_hash → summary） | ≤60 |
 | `SummaryGenerator` | ★ 根据本轮交互生成 ≤50 字摘要 | ≤40 |
 | `UsageTrackerService` | ★ 用量追踪：通过 HookService 自动记录 turn/call 级 token、cost、缓存 | ≤60 |
+| `TaskService` | ★ 任务管理：封装 IConversationStore 的 task CRUD（可选 Service 层） | ≤50 |
 
 ## Domain Layer — 核心领域逻辑
 
@@ -62,6 +64,7 @@ flypig/domain/
 ├── tools/              # executor.py + edit/search/system/mcp 四组（详见 folder-tree.md）
 ├── sandbox/            # config, path_validator, manager, builder
 ├── usage/              # ★ IUsageTracker（取代原 ICostTracker）+ SqliteUsageTracker + PricingFetcher + UsageTrackerHook
+├── tasks/              # ★ tool_task_manager.py（tool_add_task / tool_update_task）
 ├── repository/         # SQLAlchemy + IHistoryStore NoOp
 ├── policies/           # Casbin（model.conf + policy.csv + setup）
 ├── terminal.py         # 用户手动 PTY（精简版，无 AI 注入）

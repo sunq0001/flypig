@@ -429,101 +429,204 @@ const sandboxHtml = computed(() => `
 
 ## TaskBoard 任务看板
 
-AI 拆解用户需求后生成结构化的任务清单，贯穿整个会话、跨会话可检索。
+> 完整设计文档见 `plan-task-system.md`。本节只写前端组件规格。
 
-### 数据模型
+AI 拆解用户需求后生成任务列表，贯穿整个会话并可回溯查看历史状态。
+所有任务通过 IConversationStore 存储，与对话消息和 checkpoint 共享 `conversations.db`。
 
-```sql
-CREATE TABLE task_items (
-    id TEXT PRIMARY KEY,            -- "task_001"
-    session_id TEXT NOT NULL,
-    parent_task TEXT,                -- 父任务 ID（支持嵌套拆解）
-    title TEXT NOT NULL,             -- "实现 login API"
-    status TEXT DEFAULT 'todo',      -- todo / in_progress / done / cancelled
-    priority TEXT DEFAULT 'medium',  -- high / medium / low
-    tags TEXT,                       -- JSON 数组 ["auth", "backend"]
-    created_at TIMESTAMP,
-    updated_at TIMESTAMP,
-    completed_at TIMESTAMP,
-    turn_id INTEGER                  -- 哪个 turn 创建的
-);
-CREATE INDEX idx_task_session ON task_items(session_id);
-CREATE INDEX idx_task_status ON task_items(status);
-```
-
-### API 端点
-
-| 端点 | 方法 | 说明 |
-|------|------|------|
-| `/api/tasks?session_id=xxx` | GET | 获取当前会话全部任务（按时间倒序） |
-| `/api/tasks/search?q=xxx&status=xxx` | GET | 跨会话搜索任务（按标题/标签匹配） |
-| `/api/tasks` | POST | AI 调用 tool_add_task 时写入 |
-| `/api/tasks/<id>` | PATCH | AI 调 tool_update_task 更新状态 |
-| `/api/tasks/stats` | GET | 统计：未完成/进行中/已完成 数量（Dashboard 用） |
-
-### AI 交互方式
-
-AI 通过两个工具操作任务（`tool_task_manager.py`）：
-
-```python
-# AI 调用的工具
-def tool_add_task(title: str, parent: str | None = None, tags: list[str] | None = None) -> str:
-    """添加任务到看板"""
-
-def tool_update_task(task_id: str, status: str) -> str:
-    """更新任务状态: todo / in_progress / done / cancelled"""
-```
-
-对话中的自然交互：
+### 组件树
 
 ```
-用户: "实现用户登录模块，需要 users 表、login API、注册页面"
-  AI 拆解 → tool_add_task("创建 users 表", tags=["数据库"])
-           → tool_add_task("实现 login API", tags=["auth", "backend"])
-           → tool_add_task("实现注册页面", tags=["前端", "auth"])
-  → SSE 推送 task_update 事件 → TaskBoard 渲染
-
-AI 开始做 "实现 login API"
-  → tool_update_task("task_002", status="in_progress")
-  → SSE 推送 → TaskBoard 实时更新
-
-用户切换会话做另一件事
-  → 第二天回来 → Dashboard 显示 "3 个未完成任务"
-  → 点进会话 → TaskBoard 还在
+components/
+├── chat/
+│   └── TaskListCard.vue       ← 对话流中展示当前方案的任务状态卡片
+├── sidebar/
+│   └── TaskBoard.vue          ← 侧边栏完整任务看板（搜索+筛选+历史）
+└── common/
+    └── TaskHistoryDialog.vue  ← 单个任务状态变更历史弹窗
 ```
 
-### 检索与筛选
+### 1. TaskListCard.vue — 当前方案任务状态卡片（对话流中）
 
-TaskBoard 侧边栏支持：
+AI 拆解任务后（调 `tool_add_task`），在对话消息流中插入一张任务状态卡片，实时更新。
+
+**设计稿**：
 
 ```
-┌──────────────────────┐
-│ 🔍 搜索任务...       │  ← 按标题/标签全文搜索
-│                      │
-│ [全部] [待办] [进行] [完成]  ← 状态筛选
-│                      │
-│ ☑️ 创建 users 表     │
-│ 🔄 实现 login API    │  ← 当前进行中
-│ ⬜ 注册页面           │
-│ ⬜ 接入 JWT           │
-│                      │
-│ 📅 昨天               │  ← 按时间分组
-│ ✅ 用户表设计         │
-└──────────────────────┘
+┌─ 当前方案: 重构 auth 模块 ──────────────────┐
+│  🔄 重构 auth 路由           [进行中]        │  ← 蓝色高亮
+│  ⬜ 新增 JWT 中间件          [待办]          │  ← 灰色
+│  ~~编写 auth 测试~~          [已取消]        │  ← 删除线+灰
+│  ⚡ 修复数据库连接           [已中断]        │  ← 黄色
+│  ✅ 创建 users 表            [已完成]        │  ← 绿色
+│                                             │
+│  进度: ■■□□□  1/4 完成 · 1 中断 · 1 取消     │
+└─────────────────────────────────────────────┘
 ```
 
-跨会话搜索：`GET /api/tasks/search?q=login` 返回匹配的任务及所属 session 信息，方便用户找到"之前在哪个会话里讨论了 login 相关任务"。
+**状态标识**：
+
+| 状态 | 图标 | 文字色 | 背景色 |
+|------|------|--------|--------|
+| pending | ⬜ 空心圆 | #999 | 白 |
+| in_progress | 🔄 旋转 | #1890ff | 浅蓝底 |
+| blocked | ⚡ 闪电 | #faad14 | 浅黄底 |
+| cancelled | —（`<s>` 删除线） | #bbb | 白 |
+| completed | ✅ 对勾 | #52c41a | 浅绿底 |
+
+**数据来源**：SSE `task_update` 事件实时更新，首次加载时 `GET /api/tasks?session_id=xxx`。
+
+**交互**：
+- 点击任务行 → 打开 TaskHistoryDialog
+- 点击"进行中"任务 → 自动定位到对话中对应的 turn
+- 鼠标悬停取消任务 → tooltip 显示取消原因
+
+### 2. TaskBoard.vue — 完整任务看板（侧边栏）
+
+侧边栏独立面板，展示当前会话全部任务，支持搜索和回溯快照。
+
+**设计稿**：
+
+```
+┌─ 任务看板 ─────────────────────────────────┐
+│  🔍 搜索任务...        [全部▾]              │
+│                                            │
+│  📅 今天                                    │
+│  🔄 重构 auth 路由           [进行中]       │
+│  ⬜ 性能优化                 [待办]         │
+│                                            │
+│  📅 昨天                                    │
+│  ✅ 创建 users 表            [已完成]       │
+│  ⚡ 修复数据库连接           [已中断]       │
+│  ~~实现注册页面~~              [已取消]     │
+│                                            │
+│  共 5 个任务 · 1 进行中 · 2 完成 · 1 中断 · 1 取消 │
+└────────────────────────────────────────────┘
+```
+
+**功能**：
+- 搜索栏：按任务标题全文搜索
+- 状态筛选 tabs：全部 | 待办 | 进行中 | 已中断 | 已完成 | 已取消
+- 按时间分组（今天 / 昨天 / 更早）
+- 已取消的渲染 `<s>` 删除线
+- 每个任务点击 → 打开 TaskHistoryDialog
+- 底部统计行
+
+**回溯模式**：用户回溯到某个 turn 后，TaskBoard 顶部显示提示栏：
+
+```
+🔙 已回到 turn_3 时的状态  [恢复最新]
+```
+
+此时看到的任务是 `get_tasks_at_turn(session_id, turn_3)` 的快照。
+
+### 3. TaskHistoryDialog.vue — 任务生命线（弹窗）
+
+点击任务查看完整状态变更历史。
+
+**设计稿**：
+
+```
+┌─ 任务: 重构 auth 路由 ──────────────────────┐
+│                                            │
+│  🕐 turn_5  创建        → pending          │
+│  🕐 turn_5  开始做      → in_progress      │
+│  🕐 turn_6  完成        → completed        │
+│                                            │
+│  关联 checkpoint: turn_6                    │
+│  (点击可跳转到该 turn 的回复)                 │
+└────────────────────────────────────────────┘
+```
+
+**数据来源**：`GET /api/tasks/<id>/history`
+
+**交互**：
+- 每行显示 turn_id、时间线、状态变化
+- 如果该 turn 有 checkpoint，显示为可点击链接
+- 点击 turn 行 → 定位到对话中该轮消息
+- 弹窗底部"查看相关对话"按钮 → 跳转到该会话相关位置
+
+### Dashboard 集成
+
+在 Dashboard.vue 首页添加任务概览卡片：
+
+```
+┌─ 任务概览 ────────────────────┐
+│  2 个活跃会话 · 5 个未完成任务 │
+│                               │
+│  📂 stock-app:    3 待办      │
+│  📂 my-project:   2 待办      │
+│                               │
+│  [查看全部任务 →]              │
+└──────────────────────────────┘
+```
+
+### SSE 事件
+
+前端通过 SSE 事件 `task_update` 实时响应任务变更：
+
+```javascript
+// 添加任务
+{"type": "task_update", "action": "add", "task": {
+    "id": "task_001",
+    "title": "重构 auth 路由",
+    "status": "pending",
+    "created_turn": 5
+}}
+
+// 更新状态
+{"type": "task_update", "action": "update", "task": {
+    "id": "task_001",
+    "status": "in_progress",
+    "turn_id": 6
+}}
+
+// 回溯时推送快照
+{"type": "tasks_restored", "tasks": [...], "turn_id": 2}
+```
+
+前端 composable 封装：
+
+```javascript
+// composables/useTasks.js（新增）
+export function useTasks(sessionId) {
+  const tasks = ref([])
+
+  // 初始加载
+  onMounted(async () => {
+    const res = await fetch(`/api/tasks?session_id=${sessionId}`)
+    tasks.value = await res.json()
+  })
+
+  // SSE 实时更新
+  onSseEvent("task_update", (data) => {
+    if (data.action === "add") {
+      tasks.value.push(data.task)
+    } else if (data.action === "update") {
+      const idx = tasks.value.findIndex(t => t.id === data.task.id)
+      if (idx >= 0) tasks.value[idx] = { ...tasks.value[idx], ...data.task }
+    }
+  })
+
+  // 回溯时替换全部
+  onSseEvent("tasks_restored", (data) => {
+    tasks.value = data.tasks
+    showRestoreBanner(data.turn_id)
+  })
+
+  return { tasks }
+}
+```
 
 ### 涉及的新增/修改文件
 
-| 文件 | 说明 |
-|------|------|
-| `infrastructure/tools/tool_task_manager.py` | AI 调用的 add_task / update_task 工具 |
-| `interface/web/routes/tasks.py` | REST 查询端点 |
-| `components/sidebar/TaskBoard.vue` | 侧边栏任务看板 |
-| `components/chat/TaskListCard.vue` | 对话流中的任务列表卡片 |
-| `IConversationStore` | 新增 task CRUD 方法 |
-| SSE 事件 | 新增 `task_update` 事件类型 |
+| 文件 | 类型 | 说明 |
+|------|------|------|
+| `components/chat/TaskListCard.vue` | 新增 | 对话流任务状态卡片 |
+| `components/sidebar/TaskBoard.vue` | 新增 | 侧边栏任务看板（替代旧版） |
+| `components/common/TaskHistoryDialog.vue` | 新增 | 任务状态变更历史弹窗 |
+| `components/sidebar/Dashboard.vue` | 修改 | 首页添加任务概览卡片 |
+| `composables/useTasks.js` | 新增 | 任务状态管理 composable |
 
 ## 拆分前后对比
 

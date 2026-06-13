@@ -629,4 +629,4 @@ async def check_usage_storage():
         }
 ```
 
-> **关联文档**: `backend-modules.md`（DI注册）、`api-reference.md`（查询端点）、`operations.md`（数据持久化+备份）
+> **关联文档**: `backend-modules.md`（DI注册）、`api-reference.md`（查询端点）、`operations.md`（数据持久化+备份）、`plan-task-system.md`（IConversationStore vs UsageTracker 对比）

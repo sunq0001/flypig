@@ -158,9 +158,10 @@ class AgentState(TypedDict):
     adversarial_suggestion: dict | None  # 对抗建议卡片（含 suggestion_id）
     test_results: str | None      # 测试结果
     git_snapshot: str | None      # Git 快照（用于回滚）
+    active_tasks: list | None     # ★ 当前会话活跃任务列表（TaskItem[] 已序列化）
 ```
 
-> 新增 `session_id` 字段，用于与 ConversationStore 关联。
+> 新增 `session_id` 字段，用于与 ConversationStore 关联。`active_tasks` 用于在对话中传递当前活跃任务列表，Turns 间保持任务上下文。
 
 ## chat_node 集成 ContextPipeline
 

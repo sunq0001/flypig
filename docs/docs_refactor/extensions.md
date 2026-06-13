@@ -1,7 +1,7 @@
 # 扩展预留
 
 > **来源**: `architecture-refactor.md` §3.7, §3.9
-> **关联文档**: `backend-modules.md`（接口定义）、`subprocess-and-tools.md`（MCP 工具）、`usage-tracking.md`（用量追踪系统）
+> **关联文档**: `backend-modules.md`（接口定义）、`subprocess-and-tools.md`（MCP 工具）、`usage-tracking.md`（用量追踪系统）、`plan-task-system.md`（任务管理系统）
 > 当前只定义接口 + 空实现，不实现具体逻辑。
 
 ## MCP 协议集成
@@ -157,6 +157,46 @@ class TurnRecord:
     change_score: dict | None = None
 ```
 
+### 任务数据类
+
+```python
+# domain/models/task.py（新增）
+@dataclass
+class TaskItem:
+    """任务项"""
+    id: str
+    session_id: str
+    title: str
+    status: str                        # pending / in_progress / blocked / cancelled / completed
+    created_turn: int
+    status_turn: int | None = None
+    cancelled_reason: str | None = None
+    sort_order: int = 0
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    completed_at: datetime | None = None
+
+@dataclass
+class TaskStatusChange:
+    """任务状态变更记录"""
+    task_id: str
+    turn_id: int
+    old_status: str | None
+    new_status: str
+    reason: str | None = None
+    changed_at: datetime | None = None
+
+@dataclass
+class TaskStats:
+    """任务统计（Dashboard 用）"""
+    total: int
+    pending: int
+    in_progress: int
+    blocked: int
+    cancelled: int
+    completed: int
+```
+
 ### 接口
 
 ```python
@@ -190,6 +230,39 @@ class IConversationStore(ABC):
 
     @abstractmethod
     async def delete_session(self, session_id: str): ...
+
+    # ======== Task CRUD（详见 plan-task-system.md）========
+
+    @abstractmethod
+    async def add_task(self, session_id: str, turn_id: int, title: str,
+                       sort_order: int = 0) -> str:
+        """添加任务到会话，返回 task_id"""
+
+    @abstractmethod
+    async def update_task_status(self, task_id: str, new_status: str,
+                                  turn_id: int, reason: str = None):
+        """更新任务状态 + 记录 status_log"""
+
+    @abstractmethod
+    async def get_session_tasks(self, session_id: str) -> list[TaskItem]:
+        """获取会话全部任务"""
+
+    @abstractmethod
+    async def get_tasks_at_turn(self, session_id: str, turn_id: int) -> list[TaskItem]:
+        """恢复到某 turn 时的任务状态快照（回溯用）"""
+
+    @abstractmethod
+    async def search_tasks(self, session_id: str = None,
+                           query: str = "", status: str = None) -> list[TaskItem]:
+        """跨会话搜索任务"""
+
+    @abstractmethod
+    async def get_task_stats(self, session_id: str = None) -> TaskStats:
+        """任务统计"""
+
+    @abstractmethod
+    async def get_task_history(self, task_id: str) -> list[TaskStatusChange]:
+        """单个任务完整状态变更历史"""
 ```
 
 ### 实现演进

@@ -74,6 +74,7 @@
 │  │  (中介者: graph + hook +     │ │  Truncate + Trim + Fold       │ │  IConversationStore 的 SQLite 实现      │          │
 │  │   suggestion + policy 编排)  │ │  (预 LLM 上下文压缩)          │ │                                        │          │
 │  │  UsageTrackerService         │ │                              │ │                                        │          │
+│  │  TaskService                 │ │                              │ │                                        │          │
 │  └──────────────────────────────┘ └──────────────────────────────┘ └──────────────────────────────────────┘          │
 │  ┌─────────────────────────┐ ┌──────────────────────────────────┐                                                    │
 │  │ GitCheckpoint Manager   │ │ SummaryGenerator                 │                                                    │
@@ -117,9 +118,13 @@
 │  │                          │ │  mcp    : MCP 加载器+管理                    │ │ manager    │ │                          │  │
 │  │                          │ │  PermissionChecker (allow/ask/deny)         │ │ builder    │ │                          │  │
 │  ├──────────────────────────┤ ├──────────────────────────────────────────────┤ ├────────────┤ ├──────────────────────────┤  │
-│  │ Usage                    │ │ Terminal (PTY)                               │ │ Background │ │ Policies + Hooks         │  │
-│  │ SqliteUsageTracker       │ │ 用户手动 xterm.js 终端                        │ │ 后台任务    │ │ Casbin + 事件钩子实现     │  │
-│  │ PricingFetcher           │ │ 独立于 AI，AI 不注入命令                     │ │ 空闲自动清理│ │                          │  │
+│  │  Usage                    │ │ Terminal (PTY)                               │ │ Background │ │ Policies + Hooks         │  │
+│  │  SqliteUsageTracker       │ │ 用户手动 xterm.js 终端                        │ │ 后台任务    │ │ Casbin + 事件钩子实现     │  │
+│  │  PricingFetcher           │ │ 独立于 AI，AI 不注入命令                     │ │ 空闲自动清理│ │                          │  │
+│  ├──────────────────────────┤ ├──────────────────────────────────────────────┤ ├────────────┤ ├──────────────────────────┤  │
+│  │ Tasks                     │ │ Tasks Hosting                               │ │            │ │                          │  │
+│  │ tool_add_task             │ │ 任务 CRUD 端点 (routes/tasks.py)              │ │            │ │                          │  │
+│  │ tool_update_task          │ │ TaskListCard / TaskBoard (前端组件)           │ │            │ │                          │  │
 │  └──────────────────────────┘ └──────────────────────────────────────────────┘ └────────────┘ └──────────────────────────┘  │
 │                                                                                                                       │
 ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤

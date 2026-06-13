@@ -1,7 +1,7 @@
 # 数据流
 
 > **来源**: `architecture-refactor.md` §8
-> **关联文档**: `api-reference.md`（事件格式）、`frontend-arch.md`（前端消费）、`usage-tracking.md`（response_end 用量摘要）
+> **关联文档**: `api-reference.md`（事件格式）、`frontend-arch.md`（前端消费）、`usage-tracking.md`（response_end 用量摘要）、`plan-task-system.md`（任务数据流）
 > 改数据流时，需同步检查 api-reference.md 中的事件格式。
 
 ## 当前（复杂且有问题）
@@ -65,6 +65,8 @@ LangGraph StateGraph（领域层）
 SSE 事件流 → Vercel AI SDK 自动渲染
   ├── type: "token"                → 普通文本流式渲染
   ├── type: "choice"               → Explore 选择题卡片
+  ├── type: "task_update"          → 任务状态变更（创建/更新/取消）
+  ├── type: "tasks_restored"       → 回溯后的任务快照
   ├── type: "approval"             → Plan 审批卡片
   ├── type: "change_review"        → Execute 变更审查卡片
   ├── type: "adversarial_suggestion" → 对抗建议卡片（ChangeScore 触发）

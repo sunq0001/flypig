@@ -1,7 +1,7 @@
 # API 参考
 
 > **来源**: `architecture-refactor.md` §3.1, §3.8.2-3.8.5, §8.3
-> **关联文档**: `frontend-arch.md`（前端消费）、`data-flow.md`（数据流）、`usage-tracking.md`（用量查询端点）
+> **关联文档**: `frontend-arch.md`（前端消费）、`data-flow.md`（数据流）、`usage-tracking.md`（用量查询端点）、`plan-task-system.md`（任务端点）
 > 新增端点或改 SSE 事件格式时，需同步检查 frontend-arch.md 和 data-flow.md。
 
 ## REST 端点
@@ -22,11 +22,13 @@
 | `/api/history/search` | GET | 历史搜索 |
 | `/api/agent/status` | GET | Agent 运行状态（空闲/忙碌/当前任务/成本统计） |
 | `/api/agent/stop` | POST | 强制停止当前运行中的 Agent |
-| `/api/tasks?session_id=` | GET | 当前会话任务列表 |
+| `/api/tasks?session_id=` | GET | 当前会话任务列表（按 sort_order 排序） |
+| `/api/tasks/at-turn/<turn_id>?session_id=` | GET | 回溯某 turn 时的任务状态快照 |
 | `/api/tasks/search?q=&status=` | GET | 跨会话搜索任务 |
-| `/api/tasks` | POST | 添加任务（AI 调用） |
-| `/api/tasks/<id>` | PATCH | 更新任务状态 |
-| `/api/tasks/stats` | GET | 任务统计（Dashboard 用） |
+| `/api/tasks/stats?session_id=` | GET | 任务统计（Dashboard 用） |
+| `/api/tasks/<id>/history` | GET | 单个任务状态变更历史 |
+| `/api/tasks` | POST | 添加任务（AI 调用 tool_add_task） |
+| `/api/tasks/<id>` | PATCH | 更新任务状态（AI 调用 tool_update_task） |
 | `/api/usage/turn/<turn_id>` | GET | 本轮用量明细（含 calls[]） |
 | `/api/usage/session/<session_id>` | GET | 当前会话汇总（total_tokens, total_cost, avg_cache_hit） |
 | `/api/usage/range?start=&end=` | GET | 时间范围统计 |
@@ -39,7 +41,7 @@
 |----------|------|---------|
 | `token` | 逐 token 文本 | LLM 流式输出 |
 | `reasoning` | LLM 推理过程片段 | LLM 思考中间步骤（防止用户以为卡死） |
-| `task_update` | 任务状态变更 | AI 调 tool_add_task / tool_update_task 时推送 |
+| `task_update` | 任务状态变更 | AI 调 tool_add_task / tool_update_task 时推送。action: add(新任务) / update(状态变更) |
 | `choice` | 选择题卡片 | Explore 模式 |
 | `approval` | 审批卡片 | Plan 模式确认/修改 |
 | `change_plan` | 变更计划（改前预览，逐项批准） | AI 输出修改方案后、执行前 |
@@ -47,9 +49,35 @@
 | `suggestion` | 对抗建议卡片（含 `suggestion_id`） | 变更评分后 |
 | `response_end` | 结束 + usage | 本轮结束 |
 
+
 ```python
 # token 事件（逐 token 推流）
 {"type": "token", "content": "每个"}
+
+# task_update 事件（AI 创建/更新任务时推送）
+{"type": "task_update", "action": "add", "task": {
+    "id": "task_001",
+    "title": "重构 auth 路由",
+    "status": "pending",
+    "created_turn": 5
+}}
+{"type": "task_update", "action": "update", "task": {
+    "id": "task_001",
+    "status": "completed",
+    "turn_id": 7
+}}
+{"type": "task_update", "action": "update", "task": {
+    "id": "task_002",
+    "status": "cancelled",
+    "turn_id": 8,
+    "reason": "改用 session 方案"
+}}
+
+# tasks_restored 事件（回溯到某 turn 后推送任务快照）
+{"type": "tasks_restored", "tasks": [
+    {"id": "task_001", "title": "重构 auth 路由", "status": "pending", "created_turn": 5},
+    {"id": "task_002", "title": "新增 JWT 中间件", "status": "in_progress", "created_turn": 5}
+], "turn_id": 5}
 
 # response_end 事件（结束 + usage）
 {"type": "response_end", "usage": {

@@ -164,13 +164,14 @@ flypig/
 │           │   │                   ChoiceCard, ChangeReviewCard, SuggestionCard,
 │           │   │                   MermaidDiagram, LivePreview, MessageItem,
 │           │   │                   ThinkingIndicator, ToolCallCard
+│           │   │                   TaskListCard ← 当前方案任务状态卡片
 │           │   ├── terminal/     ← TerminalPanel, TerminalTab, XtermViewer, OutputViewer
 │           │   ├── init/         ← InitWizard, WorkspaceStep, ModelStep, ApiKeyStep
 │           │   └── common/       ← MarkdownRender, CodeBlock, LoadingSpinner,
 │           │                       ThemeSwitcher, CommandPalette
 │           ├── composables/      ← useChat, useMessages, useTerminal, useFileTree,
 │           │                       useEditor, useLayout, useMarkdownRender, useTheme,
-│           │                       useCommandPalette
+│           │                       useCommandPalette, useTasks ← 任务状态管理
 │           └── lib/              ← xterm-setup.js, monaco-setup.js, sfc-compiler.js
 │
 ├── tests/                        ← 单元测试 + 集成测试
