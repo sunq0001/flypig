@@ -54,6 +54,7 @@
 | `choice` | 选择题卡片 | Explore 模式 |
 | `approval` | 审批卡片 | Plan 模式 |
 | `change_plan` | 变更计划（改前预览） | AI 输出修改方案后 |
+| **`change_summary`** | **★ 变更叙事总结（需求级）** | **工具执行后，summarize 节点产出** |
 | `change_review` | 变更后审查 | Execute 执行后 |
 | `suggestion` | 对抗建议卡片 | 变更评分后 |
 | `response_end` | 结束 + usage | 本轮结束 |
@@ -99,6 +100,16 @@
 ], "turn_id": 2}
 
 # ── ★ 新增富交互事件格式 ──
+
+# change_summary — 变更叙事总结（需求级）
+{"type": "change_summary", "intent": "优化登录页查询性能",
+ "files": [
+   {"path": "db.py", "intent": "给查询加缓存装饰器",
+    "impact": "查询响应提升约 5 倍", "lines_added": 5, "lines_deleted": 1},
+   {"path": "login.vue", "intent": "表单校验提前到输入时",
+    "impact": "减少提交卡顿", "lines_added": 8, "lines_deleted": 0}
+ ],
+ "regressions": []}
 
 # code_exec — 代码即时执行结果
 {"type": "code_exec", "code": "sum(range(1, 101))", "lang": "python",

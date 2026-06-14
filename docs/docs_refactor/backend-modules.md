@@ -3,9 +3,9 @@
 > **来源**: `architecture-refactor.md` §3.1-3.5, §3.10
 > **关联文档**: `langgraph-graph.md`（AgentState）、`subprocess-and-tools.md`（工具执行）、`usage-tracking.md`（用量追踪）、`plan-task-system.md`（任务系统）、`resilience.md`（崩溃恢复/日志/迁移）
 
-## Interface Layer — 用户界面适配
+## Backend Layer — 用户界面适配
 
-> 完整文件结构见 `folder-tree.md` → `flypig/interface/web/`。本节只列路由职责。
+> 完整文件结构见 `folder-tree.md` → `flypig/backend/`。本节只列路由职责。
 
 ```
 routes/
@@ -16,14 +16,14 @@ routes/
 ├── health.py       # 健康检查
 ├── upload.py       # 文件上传 + 压缩解压
 ├── rollback.py     # Git 回滚
-├── agent.py        # /api/agent/status + /api/agent/stop
+├── agent_routes.py # /api/agent/status + /api/agent/stop
 ├── history.py      # /api/history/search
 ├── usage.py        # /api/usage/*（用量查询）
 ├── tasks.py        # /api/tasks/*（任务 CRUD + 搜索 + 回溯快照）
 └── feedback.py     # /api/feedback/suggestion（建议反馈记录）
 ```
 
-## Application Layer — 业务编排
+## Orchestration Layer — 业务编排
 
 | 服务 | 职责 | 行数 |
 |------|------|------|
@@ -55,7 +55,7 @@ routes/
 国产模型优先（DeepSeek、Qwen、GLM、Yi、Baichuan），均兼容 OpenAI API 格式：
 
 ```
-infrastructure/model/
+infrastructure/llm/
 ├── openai_adapter.py   # OpenAI/DeepSeek 兼容（当前主力）
 ├── anthropic.py        # Claude 适配
 └── local.py            # 本地模型（Ollama/vLLM，预留）
@@ -132,13 +132,13 @@ class Container:
         tools = ToolExecutor(workspace_dir=config.workspace)  # 实现 IToolExecutor
         repo = SqliteConversationStore("data/conversations.db")  # 实现 IConversationStore
         policy = PolicyService(config.permissions)      # 权限规则
-        prompts = PromptManager()                       # 多角色 prompt
+        prompts = MultiRoleManager()                    # 多角色 prompt
         knowledge = NoOpKnowledgeStore()                # 知识库空实现
         graph_factory = GraphFactory(
             tools=tools, prompts=prompts, policy=policy
         )
         suggestion_engine = SuggestionEngine()
-        hook_service = HookService()
+        event_subscriptions = EventSubscriptions()
 
         # ★ 记忆 + 压缩体系
         conversation_store = SqliteConversationStore("data/conversations.db")
@@ -157,7 +157,7 @@ class Container:
         cls.register("knowledge_store", knowledge, singleton=True)
         cls.register("graph_factory", graph_factory, singleton=True)
         cls.register("suggestion_engine", suggestion_engine, singleton=True)
-        cls.register("hook_service", hook_service, singleton=True)
+        cls.register("event_subscriptions", event_subscriptions, singleton=True)
         cls.register("conversation_store", conversation_store, singleton=True)
         cls.register("context_pipeline", context_pipeline, singleton=True)
 
@@ -212,9 +212,9 @@ AI Agent 项目的测试不能一刀切。核心逻辑分两类：
 
 ```python
 # 方案 A（推荐）：参数注入，测试时传递 mock
-async def chat_node(state, hook_service: IHook = None):
-    hook = hook_service or Container.get("hook_service")
-    # 测试时：chat_node(state, hook_service=MockHook())
+async def chat_node(state, event_subscriptions: IHook = None):
+    hook = event_subscriptions or Container.get("event_subscriptions")
+    # 测试时：chat_node(state, event_subscriptions=MockHook())
 
 # 方案 B：Container 支持 override
 class Container:
@@ -247,7 +247,7 @@ flypig/
 │   ├── unit/                    ← 纯函数单元测试
 │   │   ├── test_router.py
 │   │   ├── test_models.py       ← ChangeScore, TurnUsage 等
-│   │   ├── test_hook_service.py
+│   │   ├── test_event_subscriptions.py
 │   │   ├── test_pricing.py
 │   │   └── test_permission_checker.py
 │   ├── integration/             ← LLM 集成测试
@@ -273,9 +273,9 @@ def reset_container():
     Container.reset_overrides()
 
 @pytest.fixture
-def mock_hook_service():
+def mock_event_subscriptions():
     mock = MagicMock(spec=IHook)
-    Container.override("hook_service", mock)
+    Container.override("event_subscriptions", mock)
     return mock
 
 @pytest.fixture
@@ -299,7 +299,7 @@ def test_router_falls_back_to_chat():
     result = router(state)
     assert result == "chat"
 
-# tests/unit/test_hook_service.py  
+# tests/unit/test_event_subscriptions.py  
 @pytest.mark.asyncio
 async def test_cancellable_hook_denies():
     service = HookService()
@@ -559,10 +559,13 @@ class ChatService:
 
     def __init__(self):
         self.graph_factory = Container.get("graph_factory")
-        self.hook_service = Container.get("hook_service")
+        self.event_subscriptions = Container.get("event_subscriptions")
         self.suggestion_engine = Container.get("suggestion_engine")
         self.policy = Container.get("policy")
         self.conversation_store = Container.get("conversation_store")
+
+        # System Prompt 缓存（同一会话内只构建一次）
+        self._prompt_cache: dict[str, str] = {}
 
     async def process_message(self, user_msg: str, session_id: str) -> AsyncGenerator:
         """五步流程，中介者统一编排"""
@@ -572,7 +575,7 @@ class ChatService:
             return
 
         # Step 2: 触发前置事件（中介者通知 HookService）
-        await self.hook_service.emit("chat:before", {
+        await self.event_subscriptions.emit("chat:before", {
             "session_id": session_id, "message": user_msg
         })
 
@@ -588,7 +591,7 @@ class ChatService:
                 yield event
 
         # Step 5: 触发完成事件
-        await self.hook_service.emit("chat:after", {"session_id": session_id})
+        await self.event_subscriptions.emit("chat:after", {"session_id": session_id})
 
 # 各服务之间没有任何直接引用：
 # GraphFactory 不知道 HookService 存在

@@ -21,19 +21,24 @@ flypig/
 │   ├── events.py                 ← 启动/关闭事件
 │   └── app.py                    ← Quart app 工厂
 │
-├── domain/                       ← 领域层（零外部依赖）
+├── domain/                       ← 领域层（接口、数据类、prompt、节点——定义 AI 是什么）
 │   ├── __init__.py
 │   ├── interfaces/               ← 抽象接口
-│   │   ├── imodel.py             ← IModel（context 驱动，统一 stream 接口）
+│   │   ├── imodel.py             ← IModel（LLM 适配器：统一 stream + context 接口，DeepSeek/Claude/GPT 各有实现）
 │   │   ├── itool_executor.py     ← IToolExecutor（含 MCP 动态注册）
-│   │   ├── iknowledge_store.py   ← IKnowledgeStore（NoOp 预留）
 │   │   ├── iconversation_store.py  ← IConversationStore（对话存储 + 检索）
 │   │   ├── icontext_pipeline.py   ← IContextPipeline（预 LLM 压缩）
 │   │   ├── iusage_tracker.py     ← IUsageTracker（用量追踪接口）
 │   │   ├── ilicense_service.py   ← ☆ P2 许可激活接口（NoOp 预留）
 │   │   ├── iupdate_service.py    ← ☆ P2 自动更新接口（NoOp 预留）
 │   │   ├── ihook.py              ← IHook（事件钩子）
-│   │   └── iagent.py             ← IAgent
+│   │   ├── iagent.py             ← IAgent
+│   │   ├── isearch.py            ★ ISearch（全文/语义/代码结构搜索抽象）
+│   │   ├── iknowledge_graph.py   ★ IKnowledgeGraph（代码关系图，P1）
+│   │   ├── ivector_store.py      ★ IVectorStore（语义向量检索，P2）
+│   │   ├── iranker.py            ★ IRanker（多源结果融合排序，P2）
+│   │   ├── iast_parser.py        ★ IASTParser（AST 解析：symbol→行号，P0 NoOp）
+│   │   └── ilsp_diagnostics.py   ★ ILspDiagnostics（LSP 诊断，P0 NoOp）
 │   │
 │   ├── agent/                    ← LangGraph（领域层只定义节点和状态）
 │   │   ├── state.py              ← AgentState TypedDict（纯数据，零依赖）
@@ -48,41 +53,40 @@ flypig/
 │   │   ├── change_score.py       ← ChangeScore（§3.8.9）
 │   │   └── task.py               ← TaskItem / TaskStatusChange / TaskStats
 │   │
-│   ├── prompt_manager.py         ← 多角色 prompt 切换
-│   ├── prompts/                  ← prompt 仓库
-│   │   ├── developer.md          ← 核心开发者身份
-│   │   ├── reviewer.md           ← 代码审查员（对抗性）
-│   │   ├── tester.md             ← 测试员
-│   │   ├── architect.md          ← 重构/架构评估
-│   │   └── documenter.md         ← 文档撰写
+│   ├── prompts/                  ← prompt 系统
+│   │   ├── __init__.py           ← 包导出（from .multirole_manager import MultiRoleManager）
+│   │   ├── multirole_manager.py  ★ MultiRoleManager：按角色+模型+会话维度选择 prompt
+│   │   └── roles/                ← 角色 prompt 库（多 agent / 多视角通用）
+│   │       ├── developer.md     ← 主身份：写代码时用的默认视角
+│   │       ├── reviewer.md      ← 审查视角：从代码质量角度挑毛病
+│   │       ├── tester.md        ← 测试视角：关注边界情况和脆弱性
+│   │       ├── architect.md     ← 架构视角：评估模块耦合和扩展性
+│   │       └── documenter.md    ← 文档视角：检查注释和接口可读性
 │   │
 │   ├── config/                   ← 配置数据类（纯数据，无 IO）
 │   │   ├── config.py             ← Config dataclass
 │   │   └── model_registry.py     ← ModelRegistry dataclass
 │   └── exceptions.py             ← 统一异常
 │
-├── application/                  ← 应用层
-│   ├── services/
-│   │   ├── chat_service.py       ← 对话编排：调用 LangGraph → 事件分发
-│   │   ├── config_service.py     ← 配置管理
-│   │   ├── session_service.py    ← 会话状态管理
-│   │   ├── policy_service.py     ← Casbin 封装
-│   │   ├── graph_factory.py      ← ★ 图构建：组装 nodes + router → 编译 StateGraph
-│   │   ├── suggestion_engine.py  ← ★ 评分→建议映射：generate_suggestion()
-│   │   ├── hook_service.py       ← ★ 钩子管理器：register / emit
-│   │   ├── git_checkpoint_manager.py ← ★ Agent Git checkpoint 管理
-│   │   ├── context_pipeline.py    ← ★ 预 LLM 上下文压缩（Truncate+Trim+Fold）
-│   │   ├── conversation_store.py  ← ★ 对话存储 SQLite（IConversationStore 实现）
-│   │   ├── usage_tracker_service.py  ← ★ 用量追踪编排（IUsageTracker + PricingFetcher）
-│   │   ├── export_service.py     ← ☆ P1 导入/导出服务（NotImplemented 预留）
-│   │   ├── model_fallback_service.py ← ☆ P1 多模型 fallback（P0 仅记录）
-│   │   └── summary_generator.py  ← ★ 自动生成短语摘要
-│   └── dto/
-│       ├── chat_dto.py           ← 数据传输对象
-│       └── config_dto.py
+├── orchestration/                ← 编排层（服务编排，非 UI 入口）
+│   ├── chat_service.py           ← 对话编排：调用 LangGraph → 事件分发
+│   ├── config_service.py         ← 配置管理
+│   ├── session_service.py        ← 会话状态管理
+│   ├── policy_service.py         ← Casbin 封装
+│   ├── graph_factory.py          ← ★ 图构建：组装 nodes + router → 编译 StateGraph
+│   ├── suggestion_engine.py      ← ★ 评分→建议映射：generate_suggestion()
+│   ├── event_subscriptions.py    ← ★ 事件订阅编排：声明哪个模块订阅哪些事件
+│   ├── git_checkpoint_manager.py ← ★ Agent Git checkpoint 管理
+│   ├── context_pipeline.py       ← ★ 预 LLM 上下文压缩（Truncate+Trim+Fold）
+│   ├── conversation_store.py     ← ★ 对话存储 SQLite（IConversationStore 实现）
+│   ├── usage_tracker_service.py  ← ★ 用量追踪编排（IUsageTracker + PricingFetcher）
+│   ├── export_service.py         ← ☆ P1 导入/导出服务（NotImplemented 预留）
+│   ├── model_fallback_service.py ← ☆ P1 多模型 fallback（P0 仅记录）
+│   └── summary_generator.py      ← ★ 自动生成短语摘要
+
 │
 ├── infrastructure/               ← 基础设施层
-│   ├── model/                    ← 模型适配
+│   ├── llm/                      ← LLM 驱动适配（不是数据模型，是 DeepSeek/Claude 的 API 驱动）
 │   │   ├── openai_adapter.py     ← OpenAI/DeepSeek 兼容（国产主力）
 │   │   ├── anthropic.py          ← Claude 适配
 │   │   └── local.py              ← 本地模型（Ollama/vLLM, 预留）
@@ -90,16 +94,23 @@ flypig/
 │   ├── tools/                    ← 工具执行（按功能分组）
 │   │   ├── __init__.py
 │   │   ├── executor.py           ← ToolExecutor 主类（调度器）
-│   │   ├── edit/                 ← 代码编辑工具
-│   │   │   ├── tool_file.py          ← read/write/edit（Aider 或 git apply）
+│   │   ├── file/                 ← 文件操作（CRUD）
+│   │   │   ├── tool_read.py          ★ 读文件（支持 start/end 范围 / symbol 符号定位）
+│   │   │   ├── tool_write.py         ← 写文件（新建/全量重写）
+│   │   │   ├── tool_patch_file.py    ★ 局部更新（按 anchor 定位修改）
+│   │   │   └── tool_delete.py        ★ 删除文件
+│   │   ├── review/               ← 代码审查（改完后检查质量）
 │   │   │   ├── tool_change_review.py ← 变更审查数据生成（§3.8.7）
 │   │   │   ├── tool_lint.py          ← 代码规范自动检查（Ruff, §3.8.8）
 │   │   │   └── tool_change_score.py  ← 变更影响评分（§3.8.9）
-│   │   ├── search/               ← 搜索调研工具
+│   │   ├── search/               ← 搜索调研（从项目/网络获取信息）
 │   │   │   ├── tool_search.py        ← grep + find_files
-│   │   │   ├── tool_web_search.py    ← ☆ P1 内置网络搜索（DuckDuckGo）
+│   │   │   ├── tool_search_tools.py  ★ 懒加载协议：按 query 搜索工具 schema
+│   │   │   ├── tool_call_direct.py   ★ 懒加载协议：按名直接调工具
+│   │   │   └── tool_web_search.py    ← ☆ P1 内置网络搜索（DuckDuckGo）
+│   │   ├── interact/             ★ 交互选择（和用户对话/让用户做选择）
 │   │   │   └── tool_ask_choice.py    ← Explore 选择题（§3.6.3）
-│   │   ├── system/               ← 系统工具
+│   │   ├── system/
 │   │   │   ├── tool_bash.py          ← subprocess 命令（无 PTY）
 │   │   │   ├── tool_git.py           ← ★ Git 操作代替裸 bash：status/diff/log/commit/branch
 │   │   │   ├── tool_fetch_url.py     ← ★ 网页抓取（httpx，零依赖）
@@ -111,49 +122,56 @@ flypig/
 │   │   │   ├── tool_ocr.py           ← ☆ P1 OCR 文字识别（PaddleOCR）
 │   │   │   └── tool_extract_archive.py ← 压缩解压 + Zip Slip 防护（§3.7.2）
 │   │   ├── mcp/                  ← MCP 协议工具
-│   │   │   ├── mcp_loader.py         ← MCP 加载器
+│   │   │   ├── tool_mcp_loader.py    ← MCP 加载器
 │   │   │   └── tool_mcp_manager.py   ← MCP 自助安装（用 mcp-auto-install 现成方案）
 │   │   └── utils.py              ← strip_ansi, _best_decode, _decode_clixml
 │   │
 │   ├── sandbox/                  ← Docker 沙箱
-│   │   ├── config.py             ← SandboxConfig 数据类
+│   │   ├── sandbox_config.py     ← SandboxConfig 数据类
 │   │   ├── path_validator.py     ← PathValidator（路径安全验证）
-│   │   ├── manager.py            ← SandboxManager（容器生命周期）
+│   │   ├── sandbox_manager.py    ← SandboxManager（容器生命周期）
 │   │   └── builder.py            ← Dockerfile 生成 + 镜像构建
 │   │
 │   ├── usage/
 │   │   ├── sqlite_tracker.py     ← SqliteUsageTracker（IUsageTracker 的 SQLite 实现）
 │   │   ├── pricing.py            ← PricingFetcher（价格获取 + 缓存）
-│   │   └── hooks.py              ← UsageTrackerHook（HookService 自动记录）
+│   │   └── usage_handler.py       ← ★ 用量事件处理器（订阅 event_bus，自动记录用量）
 │   │
-│   ├── policies/                 ← Casbin 初始化配置
+│   ├── search/                    ★ 代码理解服务（被工具/节点调用，AI 不直接调）
+│   │   ├── search_grep.py        ★ MVP: grep 全文搜索（实现 ISearch）
+│   │   ├── search_ast.py         ★ P1: tree-sitter AST 搜索（实现 ISearch）
+│   │   ├── ast_parser.py         ★ P0: tree-sitter AST 解析（实现 IASTParser）
+│   │   ├── lsp_diagnostics.py    ★ P0: pyright LSP 诊断（实现 ILspDiagnostics）
+│   │   ├── search_kg.py          ★ P1: 知识图谱查询（实现 IKnowledgeGraph）
+│   │   ├── search_vector.py      ★ P2: 向量语义检索（实现 IVectorStore）
+│   │   └── search_ranker.py      ★ P2: 多源排序器（实现 IRanker）
+│   │
+│   ├── policies/                 ← 权限系统
 │   │   ├── model.conf            ← Casbin 模型
 │   │   ├── policy.csv            ← Casbin 策略
-│   │   └── casbin_setup.py       ← Casbin 初始化
-│   │
-│   ├── permission_checker.py     ← 权限检查（file/term/git/test, allow/ask/deny）
-│   ├── terminal.py               ← 用户手动 PTY（精简版，无 AI 注入）
-│   ├── hooks.py                  ← 事件钩子实现
-│   └── background.py             ← 后台任务管理
+│   │   ├── casbin_setup.py       ← Casbin 初始化
+│   │   └── permission_checker.py ← 权限检查（file/term/git/test, allow/ask/deny）
+│   ├── process_manager.py        ← 后台进程管理器（tool_task / /api/agent/stop 共用）
+│   └── hooks.py                  ← 事件钩子系统（register / emit）
 │
-├── interface/                    ← 接口层（唯一 Web 入口）
-│   └── web/
-│       ├── server.py             ← app 声明 + 路由注册
-│       ├── routes/
-│       │   ├── chat.py           ← /api/chat SSE
-│       │   ├── config.py         ← /api/config/*
-│       │   ├── files.py          ← /api/files, /api/file, /api/tree
-│       │   ├── sessions.py       ← 历史会话
-│       │   ├── health.py         ← 健康检查
-│       │   ├── upload.py         ← 文件上传 + 压缩解压
-│       │   ├── rollback.py       ← Git 回滚
-│       │   ├── agent.py          ← /api/agent/status + /api/agent/stop
-│       │   ├── history.py        ← /api/history/search
-│       │   ├── usage.py          ← /api/usage/*（用量查询）
-│       │   ├── tasks.py          ← /api/tasks/*（任务看板 CRUD + 搜索）
-│       │   └── feedback.py       ← /api/feedback/suggestion（建议反馈）
-│       ├── sse_queue.py          ← SSE 队列抽象
-│       └── file_watcher.py       ← 文件变更监控
+├── backend/                      ← 后端入口（HTTP 路由 + SSE + 终端，与 frontend/ 对应）
+│   ├── server.py                 ← app 声明 + 路由注册
+│   ├── terminal.py               ← 用户手动 PTY（WebSocket，无 AI 注入）
+│   ├── routes/
+│   │   ├── chat.py               ← /api/chat SSE
+│   │   ├── config.py             ← /api/config/*
+│   │   ├── files.py              ← /api/files, /api/file, /api/tree
+│   │   ├── sessions.py           ← 历史会话
+│   │   ├── health.py             ← 健康检查
+│   │   ├── upload.py             ← 文件上传 + 压缩解压
+│   │   ├── rollback.py           ← Git 回滚
+│   │   ├── agent_routes.py       ← /api/agent/status + /api/agent/stop
+│   │   ├── history.py            ← /api/history/search
+│   │   ├── usage.py              ← /api/usage/*（用量查询）
+│   │   ├── tasks.py              ← /api/tasks/*（任务看板 CRUD + 搜索）
+│   │   └── feedback.py           ← /api/feedback/suggestion（建议反馈）
+│   ├── sse_queue.py              ← SSE 队列抽象
+│   └── file_watcher.py           ← 文件变更监控
 │
 ├── frontend/                     ← 前端源码
 │   ├── static/                   ← Vite 构建产物（自动输出，server.py 读取此目录）
@@ -198,12 +216,12 @@ flypig/
 │           │                       useAchievements, useTimeTravel
 │           └── lib/              ← xterm-setup.js, monaco-setup.js, sfc-compiler.js
 │
-├── scripts/                      ← 开发辅助脚本（跨平台）
-│   ├── setup.py                  ← 环境初始化（检测平台 + 执行安装，核心逻辑）
-│   ├── setup.bat                 ← Windows 入口：`@python scripts\setup.py`
-│   ├── setup.sh                  ← Linux/Mac 入口：`python scripts/setup.py`
+├── scripts/                      ← 运维脚本（跨平台：setup_env.bat / .sh 双入口）
+│   ├── setup_env.py              ← 环境初始化（核心逻辑：检测平台 + 安装依赖 + 配置）
+│   ├── setup_env.bat             ← Windows 入口：`python ops\setup_env.py`
+│   ├── setup_env.sh              ← Linux/Mac 入口：`python ops/setup_env.py`
 │   ├── seed_data.py              ← 测试数据填充
-│   └── migrate_db.py             ← 数据库迁移脚本
+│   └── migrate_db.py             ← 数据库迁移
 │
 ├── tests/                        ← 单元测试 + 集成测试
 │   ├── unit/
@@ -231,18 +249,4 @@ flypig/
 
 ---
 
-## 与旧版树的差异对比
 
-| 项目 | 旧树 | 新树 | 说明 |
-|------|------|------|------|
-| `di/` | 存在 | **已移除** | 合入 `core/container.py` |
-| `core/` | 不存在 | **新增** | 应用骨架：配置加载、DI 容器、Loguru、app 工厂 |
-| `domain/config/config.py` | Config 加载 + 数据类混合 | **纯数据类**（加载逻辑移入 `core/config.py`） | 分层职责清晰 |
-| `domain/policies/` | 空目录（无文件） | **已移除** | Casbin 只在 `infrastructure/policies/` |
-| 根级 `model.conf`, `policy.csv` | 存在（根级备份） | **已移除** | 只有 `infrastructure/policies/` 一份，避免不一致 |
-| `interface/web/services/` | 子目录（2 个文件） | **已打平** | 文件直接放 `interface/web/` |
-| `scripts/` | 不存在 | **新增** | 开发辅助脚本（setup/seed/migrate） |
-| `.env.example` | 不存在 | **新增** | 环境变量模板 |
-| `Makefile` | 不存在 | **新增** | 跨平台常用命令 |
-| `domain/interfaces/` | 7 个接口 | 10 个 | 新增 iusage_tracker, ilicense_service, iupdate_service |
-| `chat/` 组件 | 8 个 | **20+ 个**（分组管理） | Core 6 + Rich 3 + Preview 3 + Data 4 + Code 3 + UX 2 + Task 2 |

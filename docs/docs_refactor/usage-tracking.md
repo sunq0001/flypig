@@ -206,10 +206,10 @@ class PricingFetcher:
 
 ## 集成方式
 
-### 通过 HookService 自动记录
+### 通过 EventSubscriptions 自动记录
 
 ```python
-# infrastructure/hooks.py
+# infrastructure/usage/usage_handler.py
 class UsageTrackerHook:
     def __init__(self, tracker: IUsageTracker):
         self.tracker = tracker
@@ -298,7 +298,7 @@ cls.register("usage_tracker", usage_tracker, singleton=True)
 ## 查询 API
 
 ```python
-# 新增路由文件: flypig/interface/web/routes/usage.py
+# 新增路由文件: flypig/backend/routes/usage.py
 
 # GET /api/usage/turn/<turn_id>       — 本轮用量明细
 # GET /api/usage/session/<session_id> — 当前会话汇总
@@ -413,7 +413,7 @@ cls.register("usage_tracker", usage_tracker, singleton=True)
 ### 数据流
 
 ```
-HookService 事件流                          SSE 响应
+EventSubscriptions 事件流                          SSE 响应
 ━━━━━━━━━━━━━━━━━━━━━━                      ━━━━━━━━━━━━━━━━
 chat:before → 初始化 TurnUsage              response_end
 tool:before → 创建 CallUsage              → { usage: {...} }

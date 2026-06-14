@@ -2,6 +2,10 @@
 
 > 模式不是三张图，是同一张 LangGraph 的三种 **context 约束**。
 > 用户选择或 LLM 建议进入某个模式后，系统施加对应的约束（工具列表/温度/身份），LLM 在约束内自行决定调用哪个子链。
+>
+> **模式不影响图结构**：`langgraph-graph.md` 中的 8 条路径（A-H）在所有模式下一致。
+> 模式只影响 `chat_node` 中传给 LLM 的工具列表——Explore 看不到 write_file，自然走不出路径 B。
+> 路由拓扑、节点定义、pipeline 流程完全不变。
 
 ---
 
@@ -86,8 +90,10 @@
 
 ## 实现方式（伪代码）
 
+### 1. 模式上下文
+
 ```python
-# context.py — 模式定义
+# domain/agent/context.py — 模式定义
 MODE_CONTEXTS = {
     "explore": ModeContext(
         tools=[ask_choice, search, read_file],
@@ -108,24 +114,102 @@ MODE_CONTEXTS = {
         force_ask_choice=False,
     ),
 }
+```
 
-# chat_node — LLM 调用
+### 2. 主节点 `chat_node`
+
+```python
+# domain/agent/nodes.py — chat_node
 def chat_node(state: AgentState) -> dict:
-    ctx = MODE_CONTEXTS[state["mode"]]   # 当前模式
+    ctx = MODE_CONTEXTS[state["mode"]]   # 当前模式约束
     response = llm.invoke(
         state["messages"],
         tools=ctx.tools,                 # 只传当前模式允许的工具
         temperature=ctx.temperature,
     )
-    return {"messages": [response]}
 
-# router — 根据 LLM 调用的工具决定下一步
+    # ★ 如果 LLM 调了 write/edit 工具，注入 intent 和 changes 参数
+    # 这些数据会用于前端 ChangeSummary 卡片渲染
+    for tool_call in response.get("tool_calls", []):
+        if tool_call["name"] in ("write_file", "edit_file"):
+            enrich_change_intent(tool_call)  # 自动补全 intent + changes
+
+    return {"messages": [response]}
+```
+
+### 3. 条件路由 `router`
+
+对应 `langgraph-graph.md` 中的 8 条路径：
+
+```python
+# domain/agent/router.py — 条件路由
 def router(state: AgentState) -> str:
     last = state["messages"][-1]
+
+    # [路径 H] 用户手动停止
+    if state.get("user_stop_requested"):
+        return "end"
+
+    # [路径 F] 工具执行中断
+    if state.get("execution_interrupted"):
+        return "chat"
+
+    # [路径 E] 工具执行错误
+    if state.get("last_tool_error"):
+        return "chat"           # 错误信息已留在 state 中，AI 自行处理
+
     if last.get("tool_calls"):
         name = last["tool_calls"][0]["name"]
+
+        # [路径 C] 出选择题
         if name == "ask_choice":
             return "ask_choice"
-        return "execute"  # bash/write_file 等
-    return "chat"         # 无工具调用，继续对话
+
+        # [路径 D] 高敏感操作审批
+        if name in NEED_APPROVAL_TOOLS:
+            return "approval"
+
+        # [路径 B] 修改代码
+        if name in CODE_MODIFY_TOOLS:
+            # ★ 返回 change_plan 节点，先输出计划 + ChangeSummary 卡片
+            return "change_plan"
+
+        # [路径 A] 不可修改工具（search/read），走 execute
+        return "execute"
+
+    # [路径 A] 无工具调用 → 直接回答
+    return "chat"
+
+# [路径 G] 流水线自动路由（固定边，不走 router）
+# execute → lint → review → suggestion 是 pipeline 内部的确定链路
+```
+
+### 4. `summarize` 节点（内置于工具）
+
+不需要独立节点。信息在 AI 调 write/edit 工具时自带 `intent` 和 `changes` 参数：
+
+```python
+# tools.py — write_file 工具
+@tool(name="write_file",
+      intent="必填：本次修改的意图说明",
+      changes="必填：每个改动的行号和原因")
+def write_file(path: str, content: str, intent: str = "",
+               changes: list[dict] = None) -> dict:
+    """写入文件，自带变更解释"""
+    # 执行写入
+    result = _do_write(path, content)
+    # 返回结构包含 change_summary
+    return {
+        "success": True,
+        "diff": result["diff"],
+        "change_summary": {
+            "intent": intent,
+            "changes": changes or [],
+            "lines_added": result["added"],
+            "lines_deleted": result["deleted"],
+        }
+    }
+
+# 前端 EventRouter 收集所有 tool 返回的 change_summary
+# → 聚合渲染 ChangeSummary 卡片
 ```

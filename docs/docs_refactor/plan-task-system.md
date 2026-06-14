@@ -211,7 +211,7 @@ class IConversationStore(ABC):
 ### SqliteConversationStore 实现要点
 
 ```python
-# application/services/conversation_store.py
+# orchestration/conversation_store.py
 # 在 _init_db() 中新增建表
 
 class SqliteConversationStore(IConversationStore):
@@ -518,9 +518,9 @@ AI 在对话中自然输出结构化列表时，系统可自动识别并创建�
 |------|------|------|
 | `domain/models/task.py` | 新增 | TaskItem / TaskStatusChange / TaskStats 数据类 |
 | `domain/interfaces/iconversation_store.py` | 修改 | 新增 7 个 task CRUD 抽象方法 |
-| `application/services/conversation_store.py` | 修改 | SqliteConversationStore 实现 task 方法 |
+| `orchestration/conversation_store.py` | 修改 | SqliteConversationStore 实现 task 方法 |
 | `infrastructure/tools/system/tool_task_manager.py` | 新增 | tool_add_task / tool_update_task 工具 |
-| `interface/web/routes/tasks.py` | 新增 | 7 个 REST 端点 |
+| `backend/routes/tasks.py` | 新增 | 7 个 REST 端点 |
 | `frontend/static_vite/src/components/chat/TaskListCard.vue` | 新增 | 对话流中的任务状态卡片 |
 | `frontend/static_vite/src/components/sidebar/TaskBoard.vue` | 新增 | 侧边栏任务看板 |
 | `frontend/static_vite/src/components/common/TaskHistoryDialog.vue` | 新增 | 任务状态变更历史弹窗 |

@@ -33,7 +33,7 @@
 │  └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘   │
 │                                                                      │ SSE (chat) + WebSocket (pty)                   │
 ├──────────────────────────────────────────────────────────────────────┼─────────────────────────────────────────────────┤
-│                                   INTERFACE LAYER (Quart — 唯一入口)                                                   │
+│                                   BACKEND LAYER (HTTP + SSE + PTY)                                                   │
 │                                                                                                                       │
 │  ┌─────────────┐ ┌──────────────┐ ┌──────────────┐ ┌────────────┐ ┌─────────────────┐                                │
 │  │  /api/chat   │ │ /api/config  │ │  /api/files   │ │  /ws/pty   │ │  /api/sessions   │                                │
@@ -54,7 +54,7 @@
 │       │                                                                                                               │
 ├───────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │       ▼                                                                                                               │
-│                                      APPLICATION LAYER (业务编排)                                                       │
+│                                      ORCHESTRATION LAYER (服务编排)                                                       │
 │                                                                                                                       │
 │  ┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐   │
 │  │  GraphFactory                                                                                                   │   │
@@ -65,7 +65,7 @@
 │  └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘   │
 │                                                                                                                       │
 │  ┌──────────────────────────────────────────────┐ ┌──────────────────────────────┐ ┌────────────────────────────┐    │
-│  │  SuggestionEngine                            │ │  HookService                 │ │  ConfigSvc                 │    │
+│  │  SuggestionEngine                            │ │  EventSubscriptions          │ │  ConfigSvc                 │    │
 │  │  generate_suggestion(score) → SuggestionCard  │ │  register / emit             │ │  SessionSvc                │    │
 │  │                                              │ │  (通用事件钩子)               │ │  PolicySvc                 │    │
 │  └──────────────────────────────────────────────┘ └──────────────────────────────┘ └────────────────────────────┘    │
@@ -94,12 +94,12 @@
 │  │    change_score, adversarial_suggestion, test_results                                                         │   │
 │  └────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘   │
 │  ┌───────────────────────┐ ┌──────────────────────────────┐ ┌──────────────────────────────┐                        │
-│  │  Interfaces           │ │  Models                      │ │  PromptManager               │                        │
+│  │  Interfaces           │ │  Models                      │ │  MultiRoleManager               │                        │
 │  │  IModel(context驱动)   │ │  Message, ToolCall          │ │  developer(核心)             │                        │
 │  │  IToolExecutor        │ │  Session, ModeConfig         │ │  reviewer(对抗)              │                        │
 │  │  IConversationStore   │ │  ChoiceCard                  │ │  tester                      │                        │
 │  │  IContextPipeline     │ │  ChangeScore                 │ │  architect                   │                        │
-│  │  IKnowledgeStore      │ │  ExecutionMode               │ │  documenter                  │                        │
+│  │  IKnowledgeGraph      │ │  ExecutionMode               │ │  documenter                  │                        │
 │  │  IUsageTracker        │ │  ConversationState           │ │                              │                        │
 │  │  IAgent / IHook       │ │                              │ │                              │                        │
 │  │  + HookContext       │ │                              │ │                              │                        │
@@ -120,7 +120,7 @@
 │  │                          │ │  mcp    : MCP 加载器+管理                    │ │ manager    │ │                          │  │
 │  │                          │ │  PermissionChecker (allow/ask/deny)         │ │ builder    │ │                          │  │
 │  ├──────────────────────────┤ ├──────────────────────────────────────────────┤ ├────────────┤ ├──────────────────────────┤  │
-│  │  Usage                    │ │ Terminal (PTY)                               │ │ Background │ │ Policies + Hooks         │  │
+│  │  Usage                    │ │                                          │ │ ProcessMgr │ │ Policies + Hooks         │  │
 │  │  SqliteUsageTracker       │ │ 用户手动 xterm.js 终端                        │ │ 后台任务    │ │ Casbin + 事件钩子实现     │  │
 │  │  ☆ LicenseService(NoOp)  │ │                                              │ │            │ │                          │  │
 │  │  ☆ UpdateService(NoOp)   │ │                                              │ │            │ │                          │  │
@@ -134,8 +134,8 @@
 ├─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │                                             DI CONTAINER (依赖注入容器)                                                │
 │  Container.configure() → 装配:                                                                                      │
-│    IModel / IToolExecutor / IConversationStore / IContextPipeline / IUsageTracker / PolicyService / PromptManager    │
-│    IKnowledgeStore(NoOp) / GraphFactory / SuggestionEngine / HookService                                             │
+│    IModel / IToolExecutor / IConversationStore / IContextPipeline / IUsageTracker / PolicyService / MultiRoleManager    │
+│    IKnowledgeGraph(NoOp) / GraphFactory / SuggestionEngine / EventSubscriptions                                             │
 │  create_agent() → 返回 IAgent (一张图统一 Graph，context 约束内 LLM 自行决定)                                            │
 └─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -153,34 +153,34 @@ flowchart TD
         P4["🖥️ 终端面板<br/>XtermViewer / OutputViewer / TerminalTab"]
         P5["📁 侧边栏<br/>FileTree / Dashboard / TaskBoard"]
     end
-    PRESENTATION -->|"SSE<br/>+<br/>WS"| INTERFACE
+    PRESENTATION -->|"SSE<br/>+<br/>WS"| BACKEND
 
-    subgraph INTERFACE["🔌 接口层"]
+    subgraph BACKEND["🔌 后端层"]
         direction TB
         I1["/api/chat (SSE流式)<br/>/api/config · /api/files · /api/tree"]
         I2["/ws/pty (手动终端)<br/>/api/sessions · /api/rollback"]
         I3["/api/health · /api/upload<br/>/api/history/search · /api/agent<br/>/api/feedback/suggestion"]
         I4["/api/usage/*<br/>(用量查询: turn/session/range/cache-stats)"]
     end
-    INTERFACE --> APPLICATION
+    BACKEND --> ORCHESTRATION
 
-    subgraph APPLICATION["⚙️ 应用层"]
+    subgraph ORCHESTRATION["⚙️ 编排层"]
         direction TB
-        A1["GraphFactory（图构建）<br/>SuggestionEngine（对抗建议）<br/>HookService（事件钩子）"]
+        A1["GraphFactory（图构建）<br/>SuggestionEngine（对抗建议）<br/>EventSubscriptions（事件订阅）"]
         A2["ConfigSvc · SessionSvc<br/>PolicySvc（Casbin）"]
         A3["ContextPipeline（预 LLM 压缩）<br/>GitCheckpointManager · SummaryGenerator"]
         A4["ChatService（中介者编排）<br/>UsageTrackerService（用量追踪）<br/>@hook 自动记录 turn/call"]
         A5["SSE 事件（18 种）:<br/>token/reasoning/choice/suggestion<br/>code_exec/inline_preview/chart<br/>data_table/command/file_preview<br/>+ response_end 含用量摘要"]
     end
-    APPLICATION --> DOMAIN
+    ORCHESTRATION --> DOMAIN
 
     subgraph DOMAIN["📦 领域层"]
         direction TB
         D1["LangGraph 状态机<br/>state.py / nodes.py / router.py<br/>context.py / ToolNode / Checkpointer"]
         D2["AgentState<br/>messages / turn_id / mode / persona<br/>pending_approval / change_review / ..."]
-        D3["Interfaces<br/>IModel / IToolExecutor<br/>IConversationStore / IContextPipeline<br/>IKnowledgeStore / IUsageTracker<br/>IAgent / IHook"]
+        D3["Interfaces<br/>IModel / IToolExecutor<br/>IConversationStore / IContextPipeline<br/>IKnowledgeGraph / IUsageTracker<br/>IAgent / IHook"]
         D4["Models<br/>Message / ToolCall / Session / ModeConfig<br/>ChoiceCard / ChangeScore / ExecutionMode<br/>ConversationState / exceptions.py"]
-        D5["PromptManager<br/>developer / reviewer / tester<br/>architect / documenter"]
+        D5["MultiRoleManager<br/>developer / reviewer / tester<br/>architect / documenter"]
         D6["Casbin 权限<br/>model.conf / policy.csv<br/>allow / ask / deny"]
     end
     DOMAIN --> INFRASTRUCTURE
@@ -188,8 +188,8 @@ flowchart TD
     subgraph INFRASTRUCTURE["🔧 基础设施层"]
         direction TB
         F1["Model Adapter<br/>openai / anthropic / local"]
-        F2["Tools（4组）<br/>📝 edit/ 文件编辑+审查<br/>🔍 search/ 搜索+选择题<br/>⚡ system/ bash+任务+解压<br/>🔌 mcp/ 加载+管理"]
-        F3["Sandbox（Docker）<br/>ConversationStore（SQLite）<br/>Usage（SqliteUsageT+PricingFetcher）<br/>PermissionChecker<br/>Terminal（PTY）/ Background"]
+        F2["Tools（6组）<br/>📄 file/ 文件CRUD<br/>🔎 review/ 审查+lint<br/>🔍 search/ 搜索+懒加载<br/>⚡ system/ bash+任务<br/>🔌 mcp/ 加载+管理<br/>💬 interact/ 选择题"]
+        F3["Sandbox（Docker）<br/>ConversationStore（SQLite）<br/>Usage（SqliteUsageT+PricingFetcher）<br/>PermissionChecker<br/>ProcessManager / Hooks"]
     end
 
     subgraph DI["💉 DI 容器"]
@@ -199,13 +199,13 @@ flowchart TD
         DX3["create_agent() → IAgent"]
     end
 
-    DI -.->|注入应用层| APPLICATION
+    DI -.->|注入编排层| ORCHESTRATION
     DI -.->|注入领域层| DOMAIN
     DI -.->|注入基础设施| INFRASTRUCTURE
 
     style PRESENTATION fill:#BBDEFB,stroke:#1565C0,stroke-width:3px,fontSize:16px
     style INTERFACE fill:#FFE0B2,stroke:#E65100,stroke-width:3px,fontSize:16px
-    style APPLICATION fill:#C8E6C9,stroke:#2E7D32,stroke-width:3px,fontSize:16px
+    style ORCHESTRATION fill:#C8E6C9,stroke:#2E7D32,stroke-width:3px,fontSize:16px
     style DOMAIN fill:#E1BEE7,stroke:#6A1B9A,stroke-width:3px,fontSize:16px
     style INFRASTRUCTURE fill:#FFCDD2,stroke:#C62828,stroke-width:3px,fontSize:16px
     style DI fill:#FFF9C4,stroke:#F57F17,stroke-width:3px,fontSize:16px

@@ -5,7 +5,7 @@
 
 ## 核心原则
 
-- **单向依赖**：Interface → Application → Domain → Infrastructure
+- **单向依赖**：Backend → Orchestration → Domain → Infrastructure
 - **接口隔离**：领域层定义接口，基础设施层实现
 - **DI 单点装配**：所有依赖在 Container 类里装配
 - **每个文件一个职责**：不超过 200 行，一个类不超过 100 行
@@ -88,7 +88,7 @@ class ToolBash:
 | 查看对话存储、上下文压缩、LangMem 记忆 | `extensions.md` |
 | 查看用量追踪（Token/Cost/缓存统计） | `usage-tracking.md` |
 | 查看迁移路线和 MVP 迭代 | `migration-roadmap.md` |
-| 查看数据流向 | `data-flow.md` |
+| 查看代码理解服务（搜索/知识图谱/向量库） | `folder-tree.md` → `infrastructure/search/` |
 | 查看崩溃恢复/日志/数据迁移 | `resilience.md` |
 | 查看许可激活/自动更新（P2 预留） | `resilience.md` → P1/P2 预留接口 |
 | 查看导出/模型 fallback（P1 预留） | `resilience.md` → P1/P2 预留接口 |
@@ -100,27 +100,27 @@ class ToolBash:
 | 想改什么 | 先看哪个文件 |
 |---------|------------|
 | AI 对话流程 | `langgraph-graph.md` → `domain/agent/nodes.py` |
-| 图构建/路由注册 | `langgraph-graph.md` → `application/services/graph_factory.py` |
-| 换 AI 模型 | `backend-modules.md` → `infrastructure/model/` |
-| 加工具 | `subprocess-and-tools.md` → `infrastructure/tools/`（按 edit/search/system/mcp 分组） |
-| 改 SSE 事件 | `api-reference.md` → `interface/web/routes/chat.py` |
+| 图构建/路由注册 | `langgraph-graph.md` → `orchestration/graph_factory.py` |
+| 换 AI 模型 | `backend-modules.md` → `infrastructure/llm/` |
+| 加工具 | `subprocess-and-tools.md` → `infrastructure/tools/`（按 file/search/system/mcp 分组） |
+| 改 SSE 事件 | `api-reference.md` → `backend/routes/chat.py` |
 | 改前端消息渲染 | `frontend-arch.md` → `static_vite/src/components/chat/` |
-| 改变更审查逻辑 | `adversarial-system.md` → `infrastructure/tools/edit/tool_change_review.py` |
-| 改代码规范检查 | `adversarial-system.md` → `infrastructure/tools/edit/tool_lint.py` + `pyproject.toml` |
+| 改变更审查逻辑 | `adversarial-system.md` → `infrastructure/tools/review/tool_change_review.py` |
+| 改代码规范检查 | `adversarial-system.md` → `infrastructure/tools/review/tool_lint.py` + `pyproject.toml` |
 | 改变更评分逻辑 | `adversarial-system.md` → `domain/models/change_score.py` |
 | 改模式配置(温度/工具) | `mode-matrix.md` → `domain/models/mode.py` |
 | 改权限规则 | `backend-modules.md` → `infrastructure/policies/` + Casbin 策略文件 |
-| 改会话持久化 | `extensions.md` → `application/services/conversation_store.py` |
+| 改会话持久化 | `extensions.md` → `orchestration/conversation_store.py` |
 | 改用量追踪 | `usage-tracking.md` → `infrastructure/usage/` + `SqliteUsageTracker` |
 | 断点恢复（关掉再开继续） | `api-reference.md` → `GET /api/sessions/<id>/restore` + `SessionService.restore()` |
-| 改终端管理 | `subprocess-and-tools.md` → `infrastructure/terminal.py` |
+| 改终端管理 | `subprocess-and-tools.md` → `backend/terminal.py` |
 | 工具安全限制（路径白名单） | `subprocess-and-tools.md` → `infrastructure/tools/tool_bash.py` |
 | 敏感信息检测 | `backend-modules.md` → `domain/agent/nodes.py`（chat_node 输出前） |
 | 死循环检测 + 节点异常保护 | `langgraph-graph.md` → `domain/agent/nodes.py + router.py` |
 | DI 容器装配 | `backend-modules.md` → `core/container.py` |
 | LangGraph 节点逻辑 | `langgraph-graph.md` → `domain/agent/state.py + nodes.py + router.py + context.py` |
-| 对抗建议生成 | `backend-modules.md` → `application/services/suggestion_engine.py` |
-| 钩子事件注册 | `backend-modules.md` → `application/services/hook_service.py` |
+| 对抗建议生成 | `backend-modules.md` → `orchestration/suggestion_engine.py` |
+| 钩子事件注册 | `backend-modules.md` → `orchestration/event_subscriptions.py` |
 | 配置即代码 | `backend-modules.md` → YAML + `@dataclass ModelConfig` |
 | 部署 / 运维 / CI/CD | `operations.md` → Docker Compose + GitHub Actions + 环境变量 |
 | 数据类型规范 | `backend-modules.md` → `@dataclass` 替代 `dict` |

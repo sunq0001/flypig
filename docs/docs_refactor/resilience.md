@@ -14,7 +14,7 @@
 将 TurnCheckpointHook 从"可选"改为**默认启用**：
 
 ```python
-# application/services/chat_service.py
+# orchestration/chat_service.py
 # ChatService.__init__() 中注册
 
 @hook("tool:after", priority=50)
@@ -422,7 +422,7 @@ class NoOpUpdateService(IUpdateService):
 ### ExportService（P1 — 导入导出）
 
 ```python
-# application/services/export_service.py
+# orchestration/export_service.py
 class ExportService:
     """导入/导出服务（P1 实现具体逻辑，P0 只定义端点）"""
 
@@ -446,7 +446,7 @@ class ExportService:
 ### MultiModel Fallback（P1 — 多模型自动切换）
 
 ```python
-# application/services/model_fallback_service.py
+# orchestration/model_fallback_service.py
 class ModelFallbackService:
     """
     多模型自动 fallback 策略。
@@ -490,10 +490,10 @@ P2:    vue-i18n + locale JSON 文件，按 `navigator.language` 自动切换
 | `docs/docs_refactor/resilience.md` | **新增** | 本文 |
 | `domain/interfaces/ilicense_service.py` | 新增 | 许可激活接口 + NoOp |
 | `domain/interfaces/iupdate_service.py` | 新增 | 自动更新接口 + NoOp |
-| `application/services/export_service.py` | 新增 | 导出服务（P1 实现） |
-| `application/services/model_fallback_service.py` | 新增 | 模型 fallback 服务 |
-| `application/services/chat_service.py` | 修改 | 默认注册 TurnCheckpointHook |
-| `application/services/conversation_store.py` | 修改 | 添加 _SCHEMA_VERSION 迁移+ partial checkpoint |
+| `orchestration/export_service.py` | 新增 | 导出服务（P1 实现） |
+| `orchestration/model_fallback_service.py` | 新增 | 模型 fallback 服务 |
+| `orchestration/chat_service.py` | 修改 | 默认注册 TurnCheckpointHook |
+| `orchestration/conversation_store.py` | 修改 | 添加 _SCHEMA_VERSION 迁移+ partial checkpoint |
 | `infrastructure/usage/sqlite_tracker.py` | 修改 | 添加 _SCHEMA_VERSION 迁移 |
 | `__main__.py` | 修改 | 添加 --debug 参数 + init_logging() + 恢复检测 |
 | `composables/useChat.js` | 修改 | 添加 localStorage 草稿恢复 |

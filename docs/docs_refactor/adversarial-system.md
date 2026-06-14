@@ -297,18 +297,18 @@ Red（Reviewer/Tester/Architect）: 负责挑错、测试、重构建议
 
 ## 测试集成
 
-开发完成 → Agent 进入 REVIEWING 状态 → PromptManager 切换 tester 身份 → 运行测试（tool_bash("pytest")）→ 全部通过则继续，有失败则修复后重新审查。
+开发完成 → Agent 进入 REVIEWING 状态 → MultiRoleManager 切换 tester 身份 → 运行测试（tool_bash("pytest")）→ 全部通过则继续，有失败则修复后重新审查。
 
-## 与 PromptManager 的联动
+## 与 MultiRoleManager 的联动
 
 对抗不是让模型"自己打自己"，而是切换 system prompt 改变视角：
 
 ```
 用户选了"逐文件对抗审查"后：
-  1. PromptManager 将 persona 从 "developer" 切换到 "reviewer"
+  1. MultiRoleManager 将 persona 从 "developer" 切换到 "reviewer"
   2. AI 以 reviewer(对抗) 身份审阅
   3. 审查结果输出到对话
-  4. 完成后 PromptManager 切回 "developer"
+  4. 完成后 MultiRoleManager 切回 "developer"
   5. 回到对抗建议卡片 → 用户决定是否继续下一项
 ```
 
@@ -602,7 +602,7 @@ SSE 事件中增加 `suggestion_id` 字段：
 ### 2. 反馈 API（走 ConversationStore）
 
 ```python
-# interface/web/routes/feedback.py
+# backend/routes/feedback.py
 from di.container import Container
 
 @app.post("/api/feedback/suggestion")

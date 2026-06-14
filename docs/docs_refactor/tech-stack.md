@@ -45,6 +45,13 @@
 | | 代码规范检查 | **Ruff CLI** | 市面方案 | subprocess 调用 ruff --fix，自动修复 |
 | | 文件上传 | **Element Plus Upload** | 市面方案 | 前端拖拽，后端接收解压 |
 | | 文件拖拽缩略图 | **vue-draggable-next + Element Plus Upload** | 市面方案 | 拖入输入框，自动预览缩略图 |
+| | 代码检索（MVP） | **grep + Path.rglob** | 标准库 | Python 内置，零依赖 |
+| | 结构化代码搜索 | **ast-grep** | 市面方案 | AST 级别搜索，支持跨文件模式匹配，替代 bare grep |
+| | AST 解析（符号定位） | **tree-sitter** | 市面方案 | 即时解析→symbol 转行号，read_file/patch_file 内部使用 |
+| | LSP 诊断（改后检查） | **pyright **(Python) **/ typescript-language-server (TS)** | 市面方案 | CLI 模式，改完代码后调一次诊断错误 |
+| | 知识图谱（P1） | **自研 ~300 行**（基于 AST 关系抽取） | 业务定制 | 无现成代码知识图谱开源方案，需自研函数/类/模块关系图 |
+| | 向量检索（P2） | **sentence-transformers + SQLite** | 市面方案 | 轻量嵌入，无需单独部署向量服务。备选：ChromaDB |
+| | 多源排序（P2） | **自研 ~50 行 + FlashRank** | 混合 | 知识图谱/向量/grep 结果融合排序；FlashRank 作为可选的 LLM-free reranker |
 | | 图片预览 | **medium-zoom** | 市面方案 | 点击对话中缩略图弹出大图查看 |
 | | Excel 预览 | **SheetJS (xlsx)** | 市面方案 | 浏览器内读取 workbook，按 AI 标注行列渲染 |
 | | PDF 预览 | **PDF.js** | 市面方案 | Mozilla 出品，渲染指定页码为 canvas |

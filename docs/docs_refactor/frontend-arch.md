@@ -118,7 +118,8 @@ const COMPONENT_MAP = {
   chart:            ChartView,
   data_table:       DataTable,
   command:          CommandCard,
-  change_review:    DiffViewer,
+  change_summary:   ChangeSummary,   // ★ 需求级变更叙事（默认）
+  change_review:    DiffViewer,      // 代码级 diff（辅助参考，点击展开）
   file_preview:     FilePreview,
   dashboard:        DashboardWidget,
   memory_hint:      MemoryBubble,

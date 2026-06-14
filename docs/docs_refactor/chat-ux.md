@@ -373,20 +373,164 @@ class AchievementEngine:
 
 **设计规格**：参见 `frontend-arch.md` → LivePreview 组件（技术实现）。
 
-### 2. DiffViewer.vue — 差异对比
+### 2. ChangeSummary.vue — 变更叙事折叠卡片
 
-Agent 改完代码后在对话中显示改动对比：
+AI 改完代码后，每个文件一个折叠卡片展示。**默认折叠，只扫一眼就知道改了哪几个文件，想看 diff 自己展开。**
+
+#### 数据结构（后端返回）
+
+工具（如 `tool_file.write`）调用时 AI 自带意图说明，执行后返回：
+
+```json
+{
+  "type": "change_summary",
+  "intent": "优化登录页查询性能",
+  "files": [
+    {
+      "path": "db.py",
+      "intent": "给数据库查询加缓存装饰器",
+      "impact": "查询响应提升约 5 倍",
+      "lines_added": 5,
+      "lines_deleted": 1,
+      "diffs": [
+        {"line": 12, "type": "modify",
+         "old": "@cache(ttl=300)",
+         "new": "@cache(ttl=600)",
+         "note": "缓存时间从 5 分钟改为 10 分钟"},
+        {"line": 3, "type": "add",
+         "new": "from cache import redis_cache",
+         "note": "新增缓存模块导入"}
+      ]
+    },
+    {
+      "path": "login.vue",
+      "intent": "表单校验从提交时改为输入时触发",
+      "impact": "减少提交卡顿感",
+      "lines_added": 8,
+      "lines_deleted": 0,
+      "diffs": [
+        {"line": 23, "type": "add",
+         "new": "watch(form, () => validateField())",
+         "note": "输入时实时校验"},
+        {"line": 35, "type": "add",
+         "new": "onSubmit(() => submitForm())",
+         "note": "提交时只提交不校验"},
+        {"line": 30, "type": "delete",
+         "old": "onSubmit(() => validateAll())",
+         "note": "移到输入时触发"}
+      ]
+    }
+  ],
+  "regressions": []
+}
+```
+
+#### 前端渲染
 
 ```
-┌─ 变更: pe_data_service.py ─────────────────────┐
-│  + 新逻辑 (line 120)                             │
-│  - 旧逻辑 (line 115)                             │
-│                                                  │
-│  [接受] [拒绝] [修改方案]                        │
-└──────────────────────────────────────────────────┘
+┌─ 📋 变更总结 ─────────────────────────────────────────┐
+│  📌 优化登录页查询性能                                  │
+│                                                         │
+│  ▶ 📄 db.py · 加缓存装饰器 · +5/-1 · 查询快 5 倍     │
+│                                                         │
+│  ▼ 📄 login.vue · 表单校验提前 · +8/-0                  │  ← 用户展开了这个
+│  ┃ 改动意图: 把表单校验从"提交时"改为"输入时实时触发"，   │
+│  ┃ 减少用户点击提交后的等待感                             │
+│  ┃                                                      │
+│  ┃ ┌─ 关键改动 ───────────────────────────────┐        │
+│  ┃ │ L23: +watch(form, () => validateField())   │        │
+│  ┃ │      输入时实时校验字段                       │        │
+│  ┃ │ L35: +onSubmit(() => submitForm())         │        │
+│  ┃ │      提交时只提交，不再调校验                  │        │
+│  ┃ │ L30: -onSubmit(() => validateAll())        │        │
+│  ┃ │      原来的提交时校验被移除了                  │        │
+│  ┃ └────────────────────────────────────────────┘        │
+│  ┃ [📂 在编辑器中打开这个文件]                             │
+│  ┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━│
+│                                                         │
+│  ▶ 📄 config.py · 加缓存配置 · +3/-0                    │
+│                                                         │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │ 对哪个文件的改动有问题？直接打字说，我调整方案    │   │
+│  └──────────────────────────────────────────────────┘   │
+│                                                         │
+│  [全部接受 👍] [调整方案 🔄]                            │
+└─────────────────────────────────────────────────────────┘
 ```
 
-**数据来源**: SSE `change_review` 事件或 `tool_write_file` 返回的 diff。
+#### 交互行为
+
+| 状态 | 用户操作 | 结果 |
+|------|---------|------|
+| **折叠** | ▶ 点击 | 展开，显示 intent + 关键改动列表 + 行内注释 |
+| **展开** | ▼ 点击 | 折叠，只留文件名 + 意图 + 统计 |
+| **展开** | 点击 [📂 在编辑器中打开] | Monaco Editor 跳转到该文件 |
+| **任一状态** | 点 [全部接受] | 本轮所有改动确认，写入 change_history |
+| **任一状态** | 打字说"db.py 的改动说详细点" | AI 单独展开 db.py 的 diff 上下文 |
+| **任一状态** | 打字说"缓存可以，校验不要" | AI 重新执行，只改 db.py 不改 login.vue |
+
+#### Vue 组件骨架
+
+```vue
+<!-- components/chat/ChangeSummary.vue -->
+<template>
+  <div class="change-summary">
+    <div class="summary-header">📋 {{ data.intent }}</div>
+    
+    <FileCard
+      v-for="file in data.files"
+      :key="file.path"
+      :file="file"
+      :default-expanded="false"
+      @open-in-editor="openInEditor(file.path)"
+    />
+    
+    <div class="summary-footer">
+      <el-button type="primary" @click="acceptAll">全部接受 👍</el-button>
+      <el-button @click="requestAdjust">调整方案 🔄</el-button>
+    </div>
+  </div>
+</template>
+
+<!-- FileCard.vue — 单文件折叠卡片 -->
+<template>
+  <div class="file-card" :class="{ expanded }">
+    <div class="file-header" @click="expanded = !expanded">
+      <span class="toggle">{{ expanded ? '▼' : '▶' }}</span>
+      📄 {{ file.path }}
+      <span class="intent-tag">{{ file.intent }}</span>
+      <span class="stat">+{{ file.lines_added }}/-{{ file.lines_deleted }}</span>
+      <span class="impact">{{ file.impact }}</span>
+    </div>
+
+    <Transition name="fade">
+      <div v-if="expanded" class="file-body">
+        <p class="intent-desc">{{ file.intent_desc }}</p>
+        <div class="diff-block">
+          <div v-for="d in file.diffs" :key="d.line" class="diff-line"
+               :class="d.type">
+            <span class="lineno">L{{ d.line }}</span>
+            <span class="op">{{ d.type === 'add' ? '+' : d.type === 'delete' ? '-' : '~' }}</span>
+            <code class="code">{{ d.type === 'delete' ? d.old : d.new }}</code>
+            <span class="note">{{ d.note }}</span>
+          </div>
+        </div>
+        <el-button size="small" @click="$emit('open-in-editor')">
+          📂 在编辑器中打开
+        </el-button>
+      </div>
+    </Transition>
+  </div>
+</template>
+```
+
+#### 设计原则
+
+1. **默认折叠** — 用户第一眼看到的是文件清单和意图，不是代码
+2. **展开→关键改动** — 展开后看到 AI 自己的行内注释，不是 raw diff
+3. **想看完整 diff** — 点 [在编辑器中打开] 在 Monaco 里看
+4. **拒绝整个文件** — 说"login.vue 的改动不需要"，AI 只改 db.py
+5. **零额外延迟** — 所有信息在工具调用时已带上，不需要单独 summarize 节点
 
 ### 3. DataTable.vue — 数据表格
 
@@ -599,7 +743,8 @@ Mermaid 库只在首次遇到 mermaid 代码块时才动态 import，不增加�
 | `tool_call` | ToolCallCard | 胶囊进度条 + 取消按钮 |
 | `tool_result` | ToolCallCard | 结果显示 |
 | `choice` | ChoiceCard | 单选/多选 → 填充输入框 |
-| `change_review` | DiffViewer | diff 展示 + 接受/拒绝按钮 |
+| `change_summary` | ChangeSummary | ★ 需求级变更叙事（替换 raw diff） |
+| `change_review` | DiffViewer | 代码级 diff（点击展开，辅助参考） |
 | `change_plan` | ChangePlanCard | 逐项批准 |
 | `suggestion` | SuggestionCard | 评分 + 应用/忽略 |
 | `inline_preview` | InlinePreview | iframe 渲染 HTML |

@@ -323,6 +323,115 @@ class CompositePipeline(IContextPipeline):
 | `FoldOldTurnsLayer` | ~30 行 | 最早几轮折叠成摘要，保留最近 N 轮完整 | 第二层 |
 | `TrimMessagesLayer` | 1 行 | 包装 LangGraph 的 `trim_messages` 做保底 | 第三层 |
 
+### Token 优化扩展点
+
+#### 动态 token 预算
+
+当前 `budget=100_000` 是硬编码值。改为根据模型上下文窗口动态调整：
+
+```python
+MODEL_TOKEN_BUDGETS = {
+    "deepseek-v3":  80_000,   # 留 30% 给输出
+    "gpt-4o":      100_000,
+    "claude-3.5":  150_000,
+    "local":        32_000,
+}
+
+def get_budget(model: str) -> int:
+    return int(MODEL_TOKEN_BUDGETS.get(model, 100_000) * 0.7)
+```
+
+#### AI 输出 token 预算
+
+`chat_node` 中限制单次回复长度：
+
+```python
+# chat_node
+response = llm.invoke(
+    messages,
+    max_tokens=OUTPUT_BUDGETS.get(state["mode"], 4096),
+    # Explore: 2048, Plan: 4096, Execute: 8192
+)
+```
+
+#### 语义级工具结果摘要（P2 扩展）
+
+当前 `TruncateResultsLayer` 做头尾截断。P2 时可用 LLM 提取关键信息：
+
+```python
+class AiSummaryLayer(ICompressLayer):
+    """用 LLM 总结工具结果，替代机械截断"""
+    def compress(self, messages, budget):
+        for msg in messages:
+            if msg["role"] == "tool" and len(msg["content"]) > 2000:
+                msg["content"] = self._summarize(msg["content"])
+        return messages
+```
+
+### 工具描述按使用频率排序
+
+Execute 模式下全部工具的描述列表会随 MCP 持续膨胀。按使用频率排序+折叠：
+
+```python
+# executor.py — 工具描述频率排序
+TOOL_CALL_FREQUENCY: dict[str, int] = defaultdict(int)
+
+def get_tool_definitions(all_tools: list) -> list:
+    """前 5 个完整描述，后面的只传 name"""
+    all_tools.sort(key=lambda t: -TOOL_CALL_FREQUENCY.get(t.name, 0))
+    return all_tools[:5] + [
+        ToolDef(name=t.name) for t in all_tools[5:]
+    ]
+
+# 每次工具调用后更新频率
+def record_tool_call(name: str):
+    TOOL_CALL_FREQUENCY[name] += 1
+```
+
+### 对话历史去重 `DedupLayer`
+
+同一用户输入重复出现时（如连续两次"帮我看下认证"），第二轮不需要 AI 再看一遍自己的完整回复：
+
+```python
+class DedupLayer(ICompressLayer):
+    """移除对话历史中重复的用户输入（不降质量）"""
+    def __init__(self):
+        self._seen = set()
+
+    def compress(self, messages, budget):
+        for msg in messages:
+            if msg["role"] == "user" and msg["content"] in self._seen:
+                msg["content"] = "[同上轮]"  # 替换为标记
+            elif msg["role"] == "user":
+                self._seen.add(msg["content"])
+        return messages
+```
+
+### 旧轮工具结果→摘要 `ToolResultSummaryLayer`
+
+当 AI 第 3 轮还在引用第 1 轮的工具结果时，原始内容很长但 AI 实际只用了其中一小部分：
+
+```python
+class ToolResultSummaryLayer(ICompressLayer):
+    """超过 N 轮的工具结果替换为摘要（长对话省 20-40%）"""
+    def __init__(self, max_age_turns: int = 5):
+        self.max_age = max_age_turns
+
+    def compress(self, messages, budget):
+        turn_count = 0
+        for msg in reversed(messages):
+            if msg["role"] in ("user", "assistant"):
+                turn_count += 1
+            if msg["role"] == "tool" and turn_count > self.max_age:
+                msg["content"] = f"[工具结果摘要：{self._brief(msg['content'])}]"
+        return messages
+
+    def _brief(self, text: str) -> str:
+        return text[:100].replace("\n", " ") + "..." if len(text) > 100 else text
+```
+
+> **不实现 AI 回复缓存**：agent 场景中文件状态会变化，两次相同问题的上下文可能完全不同。缓存带来的风险（返回过时答案）远大于收益（省 token）。
+
 ### 与 ConversationStore 的关系
 
 ```

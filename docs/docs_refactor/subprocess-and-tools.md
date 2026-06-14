@@ -363,13 +363,18 @@ class ToolExecutor:
 
 | 分组 | 工具 | 职责 |
 |------|------|------|
-| **edit** | tool_file | read/write/edit 文件（Aider 或 git apply） |
-| | tool_change_review | 变更审查数据生成 |
+| **file** | tool_read | ★ 读文件（支持 start/end 范围，避免全量 token） |
+| | tool_write | 写文件（全量重写，新建/大改时用） |
+| | tool_patch_file | ★ 局部更新：按 anchor 定位修改，省 90%+ token |
+| | tool_delete | ★ 删除文件 |
+| **review** | tool_change_review | 变更审查数据生成 |
 | | tool_lint | 代码规范检查（Ruff） |
 | | tool_change_score | 变更影响评分 |
 | **search** | tool_search | grep + find_files |
+| | tool_search_tools | ★ 按 query 搜索可用工具，返回 name+description+schema（懒加载协议用） |
+| | tool_call_direct | ★ 按工具名直接调用，name 来自 tool_search_tools 结果 |
 | | tool_web_search | ☆ P1 内置网络搜索（DuckDuckGo） |
-| | tool_ask_choice | Explore 选择题 |
+| **interact** | tool_ask_choice | Explore 选择题 |
 | **system** | tool_bash | subprocess 命令 |
 | | tool_git | ★ Git 操作：status/diff/log/commit/branch |
 | | tool_fetch_url | ★ 网页抓取（httpx + trafilatura） |
@@ -380,7 +385,7 @@ class ToolExecutor:
 | | tool_task_manager | 任务看板 add_task / update_task |
 | | tool_ocr | ☆ P1 OCR 文字识别 |
 | | tool_extract_archive | 压缩解压（防 Zip Slip） |
-| **mcp** | mcp_loader | MCP 服务器加载器 |
+| **mcp** | tool_mcp_loader | MCP 服务器加载器 |
 | | tool_mcp_manager | MCP 自助安装 |
 
 ### 新增基础工具说明
@@ -407,7 +412,133 @@ class ToolExecutor:
 
 **原则**：纯数据操作（时间/计算/扫描）自写，与外部系统交互（Git/HTTP）用成熟库封装。
 
-### 工具调用幂等性
+## 工具参数优化：避免全量读写
+
+核心原则：**工具的参数设计应让 AI 能精确指定操作范围，避免全量传输 token 浪费。**
+
+| 工具 | 优化参数 | 对应场景 |
+|------|---------|---------|
+| `tool_read` | `start`/`end` → 按行范围读 | 搜到 def login 在 42-58 行 → 只读这一段 |
+| `tool_write` | 本身全量写，无优化空间 | — |
+| `tool_patch_file` | 已有 `anchor` → 按附近文本定位修改 | 不改完整文件 |
+| `tool_search` | `pattern` + `glob` → 精确匹配 | 只搜 "def login" 不读全文件 |
+| `tool_git` | `command` → git status/diff/log/commit 等 | 只取指定命令，不跑全量 |
+| `tool_bash` | `max_output` → 输出截断 | 限制返回行数 |
+| `tool_task_log` | `tail` → 只取尾 N 行 | 不拿全量 10000 行缓冲区 |
+| `tool_project_scan` | 自身上下文感知 → 精确扫描 | 只扫指定目录 |
+
+### tool_read 和 tool_patch_file 详细设计
+
+```python
+@tool(name="read_file")
+def read_file(path: str, start: int = None, end: int = None) -> dict:
+    """读取文件内容。支持按行范围读取，避免全量 token 消耗。
+
+    Args:
+        path:  文件路径（必填）
+        start: 起始行号（可选，从 1 开始）
+        end:   结束行号（可选，含该行）
+
+    Returns:
+        content: 文件内容
+        lines:   文件总行数
+        range:   实际返回的行范围
+    """
+    with open(path) as f:
+        lines = f.readlines()
+
+    if start is not None and end is not None:
+        content = "".join(lines[start-1:end])
+    elif start is not None:
+        content = "".join(lines[start-1:])
+    else:
+        content = "".join(lines)
+
+    return {
+        "content": content,
+        "lines": len(lines),
+        "range": f"{start or 1}-{end or len(lines)}",
+    }
+
+@tool(name="patch_file")
+def patch_file(path: str, operations: list[dict]) -> dict:
+    """对文件做局部更新，不需要输出完整文件内容。
+    比全量 write_file 省 90%+ token。
+
+    Args:
+        path: 文件路径
+        operations: 从后往前执行的操作列表:
+          {"op": "insert", "line":10,        "content":"new_line"}
+          {"op": "replace","start":20,"end":25,"content":"new_lines"}
+          {"op": "delete", "start":30,"end":35}
+
+    与 edit_file 的区别:
+      edit_file = 用 old_str/new_str 做文本匹配（Aider/git apply）
+      patch_file = 用行号精确定位（不依赖原文是否一致）
+    """
+    with open(path) as f:
+        lines = f.readlines()
+
+    # 从后往前执行，防止行号偏移
+    ops = sorted(operations, key=lambda o: o.get("start", o.get("line", 0)), reverse=True)
+    for op in ops:
+        if op["op"] == "insert":
+            lines.insert(op["line"] - 1, op["content"] + "\n")
+        elif op["op"] == "replace":
+            lines[op["start"]-1:op["end"]] = [op["content"] + "\n"]
+        elif op["op"] == "delete":
+            lines[op["start"]-1:op["end"]] = []
+
+    with open(path, "w") as f:
+        f.writelines(lines)
+    return {"success": True, "path": path, "ops": len(operations)}
+```
+
+## 工具与知识图谱/AST 的集成
+
+当前工具是 AI 操作的**底层接口**，知识图谱和 AST 是上层**索引层**，不会替代工具，而是让 AI 少调工具：
+
+### 当前（MVP）
+
+```
+AI 想理解项目结构:
+  1. tool_project_scan → 拿到文件树
+  2. tool_search("class.*Service") → 搜服务类
+  3. read_file("auth_service.py", start=1, end=50) → 读头部结构
+  → 3 次工具调用才能摸清一个类的关系
+```
+
+### P1 加上知识图谱
+
+```
+AI 想理解项目结构:
+  1. kg_query("list_classes") → {"ChatService": {"file":"chat.py","methods":["process","validate"]}}
+  → 1 次查询，精确返回，不需要逐文件搜索阅读
+```
+
+### 工具的分层关系
+
+```
+┌─ 用户/对话 ──────────────────────────┐
+│                                        │
+│  ┌── AI ───────────────────────────┐   │
+│  │                                  │   │
+│  │  P1+ 优先调用:                   │   │
+│  │  ├── kg_query("什么是 ChatService")│   │  ← 知识图谱查询
+│  │  ├── kg_query("谁调用了这个")     │   │
+│  │  └── vs_query("类似登录的功能")   │   │  ← 向量检索
+│  │                                  │   │
+│  │  以上查不到时降级调用:             │   │
+│  │  ├── search("ChatService")       │   │  ← 文本搜索
+│  │  ├── read_file("chat.py")        │   │  ← 读文件
+│  │  └── bash("grep -r ChatService") │   │  ← 原始命令
+│  │                                  │   │
+│  └──────────────────────────────────┘   │
+│                                          │
+└──────────────────────────────────────────┘
+```
+
+知识图谱和 AST **不改变工具的实现**，只改变 AI 的调用策略——先从索引查，查不到再降级到工具。工具本身不变，只是 AI 少调了它们。
 
 subprocess 超时后无法判断远程命令是否已执行，可能导致重复操作：
 
@@ -511,3 +642,176 @@ class CommandHistory:
 - 命令模式**不取代** git 回滚（严谨场景仍需 git），而是提供**更细粒度的即时撤销**
 
 > **关联文档**: `backend-modules.md`（CheckpointStore）、`adversarial-system.md`（驳回处理）
+
+## Token 优化
+
+### 1. 工具输出源头截断
+
+Pipeline 层压缩是后端防线，但最好在源头就限制工具输出的最大长度。
+
+```python
+# tool_bash.py — subprocess 输出截断
+@tool(name="bash")
+def tool_bash(command: str, max_output: int = 5000):
+    result = subprocess.run(command, capture_output=True, timeout=30)
+    output = result.stdout[:max_output]
+    if len(result.stdout) > max_output:
+        output += b"\n...(truncated)..."
+    return {"stdout": output.decode(), "stderr": result.stderr.decode()}
+
+# mcp_executor.py — MCP 结果大小限制
+MAX_MCP_CHARS = 10_000
+async def call_mcp_tool(server, tool, args):
+    result = await mcp_client.call_tool(server, tool, args)
+    content = result.content[:MAX_MCP_CHARS]
+    return {"content": content}
+
+# task_log 默认只返回末尾 200 行（替代全量 10000 行）
+@tool(name="task_log")
+def task_log(pid: int, tail: int = 200):
+    buffer = _BACKGROUND_PROCESSES[pid]["buffer"]
+    return {"lines": buffer[-tail:]}
+```
+
+### 2. 动态工具加载策略
+
+> 根据 LLM 能力自动选择最省 token 的工具传递方案。
+> 核心原则：**高频工具永远预加载（不搜索），低频/长尾工具按需搜索。**
+
+#### 两层分级
+
+| 层 | 工具 | 数量 | 每轮 token | 是否需要 search |
+|:--:|------|:----:|:----------:|:--------------:|
+| **Layer 1 预加载** | read_file, write_file, search, bash, git, ask_choice | ~6 个 | ~500 | ❌ 永远可用 |
+| **Layer 2 按需搜** | MCP 工具、web_search、ocr、extract_archive 等 | 无上限 | ~0（未搜索时） | ✅ 首次用才搜 |
+
+Layer 1 是 AI 吃饭的碗，每轮都必须有。Layer 2 是 AI 偶尔用的螺丝刀，用的时候再搜。
+
+#### 运行时协商
+
+不硬编码模型名单，首次对话时让 LLM 自己协商，结果持久化到配置：
+
+```python
+# 高频工具：永远预加载，不检查协议
+LAYER1_TOOLS = [
+    ToolDef(name="read_file"), ToolDef(name="write_file"),
+    ToolDef(name="search"), ToolDef(name="bash"),
+    ToolDef(name="git"), ToolDef(name="ask_choice"),
+]
+
+class ToolExecutor:
+    def __init__(self, model_adapter):
+        self._protocol = None
+
+    async def negotiate(self):
+        cached = self._load_cached_protocol()
+        if cached:
+            self._protocol = cached
+            return cached
+
+        probe = await self._model.invoke([
+            {"role": "system", "content": (
+                "请选择工具交互协议（回复协议名即可）：\n"
+                "1. native_mcp — 我自己管理工具清单，不需要你传工具描述\n"
+                "2. search — 高频工具有，低频的自己搜\n"
+                "3. full — 把所有工具描述都传给我"
+            )},
+            {"role": "user", "content": "请选择协议"},
+        ], tools=[ToolDef(name="tool_search_tools",
+                          description="搜索可用工具，返回 name+description+parameters")])
+
+        if "native_mcp" in probe.content:
+            self._protocol = "native_mcp"
+        elif any(tc.name == "tool_search_tools" for tc in (probe.tool_calls or [])):
+            self._protocol = "search_and_call"
+        else:
+            self._protocol = "full_schema"
+        self._save_cached_protocol(self._protocol)
+        return self._protocol
+
+    def get_tool_definitions(self) -> list:
+        """返回本轮传送给 LLM 的工具列表"""
+        if self._protocol == "native_mcp":
+            return []                              # 0 token，LLM 自己管
+        if self._protocol == "search_and_call":
+            return LAYER1_TOOLS + [                # ~500 tokens（Layer 1 高频工具）
+                ToolDef(name="tool_search_tools"), # + 1 个搜索工具
+                ToolDef(name="tool_call_direct"),
+            ]
+        return LAYER1_TOOLS + ALL_TOOLS            # 全量（含高频）
+
+    async def execute(self, tool_call):
+        if self._protocol == "search_and_call":
+            if tool_call.name == "tool_search_tools":
+                return self.search_tools(tool_call.args["query"])
+            if tool_call.name == "tool_call_direct":
+                return await self.call_tool(
+                    tool_call.args["name"], tool_call.args.get("args", {}))
+        return await self.call_tool(tool_call.name, tool_call.args)
+```
+
+#### 调 read_file 不需要搜索
+
+```python
+# search_and_call 模式下，Layer 1 工具已预加载
+AI → read_file("config.py")         # 直接调，不搜
+AI → bash("ls")                      # 直接调，不搜
+AI → tool_search_tools("mcp_docker") # 第一次调 MCP 工具，搜
+AI → tool_call_direct("mcp_docker...") # 调 MCP
+# 后续再调 mcp_docker → 直接调，不搜
+```
+
+**预期节省**：
+
+| 模型 | 当前 | 优化后 | 节省 |
+|------|------|--------|------|
+| DeepSeek V4 / Claude 3.5+（原生 MCP） | ~8000 tokens | **0** | **100%** |
+| GPT-4o（search+call） | ~8000 tokens | **~200** | **~97%** |
+| 旧模型（全量 fallback） | ~8000 tokens | ~8000 | 0% |
+
+### 3. 工具结果缓存（同轮去重）
+
+同一轮对话中 AI 可能重复调同一个工具（如反复 `read_file`）：
+
+```python
+_TOOL_CACHE: dict[str, str] = {}
+
+async def execute(self, tool_call):
+    cache_key = f"{tool_call.name}:{json.dumps(tool_call.args, sort_keys=True)}"
+    if cache_key in _TOOL_CACHE:
+        return _TOOL_CACHE[cache_key]  # 命中缓存，0 token
+    result = await self._real_execute(tool_call)
+    _TOOL_CACHE[cache_key] = result
+    return result
+
+def reset_tool_cache():
+    _TOOL_CACHE.clear()  # 每轮开始前调用
+```
+
+> 只缓存同一轮内的重复调用，跨轮不缓存（文件可能已被修改）。
+
+### 4. 工具并行执行
+
+AI 同一轮发送多个 `tool_call` 时（如同时读 3 个文件），默认串行执行太慢：
+
+```python
+async def execute_batch(self, tool_calls: list[ToolCall]) -> list:
+    """同一轮多个独立工具调用并行执行，互不依赖时提速显著"""
+    async def safe_execute(tc):
+        try:
+            return await self._real_execute(tc)
+        except Exception as e:
+            return {"error": str(e)}
+
+    return await asyncio.gather(
+        *[safe_execute(tc) for tc in tool_calls]
+    )
+```
+
+典型场景：
+- AI 一次读多个文件：`read_file("a.py")` + `read_file("b.py")` + `read_file("c.py")` → **0.1s 而不是 0.3s**
+- AI 同时搜多个关键词：`search("class User")` + `search("def login")` → **同时返回**
+- AI 批量查 git：`git("status")` + `git("log -5")` → **同时返回**
+
+> 依赖关系由 AI 自行保证——同轮 `tool_calls` 数组中的顺序不代表先后依赖。
+> 如果 AI 需要先 A 再 B（如 B 依赖 A 的输出），它会分两轮调用，不会放一起。
