@@ -8,6 +8,8 @@
 
 ## 目标文件夹树
 
+> 图例：`←` 标准分隔符｜`★` MVP 当前实现｜`☆` P1/P2 未来预留接口
+
 ```
 flypig/
 │
@@ -33,12 +35,12 @@ flypig/
 │   │   ├── iupdate_service.py    ← ☆ P2 自动更新接口（NoOp 预留）
 │   │   ├── ihook.py              ← IHook（事件钩子）
 │   │   ├── iagent.py             ← IAgent
-│   │   ├── isearch.py            ★ ISearch（全文/语义/代码结构搜索抽象）
-│   │   ├── iknowledge_graph.py   ★ IKnowledgeGraph（代码关系图，P1）
-│   │   ├── ivector_store.py      ★ IVectorStore（语义向量检索，P2）
-│   │   ├── iranker.py            ★ IRanker（多源结果融合排序，P2）
-│   │   ├── iast_parser.py        ★ IASTParser（AST 解析：symbol→行号，P0 NoOp）
-│   │   └── ilsp_diagnostics.py   ★ ILspDiagnostics（LSP 诊断，P0 NoOp）
+│   │   ├── isearch.py            ← ★ ISearch（全文/语义/代码结构搜索抽象）
+│   │   ├── iknowledge_graph.py   ← ☆ IKnowledgeGraph（代码关系图，P1）
+│   │   ├── ivector_store.py      ← ☆ IVectorStore（语义向量检索，P2）
+│   │   ├── iranker.py            ← ☆ IRanker（多源结果融合排序，P2）
+│   │   ├── iast_parser.py        ← ★ IASTParser（AST 解析：symbol→行号，P0 NoOp）
+│   │   └── ilsp_diagnostics.py   ← ★ ILspDiagnostics（LSP 诊断，P0 NoOp）
 │   │
 │   ├── agent/                    ← LangGraph（领域层只定义节点和状态）
 │   │   ├── state.py              ← AgentState TypedDict（纯数据，零依赖）
@@ -46,7 +48,7 @@ flypig/
 │   │   ├── router.py             ← 条件边路由逻辑（基于 tool_calls）
 │   │   └── context.py            ← Explore/Plan/Execute context 约束
 │   │
-│   ├── models/                   ← 数据类
+│   ├── models/                   ← 领域数据类（Message/Session/Task 等）
 │   │   ├── message.py            ← Message, ToolCall, ChoiceCard
 │   │   ├── session.py            ← Session
 │   │   ├── mode.py               ← ExecutionMode 枚举 + ModeConfig
@@ -54,8 +56,8 @@ flypig/
 │   │   └── task.py               ← TaskItem / TaskStatusChange / TaskStats
 │   │
 │   ├── prompts/                  ← prompt 系统
-│   │   ├── __init__.py           ← 包导出（from .multirole_manager import MultiRoleManager）
-│   │   ├── multirole_manager.py  ★ MultiRoleManager：按角色+模型+会话维度选择 prompt
+│   │   ├── __init__.py           ← 导出 MultiRoleManager
+│   │   ├── multirole_manager.py  ← ★ MultiRoleManager（按角色+模型+会话维度选择 prompt）
 │   │   └── roles/                ← 角色 prompt 库（多 agent / 多视角通用）
 │   │       ├── developer.md     ← 主身份：写代码时用的默认视角
 │   │       ├── reviewer.md      ← 审查视角：从代码质量角度挑毛病
@@ -73,7 +75,8 @@ flypig/
 │   ├── config_service.py         ← 配置管理
 │   ├── session_service.py        ← 会话状态管理
 │   ├── policy_service.py         ← Casbin 封装
-│   ├── graph_factory.py          ← ★ 图构建：组装 nodes + router → 编译 StateGraph
+│   ├── graph_factory.py          ← ★ 图构建：读取 graph_config.yaml → 组装 nodes + router → 编译 StateGraph
+│   ├── graph_config.yaml         ← ☆ 图构建配置（P1 配置驱动化，MVP 硬编码建图）
 │   ├── suggestion_engine.py      ← ★ 评分→建议映射：generate_suggestion()
 │   ├── event_subscriptions.py    ← ★ 事件订阅编排：声明哪个模块订阅哪些事件
 │   ├── git_checkpoint_manager.py ← ★ Agent Git checkpoint 管理
@@ -86,7 +89,7 @@ flypig/
 
 │
 ├── infrastructure/               ← 基础设施层
-│   ├── llm/                      ← LLM 驱动适配（不是数据模型，是 DeepSeek/Claude 的 API 驱动）
+│   ├── llm/                      ← LLM API 驱动（DeepSeek/Claude/GPT 各有实现）
 │   │   ├── openai_adapter.py     ← OpenAI/DeepSeek 兼容（国产主力）
 │   │   ├── anthropic.py          ← Claude 适配
 │   │   └── local.py              ← 本地模型（Ollama/vLLM, 预留）
@@ -95,22 +98,22 @@ flypig/
 │   │   ├── __init__.py
 │   │   ├── executor.py           ← ToolExecutor 主类（调度器）
 │   │   ├── file/                 ← 文件操作（CRUD）
-│   │   │   ├── tool_read.py          ★ 读文件（支持 start/end 范围 / symbol 符号定位）
+│   │   │   ├── tool_read.py          ← ★ 读文件（支持 start/end 范围 / symbol 符号定位）
 │   │   │   ├── tool_write.py         ← 写文件（新建/全量重写）
-│   │   │   ├── tool_patch_file.py    ★ 局部更新（按 anchor 定位修改）
-│   │   │   └── tool_delete.py        ★ 删除文件
+│   │   │   ├── tool_patch_file.py    ← ★ 局部更新（按 anchor 定位修改）
+│   │   │   └── tool_delete.py        ← ★ 删除文件
 │   │   ├── review/               ← 代码审查（改完后检查质量）
 │   │   │   ├── tool_change_review.py ← 变更审查数据生成（§3.8.7）
 │   │   │   ├── tool_lint.py          ← 代码规范自动检查（Ruff, §3.8.8）
 │   │   │   └── tool_change_score.py  ← 变更影响评分（§3.8.9）
 │   │   ├── search/               ← 搜索调研（从项目/网络获取信息）
 │   │   │   ├── tool_search.py        ← grep + find_files
-│   │   │   ├── tool_search_tools.py  ★ 懒加载协议：按 query 搜索工具 schema
-│   │   │   ├── tool_call_direct.py   ★ 懒加载协议：按名直接调工具
+│   │   │   ├── tool_search_tools.py  ← ★ 懒加载协议：按 query 搜索工具 schema
+│   │   │   ├── tool_call_direct.py   ← ★ 懒加载协议：按名直接调工具
 │   │   │   └── tool_web_search.py    ← ☆ P1 内置网络搜索（DuckDuckGo）
-│   │   ├── interact/             ★ 交互选择（和用户对话/让用户做选择）
+│   │   ├── interact/             ← ★ 交互选择（出选择题让用户选）
 │   │   │   └── tool_ask_choice.py    ← Explore 选择题（§3.6.3）
-│   │   ├── system/
+│   │   ├── system/                 ← 系统工具（bash/git/任务/解压等）
 │   │   │   ├── tool_bash.py          ← subprocess 命令（无 PTY）
 │   │   │   ├── tool_git.py           ← ★ Git 操作代替裸 bash：status/diff/log/commit/branch
 │   │   │   ├── tool_fetch_url.py     ← ★ 网页抓取（httpx，零依赖）
@@ -122,9 +125,9 @@ flypig/
 │   │   │   ├── tool_ocr.py           ← ☆ P1 OCR 文字识别（PaddleOCR）
 │   │   │   └── tool_extract_archive.py ← 压缩解压 + Zip Slip 防护（§3.7.2）
 │   │   ├── mcp/                  ← MCP 协议工具
-│   │   │   ├── tool_mcp_loader.py    ← MCP 加载器
+│   │   │   ├── tool_mcp_loader.py    ← 加载 MCP 服务器并注册到 ToolNode
 │   │   │   └── tool_mcp_manager.py   ← MCP 自助安装（用 mcp-auto-install 现成方案）
-│   │   └── utils.py              ← strip_ansi, _best_decode, _decode_clixml
+│   │   └── utils.py              ← 工具辅助函数（ANSI 清理/编码解码）
 │   │
 │   ├── sandbox/                  ← Docker 沙箱
 │   │   ├── sandbox_config.py     ← SandboxConfig 数据类
@@ -132,19 +135,19 @@ flypig/
 │   │   ├── sandbox_manager.py    ← SandboxManager（容器生命周期）
 │   │   └── builder.py            ← Dockerfile 生成 + 镜像构建
 │   │
-│   ├── usage/
+│   ├── usage/                      ← 用量追踪（SQLite 统计）
 │   │   ├── sqlite_tracker.py     ← SqliteUsageTracker（IUsageTracker 的 SQLite 实现）
 │   │   ├── pricing.py            ← PricingFetcher（价格获取 + 缓存）
-│   │   └── usage_handler.py       ← ★ 用量事件处理器（订阅 event_bus，自动记录用量）
+│   │   └── usage_handler.py       ← ★ 用量事件处理器（订阅 hooks，自动记录 token/cost）
 │   │
-│   ├── search/                    ★ 代码理解服务（被工具/节点调用，AI 不直接调）
-│   │   ├── search_grep.py        ★ MVP: grep 全文搜索（实现 ISearch）
-│   │   ├── search_ast.py         ★ P1: tree-sitter AST 搜索（实现 ISearch）
-│   │   ├── ast_parser.py         ★ P0: tree-sitter AST 解析（实现 IASTParser）
-│   │   ├── lsp_diagnostics.py    ★ P0: pyright LSP 诊断（实现 ILspDiagnostics）
-│   │   ├── search_kg.py          ★ P1: 知识图谱查询（实现 IKnowledgeGraph）
-│   │   ├── search_vector.py      ★ P2: 向量语义检索（实现 IVectorStore）
-│   │   └── search_ranker.py      ★ P2: 多源排序器（实现 IRanker）
+│   ├── search/                    ← ★ 代码理解服务（被工具/节点调用，AI 不直接调）
+│   │   ├── search_grep.py        ← ★ MVP: grep 全文搜索（实现 ISearch）
+│   │   ├── search_ast.py         ← ☆ P1: tree-sitter AST 搜索（实现 ISearch）
+│   │   ├── ast_parser.py         ← ★ P0: tree-sitter AST 解析（实现 IASTParser）
+│   │   ├── lsp_diagnostics.py    ← ★ P0: pyright LSP 诊断（实现 ILspDiagnostics）
+│   │   ├── search_kg.py          ← ☆ P1: 知识图谱查询（实现 IKnowledgeGraph）
+│   │   ├── search_vector.py      ← ☆ P2: 向量语义检索（实现 IVectorStore）
+│   │   └── search_ranker.py      ← ☆ P2: 多源排序器（实现 IRanker）
 │   │
 │   ├── policies/                 ← 权限系统
 │   │   ├── model.conf            ← Casbin 模型
@@ -218,8 +221,8 @@ flypig/
 │
 ├── scripts/                      ← 运维脚本（跨平台：setup_env.bat / .sh 双入口）
 │   ├── setup_env.py              ← 环境初始化（核心逻辑：检测平台 + 安装依赖 + 配置）
-│   ├── setup_env.bat             ← Windows 入口：`python ops\setup_env.py`
-│   ├── setup_env.sh              ← Linux/Mac 入口：`python ops/setup_env.py`
+│   ├── setup_env.bat             ← Windows 入口：`python scripts\setup_env.py`
+│   ├── setup_env.sh              ← Linux/Mac 入口：`python scripts/setup_env.py`
 │   ├── seed_data.py              ← 测试数据填充
 │   └── migrate_db.py             ← 数据库迁移
 │
@@ -227,7 +230,7 @@ flypig/
 │   ├── unit/
 │   │   ├── test_router.py
 │   │   ├── test_models.py
-│   │   ├── test_hook_service.py
+│   │   ├── test_event_subscriptions.py
 │   │   ├── test_pricing.py
 │   │   └── test_permission_checker.py
 │   ├── integration/
