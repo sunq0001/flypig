@@ -13,6 +13,7 @@
 - **每个任务都要记录**，不分大小。只要 AI 拆解了子任务，就写入数据库
 - **通过 `turn_id` 串联**：任务创建、状态变更、checkpoint 都通过 `turn_id` 对齐
 - **回溯时任务状态跟着回**：恢复某个 turn 时，不仅文件回到 checkpoint，任务状态也回到当时快照
+- **无反馈 = 通过**：用户不评价 = ok，表扬 = good，抱怨 = not_work
 
 ---
 
@@ -64,7 +65,8 @@ CREATE TABLE tasks (
     sort_order INTEGER DEFAULT 0,             -- 排序
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP,
-    completed_at TIMESTAMP
+    completed_at TIMESTAMP,
+    user_feedback TEXT DEFAULT 'ok'            -- ok / good / not_work（★ 用户反馈）
 );
 CREATE INDEX idx_tasks_session ON tasks(session_id);
 CREATE INDEX idx_tasks_status ON tasks(status);
@@ -136,6 +138,7 @@ class TaskItem:
     created_at: datetime | None = None
     updated_at: datetime | None = None
     completed_at: datetime | None = None
+    user_feedback: str = "ok"                  # ok / good / not_work（★ 用户反馈）
 
 @dataclass
 class TaskStatusChange:
@@ -353,6 +356,83 @@ AI 在对话中自然输出结构化列表时，系统可自动识别并创建�
 
 ---
 
+## 用户反馈闭环
+
+### 三条反馈通道（零交互成本）
+
+```
+AI 完成任务的下一轮回答：
+  ┌─ system prompt 加一句指令 ──────────────────────┐
+  │ "每次回答前判断用户是否在评价之前任务。            │
+  │  确定 → 调 update_feedback(task_id, 'good'/'not_work')  │
+  │  不确定 → 调 ask_choice 让用户选                 │
+  │  无反馈 → 默认 ok（不动）"                        │
+  └─────────────────────────────────────────────────┘
+           │
+           ▼
+   同一轮回复中完成，token 零增长
+```
+
+| 通道 | 触发 | 成本 |
+|------|------|:----:|
+| AI 自动推断 | 用户在对话中表达情绪（"不错"/"又没改对"） | **0 token**（嵌入同一轮回答） |
+| AI 主动询问 | AI 不确定用户指哪个任务 → 调 `ask_choice` 出选择题 | ~50 token |
+| 用户手动标注 | 在 Dashboard / TaskBoard 中点任务 → 选 ok/good/not_work | 无 |
+
+### 工具扩展
+
+```python
+# infrastructure/tools/system/tool_task_manager.py 追加
+
+def update_feedback(task_id: str, feedback: str) -> str:
+    """
+    更新用户对任务的反馈。
+    feedback: 'good' | 'not_work'
+    不调 = ok（默认）
+    AI 在回答中评估用户情绪后自动调用，不单独调模型。
+    """
+    store = Container.get("conversation_store")
+    store.update_task_feedback(task_id, feedback)
+    return f"任务 {task_id} 反馈已更新为 {feedback}"
+```
+
+### IConversationStore 接口扩展
+
+```python
+# domain/interfaces/iconversation_store.py（新增）
+
+@abstractmethod
+async def update_task_feedback(self, task_id: str, feedback: str):
+    """更新用户反馈：ok / good / not_work"""
+
+@abstractmethod
+async def get_feedback_stats(self, session_id: str = None) -> dict:
+    """反馈统计（Dashboard 用）：good/ok/not_work 各多少"""
+```
+
+### SSE 事件
+
+```python
+# feedback_update 事件（AI 调 update_feedback 时推送）
+{"type": "task_feedback", "task_id": "task_001", "feedback": "good"}
+```
+
+### Dashboard 手动打标
+
+Dashboard.vue / TaskBoard.vue 中每个任务右侧加反馈按钮组：
+
+```
+┌─ 任务看板 ─────────────────────────────────┐
+│  🔄 重构 auth 路由           [进行中] [👍] │
+│  ⬜ 性能优化                 [待办]   [👎] │
+│  ✅ 创建 users 表            [已完成] 👍   │  ← 已标记 good
+│  ✅ 修复数据库连接           [已完成] 👎   │  ← 已标记 not_work
+│  ⬜ 测试覆盖率提升           [待办]         │  ← 默认 ok（不显示）
+└────────────────────────────────────────────┘
+```
+
+---
+
 ## API 端点
 
 | 端点 | 方法 | 说明 |
@@ -517,12 +597,12 @@ AI 在对话中自然输出结构化列表时，系统可自动识别并创建�
 | 文件 | 操作 | 说明 |
 |------|------|------|
 | `domain/models/task.py` | 新增 | TaskItem / TaskStatusChange / TaskStats 数据类 |
-| `domain/interfaces/iconversation_store.py` | 修改 | 新增 7 个 task CRUD 抽象方法 |
+| `domain/interfaces/iconversation_store.py` | 修改 | 新增 7 个 task CRUD + update_task_feedback 抽象方法 |
 | `orchestration/conversation_store.py` | 修改 | SqliteConversationStore 实现 task 方法 |
-| `infrastructure/tools/system/tool_task_manager.py` | 新增 | tool_add_task / tool_update_task 工具 |
+| `infrastructure/tools/system/tool_task_manager.py` | 新增 | tool_add_task / tool_update_task / update_feedback 工具 |
 | `backend/routes/tasks.py` | 新增 | 7 个 REST 端点 |
 | `frontend/static_vite/src/components/chat/TaskListCard.vue` | 新增 | 对话流中的任务状态卡片 |
 | `frontend/static_vite/src/components/sidebar/TaskBoard.vue` | 新增 | 侧边栏任务看板 |
 | `frontend/static_vite/src/components/common/TaskHistoryDialog.vue` | 新增 | 任务状态变更历史弹窗 |
-| `frontend/static_vite/src/components/sidebar/Dashboard.vue` | 修改 | 首页添加任务概览卡片 |
-| SSE 事件 | 新增 | `task_update`（add/update）+ `tasks_restored`（回溯） |
+| `frontend/static_vite/src/components/sidebar/Dashboard.vue` | 修改 | 首页添加任务概览卡片 + 任务反馈打标 |
+| SSE 事件 | 新增 | `task_update`（add/update）+ `task_feedback`（反馈）+ `tasks_restored`（回溯） |
