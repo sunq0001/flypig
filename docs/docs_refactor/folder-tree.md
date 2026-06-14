@@ -53,13 +53,13 @@ flypig/
 │   │   ├── session.py            ← ★ Session
 │   │   ├── mode.py               ← ★ ExecutionMode 枚举 + ModeConfig
 │   │   ├── change_score.py       ← ★ ChangeScore（§3.8.9）
-│   │   └── task.py               ← ★ TaskItem / TaskStatusChange / TaskStats
+│   │   └── task.py               ← ★ TaskItem + user_feedback（ok/good/not_work）+ TaskStats
 │   │
 │   ├── prompts/                  ← ★ prompt 系统
 │   │   ├── __init__.py           ← ★ 导出 MultiRoleManager
 │   │   ├── multirole_manager.py  ← ★ MultiRoleManager（按角色+模型+会话维度选择 prompt）
 │   │   └── roles/                ← ★ 角色 prompt 库（多 agent / 多视角通用）
-│   │       ├── developer.md     ← ★ 主身份：写代码时用的默认视角
+│   │       ├── developer.md     ← ★ 主身份（含 user_feedback 推断指令）
 │   │       ├── reviewer.md      ← ★ 审查视角：从代码质量角度挑毛病
 │   │       ├── tester.md        ← ★ 测试视角：关注边界情况和脆弱性
 │   │       ├── architect.md     ← ★ 架构视角：评估模块耦合和扩展性
@@ -121,7 +121,7 @@ flypig/
 │   │   │   ├── tool_datetime.py      ← ★ 当前时间/时区/日期计算
 │   │   │   ├── tool_calc.py          ← ★ 安全数学计算
 │   │   │   ├── tool_task.py          ← ★ task_status + task_list + task_log
-│   │   │   ├── tool_task_manager.py  ← ★ 任务看板：add_task / update_task
+│   │   │   ├── tool_task_manager.py  ← ★ 任务看板：add_task / update_task / update_feedback
 │   │   │   ├── tool_ocr.py           ← ☆ P1 OCR 文字识别（PaddleOCR）
 │   │   │   └── tool_extract_archive.py ← ★ 压缩解压 + Zip Slip 防护（§3.7.2）
 │   │   ├── mcp/                  ← ★ MCP 协议工具
