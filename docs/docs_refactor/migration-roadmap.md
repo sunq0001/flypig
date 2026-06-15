@@ -29,13 +29,13 @@
 
 | 动作 | 说明 |
 |------|------|
-| 对照 `folder-tree.md` 创建所有目录 | `flypig/core/`, `flypig/domain/`, `flypig/application/` … 共约 30+ 个子目录 |
+| 对照 `folder-tree.md` 创建所有目录 | `flypig/core/`, `flypig/domain/`, `flypig/orchestration/` … 共约 30+ 个子目录 |
 | 在每个目录创建 `__init__.py` | 保证 Python 包可导入 |
 | 创建所有空 `.py` 文件 | 每个文件顶部写模块 docstring 骨架（`"""... TODO: implement"""`） |
 | 创建根级配置文件 | `pyproject.toml`, `Dockerfile`, `docker-compose.yml`, `nginx.conf`, `mcp.json`, `.env.example`, `Makefile` |
 | 新建 `tests/` 目录 | 含 `conftest.py`, `pytest.ini`, `unit/`, `integration/`, `fixtures/` |
 | 新建 `frontend/` 骨架 | `frontend/static/` + `frontend/static_vite/` 含 `package.json`, `vite.config.js`, `index.html`, `src/main.js` |
-| 新建 `scripts/` 目录 | `setup.py`（核心）+ `setup.bat` + `setup.sh`（入口）, `seed_data.py`, `migrate_db.py` |
+| 新建 `scripts/` 目录 | `setup_env.py`（核心）+ `setup_env.bat` + `setup_env.sh`（入口）, `seed_data.py`, `migrate_db.py` |
 | 验证：`python -c "import flypig"` | 确保包结构可导入，不报错 |
 
 ### Step 0：开发者工具链搭建
@@ -69,7 +69,7 @@
 | 定义 `domain/agent/state.py`（AgentState TypedDict） | 新写 |
 | 定义 `domain/exceptions.py`（统一异常体系） | 新写 |
 | 定义 `domain/config/config.py` + `domain/config/model_registry.py` | 新写 |
-| 编写 `domain/prompt_manager.py` + `domain/prompts/` 5 份 prompt | 新写 |
+| 编写 `domain/prompts/multirole_manager.py` + `domain/prompts/` 5 份 prompt | 新写 |
 | 配置 `di/container.py`（dependency-injector，注册所有接口和实现） | 新写 |
 | 验证：`pytest --collect-only` 通过 | 包结构完整 |
 
@@ -79,10 +79,10 @@
 |------|------|
 | 创建 `infrastructure/tools/` 包 | 所有工具从零新写 |
 | 写 `executor.py`（ToolExecutor 调度器） | 核心调度逻辑 |
-| 写 `edit/` 一组：tool_file.py, tool_change_review.py, tool_lint.py, tool_change_score.py | 代码编辑工具链 |
+| 写 `file/` 一组：tool_read.py, tool_write.py, tool_patch_file.py, tool_delete.py, tool_list_dir.py + `review/` 一组：tool_change_review.py, tool_lint.py, tool_change_score.py | 代码编辑+审查工具链 |
 | 写 `search/` 一组：tool_search.py, tool_web_search.py, tool_ask_choice.py | 搜索/调研工具 |
-| 写 `system/` 一组：tool_bash.py, tool_git.py, tool_fetch_url.py, tool_project_scan.py, tool_datetime.py, tool_calc.py, tool_task.py, tool_task_manager.py, tool_ocr.py, tool_extract_archive.py | 系统工具 |
-| 写 `mcp/` 一组：mcp_loader.py, tool_mcp_manager.py | MCP 协议工具 |
+| 写 `system/` 一组：tool_bash.py, tool_git.py, tool_fetch_url.py, tool_list_dir.py, tool_datetime.py, tool_calc.py, tool_task.py, tool_task_manager.py, tool_ocr.py, tool_extract_archive.py | 系统工具 |
+| 写 `mcp/` 一组：tool_mcp_loader.py, tool_mcp_manager.py | MCP 协议工具 |
 | 写 `tools/utils.py` | 公共工具函数 |
 | 注册全部工具到 LangGraph ToolNode | 在 container.py 中串联 |
 
@@ -93,17 +93,16 @@
 | 写 `domain/agent/nodes.py`（chat/ask_choice/execute/lint/review/suggest 节点函数） | 新写 |
 | 写 `domain/agent/router.py`（条件边路由逻辑） | 新写 |
 | 写 `domain/agent/context.py`（Explore/Plan/Execute context 约束） | 新写 |
-| 写 `application/services/graph_factory.py`（组装 nodes + router → 编译 StateGraph） | 新写 |
-| 写 `application/services/chat_service.py`（对话编排主服务） | 新写 |
-| 写 `application/services/hook_service.py`（钩子管理器） | 新写 |
-| 写 `application/services/suggestion_engine.py`（评分→建议映射） | 新写 |
-| 写 `application/services/context_pipeline.py`（上下文压缩） | 新写 |
-| 写 `application/services/git_checkpoint_manager.py`（Agent Git checkpoint） | 新写 |
-| 写 `application/services/conversation_store.py`（SQLite 实现） | 新写 |
-| 写 `application/services/summary_generator.py`（短语摘要） | 新写 |
-| 写 `application/services/session_service.py` + `config_service.py` + `policy_service.py` | 新写 |
-| 写 `application/dto/`（chat_dto.py, config_dto.py） | 新写 |
-| 写 `infrastructure/hooks.py`（钩子实现） + `background.py`（后台任务） | 新写 |
+| 写 `orchestration/graph_factory.py`（组装 nodes + router → 编译 StateGraph） | 新写 |
+| 写 `orchestration/chat_service.py`（对话编排主服务） | 新写 |
+| 写 `orchestration/event_subscriptions.py`（事件订阅编排） | 新写 |
+| 写 `orchestration/suggestion_engine.py`（评分→建议映射） | 新写 |
+| 写 `orchestration/context_pipeline.py`（上下文压缩） | 新写 |
+| 写 `orchestration/git_checkpoint_manager.py`（Agent Git checkpoint） | 新写 |
+| 写 `orchestration/conversation_store.py`（SQLite 实现） | 新写 |
+| 写 `orchestration/summary_generator.py`（短语摘要） | 新写 |
+| 写 `orchestration/session_service.py` + `config_service.py` + `policy_service.py` | 新写 |
+| 写 `infrastructure/hooks.py`（钩子实现） + `process_manager.py`（后台任务） | 新写 |
 | 验证：可运行单轮对话（SSE 事件流输出） | 功能验证 |
 
 ---
@@ -119,21 +118,21 @@
 
 | 动作 | 说明 |
 |------|------|
-| 写 `interface/web/server.py`（FastAPI app 声明 + 路由注册） | 新写 |
-| 写 `interface/web/routes/` 全部路由（chat.py, config.py, files.py, sessions.py, health.py, upload.py, rollback.py, agent.py, history.py, usage.py, tasks.py, feedback.py） | 新写 |
-| 写 `interface/web/services/sse_queue.py` + `file_watcher.py` | 新写 |
+| 写 `backend/server.py`（app 声明 + 路由注册） | 新写 |
+| 写 `backend/routes/` 全部路由（chat.py, config.py, files.py, sessions.py, health.py, upload.py, rollback.py, agent_routes.py, history.py, usage.py, tasks.py, feedback.py） | 新写 |
+| 写 `backend/sse_queue.py` + `backend/file_watcher.py` | 新写 |
 | 写 `__main__.py`（接口选择 + DI 初始化 + 启动） | 入口点 |
 
 ### Step 5：基础设施
 
 | 动作 | 说明 |
 |------|------|
-| 写 `infrastructure/model/`（openai_adapter.py, anthropic.py, local.py） | 模型适配 |
+| 写 `infrastructure/llm/`（openai_adapter.py, anthropic.py, local.py） | 模型适配 |
 | 写 `infrastructure/sandbox/`（Docker 沙箱配置、路径验证、生命周期、镜像构建） | 新写 |
 | 写 `infrastructure/terminal.py`（精简版，仅用户手动 PTY WebSocket，无 AI 注入） | 新写 |
-| 写 `infrastructure/permission_checker.py`（file/term/git/test, allow/ask/deny） | 新写 |
+| 写 `infrastructure/policies/permission_checker.py`（file/term/git/test, allow/ask/deny） | 新写 |
 | 写 `infrastructure/policies/`（Casbin 初始化配置） | 新写 |
-| 写 `infrastructure/usage/`（sqlite_tracker.py, pricing.py, hooks.py） | 用量追踪 |
+| 写 `infrastructure/usage/`（sqlite_tracker.py, pricing.py, usage_handler.py） | 用量追踪 |
 
 ---
 
@@ -198,9 +197,9 @@
 | 层次 | 文件数 | 分布 |
 |------|--------|------|
 | 领域层 `domain/` | ~25 个 `.py` | 接口、模型、agent、prompts、policies、config |
-| 应用层 `application/` | ~15 个 `.py` | 服务、DTO |
+| 编排层 `orchestration/` | ~12 个 `.py` | 服务 |
 | 基础设施层 `infrastructure/` | ~30 个 `.py` | 模型适配、工具（~20）、沙箱、终端、用量、权限、Casbin |
-| 接口层 `interface/` | ~15 个 `.py` | 路由（11）、服务（2）、server、main |
+| 后端层 `backend/` | ~15 个 `.py` | 路由（11）、服务（2）、server、terminal、main |
 | 前端 `frontend/` | ~45 个文件 | 组件（~30）、composables（12）、lib（3）、style（5）、配置 |
 | 根级配置 | ~8 个文件 | pyproject.toml, Dockerfile, docker-compose.yml, nginx.conf, mcp.json, model.conf, policy.csv |
 | 测试 `tests/` | ~12 个 `.py` | unit（5）、integration（3）、fixtures、conftest、pytest.ini |

@@ -130,9 +130,9 @@ class ToolBash:
 | SQLite WAL + trace_id | `backend-modules.md` → 健壮性章节 |
 | 敏感信息检测 | `backend-modules.md` → 健壮性章节 |
 | 优雅关闭 / 工具执行追踪 | `backend-modules.md` → 健壮性章节 |
-| 对话存储与压缩 | `extensions.md`（IConversationStore + IContextPipeline）→ `application/services/conversation_store.py` |
+| 对话存储与压缩 | `extensions.md`（IConversationStore + IContextPipeline）→ `orchestration/conversation_store.py` |
 | LangMem 长期记忆 | `extensions.md`（LangMem 集成）→ 注册到 ToolNode 作为 AI 可调用工具 |
-| 建议反馈记录 | `adversarial-system.md`（建议反馈记录）→ `interface/web/routes/feedback.py` → `store.update_suggestion_feedback()` |
+| 建议反馈记录 | `adversarial-system.md`（建议反馈记录）→ `backend/routes/feedback.py` → `store.update_suggestion_feedback()` |
 | 变更计划（改前预览） | `adversarial-system.md` → `change_plan` 节点，用户逐项批准后才执行 |
 | 思考过程实时推流 | `subprocess-and-tools.md` → chat_node 中 yield `reasoning` 事件 |
 | 实时停止执行 | `subprocess-and-tools.md` → `/api/agent/stop` + kill 子进程 |

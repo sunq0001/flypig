@@ -101,8 +101,7 @@ services:
       - QWEN_API_KEY=${QWEN_API_KEY}
       - FLYPIG_WORKSPACE=/app/workspace
       - FLYPIG_DB_PATH=/app/data/conversations.db
-      - LANGGRAPH_DB_PATH=/app/data/langgraph.db
-      - FLYPIG_USAGE_DB_PATH=/app/data/usage.db
+      - FLYPIG_DB_PATH=/app/data/conversations.db
     restart: unless-stopped
 
   nginx:
@@ -131,9 +130,7 @@ docker compose up -d
 
 | 目录 | 内容 | 备份策略 |
 |------|------|---------|
-| `./data/conversations.db` | IConversationStore（对话记录） | 每日定时备份 |
-| `./data/langgraph.db` | LangGraph Checkpointer（会话状态） | 随 conversations.db 一起 |
-| `./data/usage.db` | IUsageTracker（用量追踪） | 随 conversations.db 一起 |
+| `./data/conversations.db` | 统一数据库：对话记录/用量/checkpoint（6 表） | 每日定时备份 |
 | `./workspace/` | 用户工作区代码 | 由用户自行版本管理 |
 
 ---
@@ -146,8 +143,7 @@ docker compose up -d
 | `QWEN_API_KEY` | ✅ | 通义千问 API Key（备用） |
 | `FLYPIG_WORKSPACE` | ❌ | 工作区路径（默认 /app/workspace） |
 | `FLYPIG_DB_PATH` | ❌ | 数据库路径（conversations.db） |
-| `FLYPIG_USAGE_DB_PATH` | ❌ | 用量数据库路径（usage.db，默认 /app/data/usage.db） |
-| `LANGGRAPH_DB_PATH` | ❌ | LangGraph Checkpointer 路径 |
+| `FLYPIG_DB_PATH` | ❌ | 数据库路径（conversations.db，统一存储） |
 | `LOG_LEVEL` | ❌ | 日志级别（默认 INFO，--debug 时为 DEBUG） |
 | `FLYPIG_LOG_DIR` | ❌ | 日志目录（默认 ~/.flypig/logs/） |
 

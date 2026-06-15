@@ -33,11 +33,11 @@ routes/
 | `PolicyService` | Casbin 封装 | ≤80 |
 | `GraphFactory` | ★ 图构建：导入 nodes + router → 编译 StateGraph（原 OrchestrationService.build_graph()） | ≤80 |
 | `SuggestionEngine` | ★ 评分→建议映射：generate_suggestion()（原 OrchestrationService 拆分） | ≤40 |
-| `HookService` | ★ 运行时编排入口：register/emit + cancellable 支持 + 优先级 | ≤60 |
+| `EventSubscriptions` | ★ 事件订阅编排：声明谁订阅哪些事件 | ≤60 |
 | `GitCheckpointManager` | ★ Agent Git checkpoints 管理（init/commit/restore） | ≤80 |
 | `CheckpointStore` | ★ SQLite 映射表（turn_id → commit_hash → summary） | ≤60 |
 | `SummaryGenerator` | ★ 根据本轮交互生成 ≤50 字摘要 | ≤40 |
-| `UsageTrackerService` | ★ 用量追踪：通过 HookService 自动记录 turn/call 级 token、cost、缓存 | ≤60 |
+| `UsageTrackerService` | ★ 用量追踪：通过 EventSubscriptions 自动记录 turn/call 级 token、cost、缓存 | ≤60 |
 | `TaskService` | ★ 任务管理：封装 IConversationStore 的 task CRUD（可选 Service 层） | ≤50 |
 | `ExportService` | ☆ 导入/导出服务（P1 预留，方法签名已定义） | ≤20 |
 | `ModelFallbackService` | ☆ 多模型自动 fallback（P1 预留，P0 仅记录错误） | ≤30 |
@@ -162,7 +162,7 @@ class Container:
         cls.register("context_pipeline", context_pipeline, singleton=True)
 
         # ★ 用量追踪
-        usage_tracker = SqliteUsageTracker("data/usage.db")   # 实现 IUsageTracker
+        usage_tracker = SqliteUsageTracker("data/conversations.db")   # 实现 IUsageTracker，共享 conversations.db
         pricing_fetcher = PricingFetcher()
         usage_hook = UsageTrackerHook(usage_tracker, pricing_fetcher)
         cls.register("usage_tracker", usage_tracker, singleton=True)
@@ -441,7 +441,7 @@ LangGraph Checkpointer + ConversationStore 都使用 SQLite。多会话并发写
 
 ```python
 # Checkpointer 初始化
-SqliteSaver.from_conn_string("langgraph.db?mode=wal")
+SqliteSaver.from_conn_string("data/conversations.db?mode=wal")
 
 # ConversationStore 初始化
 engine = create_async_engine("sqlite+aiosqlite:///conversations.db?mode=wal")
@@ -476,7 +476,7 @@ LangGraph Checkpointer 持久化的是**上一轮完成后**的状态。如果�
 每完成一个工具调用就 persist 一次当前状态，而不是等整轮结束：
 
 ```python
-# HookService 注册
+# EventSubscriptions 注册
 @hook("tool:after", priority=50)
 class TurnCheckpointHook:
     """每调完一个工具就 checkpoint 一次"""
@@ -551,7 +551,7 @@ if sensitive:
 
 ## 中介者模式：ChatService
 
-`ChatService` 天然承担了中介者角色——它协调 `GraphFactory`、`HookService`、`SuggestionEngine`、`PolicyService` 之间的交互，但这些服务之间互不知晓对方存在：
+`ChatService` 天然承担了中介者角色——它协调 `GraphFactory`、`EventSubscriptions`、`SuggestionEngine`、`PolicyService` 之间的交互，但这些服务之间互不知晓对方存在：
 
 ```python
 class ChatService:

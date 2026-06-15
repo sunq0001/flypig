@@ -378,7 +378,7 @@ class ToolExecutor:
 | **system** | tool_bash | subprocess 命令 |
 | | tool_git | ★ Git 操作：status/diff/log/commit/branch |
 | | tool_fetch_url | ★ 网页抓取（httpx + trafilatura） |
-| | tool_project_scan | ★ 项目扫描：树结构/语言统计 |
+| | tool_list_dir | ★ 目录浏览（deep=False 一层，deep=True 递归扫描+统计） |
 | | tool_datetime | ★ 取当前时间/时区/日期计算 |
 | | tool_calc | ★ 安全数学计算 |
 | | tool_task | task_status + task_list + task_log |
@@ -502,7 +502,7 @@ def patch_file(path: str, operations: list[dict]) -> dict:
 
 ```
 AI 想理解项目结构:
-  1. tool_project_scan → 拿到文件树
+  1. tool_list_dir(".", deep=True) → 拿到文件树
   2. tool_search("class.*Service") → 搜服务类
   3. read_file("auth_service.py", start=1, end=50) → 读头部结构
   → 3 次工具调用才能摸清一个类的关系

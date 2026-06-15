@@ -698,7 +698,7 @@ class ExportService:
 ### ModelFallbackService（P1 — 多模型自动切换）
 
 ```python
-# application/services/model_fallback_service.py
+# orchestration/model_fallback_service.py
 class ModelFallbackService:
     """P0: 不切换，仅记录错误。P1: 自动 fallback 到备选模型"""
     def get_available_models(self) -> list[str]:

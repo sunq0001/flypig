@@ -308,7 +308,7 @@ class SchemaVersionHook:
     async def on_event(self, ctx):
         for db_name, db_path in [
             ("conversations", "data/conversations.db"),
-            ("usage", "data/usage.db"),
+            ("usage", "data/conversations.db"),
         ]:
             if Path(db_path).exists():
                 version = self._get_version(db_path)

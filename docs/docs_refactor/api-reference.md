@@ -466,7 +466,7 @@ p, ai, terminal:rm *, ask
 
 ```
 开发完成 → Agent 进入 REVIEWING 状态
-→ PromptManager 切换到 tester 身份
+→ MultiRoleManager 切换到 tester 身份
 → 运行测试（tool_bash("pytest")）
 → 测试结果喂给 AI
   ├── 全部通过 → 自动切回 developer，继续下一步
