@@ -23,9 +23,9 @@ flypig/
 │   ├── events.py                 ← ★ 启动/关闭事件
 │   └── app.py                    ← ★ Quart app 工厂
 │
-├── domain/                       ← 领域层（接口、数据类、prompt、节点——定义 AI 是什么）
+├── domain/                       ← ★ 领域层（接口、数据类、prompt、节点——定义 AI 是什么）
 │   ├── __init__.py
-│   ├── interfaces/               ← 抽象接口
+│   ├── interfaces/               ← ★ 抽象接口
 │   │   ├── imodel.py             ← ★ IModel（LLM 适配器：统一 stream + context 接口，DeepSeek/Claude/GPT 各有实现）
 │   │   ├── itool_executor.py     ← ★ IToolExecutor（含 MCP 动态注册）
 │   │   ├── iconversation_store.py  ← ★ IConversationStore（对话存储 + 检索）
@@ -70,7 +70,7 @@ flypig/
 │   │   └── model_registry.py     ← ★ ModelRegistry dataclass
 │   └── exceptions.py             ← ★ 统一异常
 │
-├── orchestration/                ← 编排层（服务编排，非 UI 入口）
+├── orchestration/                ← ★ 编排层（服务编排，非 UI 入口）
 │   ├── chat_service.py           ← ★ 对话编排：调用 LangGraph → 事件分发
 │   ├── config_service.py         ← ★ 配置管理
 │   ├── session_service.py        ← ★ 会话状态管理
@@ -114,7 +114,7 @@ flypig/
 │   │   │   └── tool_web_search.py    ← ☆ P1 内置网络搜索（DuckDuckGo）
 │   │   ├── interact/             ← ★ 交互选择（出选择题让用户选）
 │   │   │   └── tool_ask_choice.py    ← ★ Explore 选择题（§3.6.3）
-│   │   ├── system/                 ← 系统工具（bash/git/任务/解压等）
+│   │   ├── system/                 ← ★ 系统工具（bash/git/任务/解压等）
 │   │   │   ├── tool_bash.py          ← ★ subprocess 命令（无 PTY）
 │   │   │   ├── tool_git.py           ← ★ Git 操作代替裸 bash：status/diff/log/commit/branch
 │   │   │   ├── tool_fetch_url.py     ← ★ 网页抓取（httpx，零依赖）
@@ -150,36 +150,36 @@ flypig/
 │   │   └── search_ranker.py      ← ☆ P2: 多源排序器（实现 IRanker）
 │   │
 │   ├── policies/                 ← ★ 权限系统
-│   │   ├── model.conf            ← Casbin 模型
-│   │   ├── policy.csv            ← Casbin 策略
+│   │   ├── model.conf            ← ★ Casbin 模型
+│   │   ├── policy.csv            ← ★ Casbin 策略
 │   │   ├── casbin_setup.py       ← ★ Casbin 初始化
 │   │   └── permission_checker.py ← ★ 权限检查（file/term/git/test, allow/ask/deny）
 │   ├── process_manager.py        ← ★ 后台进程管理器（tool_task / /api/agent/stop 共用）
 │   └── hooks.py                  ← ★ 事件钩子系统（register / emit）
 │
 ├── backend/                      ← ★ 后端入口（HTTP 路由 + SSE + 终端，与 frontend/ 对应）
-│   ├── server.py                 ← app 声明 + 路由注册
+│   ├── server.py                 ← ★ app 声明 + 路由注册
 │   ├── terminal.py               ← ★ 用户手动 PTY（WebSocket，无 AI 注入）
 │   ├── routes/
-│   │   ├── chat.py               ← /api/chat SSE
-│   │   ├── config.py             ← /api/config/*
-│   │   ├── files.py              ← /api/files, /api/file, /api/tree
-│   │   ├── sessions.py           ← 历史会话
-│   │   ├── health.py             ← 健康检查
-│   │   ├── upload.py             ← 文件上传 + 压缩解压
-│   │   ├── rollback.py           ← Git 回滚
-│   │   ├── agent_routes.py       ← /api/agent/status + /api/agent/stop
-│   │   ├── history.py            ← /api/history/search
-│   │   ├── usage.py              ← /api/usage/*（用量查询）
-│   │   ├── tasks.py              ← /api/tasks/*（任务看板 CRUD + 搜索）
+│   │   ├── chat.py               ← ★ /api/chat SSE
+│   │   ├── config.py             ← ★ /api/config/*
+│   │   ├── files.py              ← ★ /api/files, /api/file, /api/tree
+│   │   ├── sessions.py           ← ★ 历史会话
+│   │   ├── health.py             ← ★ 健康检查
+│   │   ├── upload.py             ← ★ 文件上传 + 压缩解压
+│   │   ├── rollback.py           ← ★ Git 回滚
+│   │   ├── agent_routes.py       ← ★ /api/agent/status + /api/agent/stop
+│   │   ├── history.py            ← ★ /api/history/search
+│   │   ├── usage.py              ← ★ /api/usage/*（用量查询）
+│   │   ├── tasks.py              ← ★ /api/tasks/*（任务看板 CRUD + 搜索）
 │   │   └── feedback.py           ← ★ /api/feedback/suggestion（建议反馈）
 │   ├── sse_queue.py              ← ★ SSE 队列抽象
 │   └── file_watcher.py           ← ★ 文件变更监控
 │
-├── frontend/                     ← 前端源码
-│   ├── static/                   ← Vite 构建产物（自动输出，server.py 读取此目录）
-│   └── static_vite/              ← 前端源码
-│       ├── package.json          ← 含 @ai-sdk/vue, mermaid, element-plus, echarts, sheetjs
+├── frontend/                     ← ★ 前端源码
+│   ├── static/                   ← ★ Vite 构建产物（自动输出，server.py 读取此目录）
+│   └── static_vite/              ← ★ 前端源码
+│       ├── package.json          ← ★ 含 @ai-sdk/vue, mermaid, element-plus, echarts, sheetjs
 │       ├── vite.config.js
 │       ├── index.html            ← ★ 仅 <div id="app"> 入口
 │       └── src/
@@ -221,8 +221,8 @@ flypig/
 │
 ├── scripts/                      ← ★ 运维脚本（跨平台：setup_env.bat / .sh 双入口）
 │   ├── setup_env.py              ← ★ 环境初始化（核心逻辑：检测平台 + 安装依赖 + 配置）
-│   ├── setup_env.bat             ← Windows 入口：`python scripts\setup_env.py`
-│   ├── setup_env.sh              ← Linux/Mac 入口：`python scripts/setup_env.py`
+│   ├── setup_env.bat             ← ★ Windows 入口：`python scripts\setup_env.py`
+│   ├── setup_env.sh              ← ★ Linux/Mac 入口：`python scripts/setup_env.py`
 │   ├── seed_data.py              ← ★ 测试数据填充
 │   └── migrate_db.py             ← ★ 数据库迁移
 │
