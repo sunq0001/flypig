@@ -132,7 +132,7 @@ flypig/
 │   ├── sandbox/                  ← ★ Docker 沙箱
 │   │   ├── sandbox_config.py     ← ★ SandboxConfig 数据类
 │   │   ├── path_validator.py     ← ★ PathValidator（路径安全验证）
-│   │   ├── sandbox_manager.py    ← ★ SandboxManager（容器生命周期）
+│   │   ├── sandbox_manager.py    ← ★ SandboxManager（容器生命周期，必须挂载 workspace 目录保持 Git checkpoint 一致）
 │   │   └── builder.py            ← ★ Dockerfile 生成 + 镜像构建
 │   │
 │   ├── usage/                      ← ★ 用量追踪（SQLite 统计）
@@ -247,7 +247,8 @@ flypig/
 ├── Dockerfile                    ← ★ 应用容器化（§6）
 ├── docker-compose.yml            ← ★ Docker Compose 编排：api + nginx（§6）
 ├── nginx.conf                    ← ★ Nginx 反向代理：静态文件 + SSL 终止（§6）
-└── langgraph.db                  ← ★ SqliteSaver 持久化（自动生成）
+├── data/
+    └── conversations.db          ← ★ 统一数据库：对话/任务/checkpoint/用量 6 表（自动生成）
 ```
 
 ---
