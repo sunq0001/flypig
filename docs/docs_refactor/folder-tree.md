@@ -102,7 +102,7 @@ flypig/
 │   │   │   ├── tool_write.py         ← ★ 写文件（新建/全量重写）
 │   │   │   ├── tool_patch_file.py    ← ★ 局部更新（按 anchor 定位修改）
 │   │   │   ├── tool_delete.py        ← ★ 删除文件
-│   │   │   └── tool_list_dir.py      ← ★ 列出目录内容（轻量版，不用 project_scan）
+│   │   │   └── tool_list_dir.py      ← ★ 列出目录内容（deep=False 看一层，deep=True 递归+语言统计）
 │   │   ├── review/               ← ★ 代码审查（改完后检查质量）
 │   │   │   ├── tool_change_review.py ← ★ 变更审查数据生成（§3.8.7）
 │   │   │   ├── tool_lint.py          ← ★ 代码规范自动检查（Ruff, §3.8.8）
@@ -118,7 +118,6 @@ flypig/
 │   │   │   ├── tool_bash.py          ← ★ subprocess 命令（无 PTY）
 │   │   │   ├── tool_git.py           ← ★ Git 操作代替裸 bash：status/diff/log/commit/branch
 │   │   │   ├── tool_fetch_url.py     ← ★ 网页抓取（httpx，零依赖）
-│   │   │   ├── tool_project_scan.py  ← ★ 项目扫描：树结构/语言统计/框架识别
 │   │   │   ├── tool_datetime.py      ← ★ 当前时间/时区/日期计算
 │   │   │   ├── tool_calc.py          ← ★ 安全数学计算
 │   │   │   ├── tool_task.py          ← ★ task_status + task_list + task_log
@@ -173,19 +172,19 @@ flypig/
 │   │   ├── history.py            ← /api/history/search
 │   │   ├── usage.py              ← /api/usage/*（用量查询）
 │   │   ├── tasks.py              ← /api/tasks/*（任务看板 CRUD + 搜索）
-│   │   └── feedback.py           ← /api/feedback/suggestion（建议反馈）
-│   ├── sse_queue.py              ← SSE 队列抽象
-│   └── file_watcher.py           ← 文件变更监控
+│   │   └── feedback.py           ← ★ /api/feedback/suggestion（建议反馈）
+│   ├── sse_queue.py              ← ★ SSE 队列抽象
+│   └── file_watcher.py           ← ★ 文件变更监控
 │
 ├── frontend/                     ← 前端源码
 │   ├── static/                   ← Vite 构建产物（自动输出，server.py 读取此目录）
 │   └── static_vite/              ← 前端源码
 │       ├── package.json          ← 含 @ai-sdk/vue, mermaid, element-plus, echarts, sheetjs
 │       ├── vite.config.js
-│       ├── index.html            ← 仅 <div id="app"> 入口
+│       ├── index.html            ← ★ 仅 <div id="app"> 入口
 │       └── src/
-│           ├── main.js           ← Vue app.createApp + mount
-│           ├── App.vue           ← 根组件（三栏布局 + 终端面板）
+│           ├── main.js           ← ★ Vue app.createApp + mount
+│           ├── App.vue           ← ★ 根组件（三栏布局 + 终端面板）
 │           ├── style/
 │           │   ├── variables.css
 │           │   ├── terminal-themes.css
@@ -193,41 +192,41 @@ flypig/
 │           │   ├── theme-cute.css
 │           │   └── base.css
 │           ├── components/
-│           │   ├── layout/       ← MainLayout, ResizeHandle, StatusBar
-│           │   ├── sidebar/      ← Sidebar, FileTree, FileTreeNode, Dashboard, TaskBoard
-│           │   ├── editor/       ← EditorArea, EditorTabs, MonacoEditor
-│           │   ├── chat/         ← ChatPanel, MessageList, InputBox, MessageItem,
+│           │   ├── layout/       ← ★ MainLayout, ResizeHandle, StatusBar
+│           │   ├── sidebar/      ← ★ Sidebar, FileTree, FileTreeNode, Dashboard（含反馈打标）, TaskBoard
+│           │   ├── editor/       ← ★ EditorArea, EditorTabs, MonacoEditor
+│           │   ├── chat/         ← ★ ChatPanel, MessageList, InputBox, MessageItem,
 │           │   │                   ChoiceCard, ChangeReviewCard, SuggestionCard,
 │           │   │                   InlinePreview, LivePreview, FilePreview(多类型),
 │           │   │                   DataTable, ChartView, FormGenerator, DashboardWidget,
 │           │   │                   CodeExecBlock, DiffViewer, CommandCard,
 │           │   │                   MemoryBubble, ThinkingIndicator, ToolCallCard,
 │           │   │                   TaskListCard, ImagePreview
-│           │   ├── file/         ← FilePreview 子组件（跨文件类型预览）
-│           │   │   ├── ExcelViewer.vue   ← SheetJS
-│           │   │   ├── PdfViewer.vue     ← PDF.js
-│           │   │   ├── DocxViewer.vue    ← mammoth.js
-│           │   │   └── PptxViewer.vue   ← pptxjs
-│           │   ├── terminal/     ← TerminalPanel, TerminalTab, XtermViewer, OutputViewer
-│           │   ├── init/         ← InitWizard, WorkspaceStep, ModelStep, ApiKeyStep
-│           │   └── common/       ← MarkdownRender, CodeBlock, LoadingSpinner,
+│           │   ├── file/         ← ★ FilePreview 子组件（跨文件类型预览）
+│           │   │   ├── ExcelViewer.vue   ← ★ SheetJS
+│           │   │   ├── PdfViewer.vue     ← ★ PDF.js
+│           │   │   ├── DocxViewer.vue    ← ★ mammoth.js
+│           │   │   └── PptxViewer.vue   ← ★ pptxjs
+│           │   ├── terminal/     ← ★ TerminalPanel, TerminalTab, XtermViewer, OutputViewer
+│           │   ├── init/         ← ★ InitWizard, WorkspaceStep, ModelStep, ApiKeyStep
+│           │   └── common/       ← ★ MarkdownRender, CodeBlock, LoadingSpinner,
 │           │                       ThemeSwitcher, CommandPalette, TaskHistoryDialog,
-│           │                       RecoveryDialog ← 崩溃恢复弹窗
-│           ├── composables/      ← useChat, useMessages, useTerminal, useFileTree,
+│           │                       RecoveryDialog ← ★ 崩溃恢复弹窗
+│           ├── composables/      ← ★ useChat, useMessages, useTerminal, useFileTree,
 │           │                       useEditor, useLayout, useMarkdownRender, useTheme,
 │           │                       useCommandPalette, useTasks, useDraft, useFileDrop,
 │           │                       useEventRouter, useUxEnhancements,
 │           │                       useAchievements, useTimeTravel
-│           └── lib/              ← xterm-setup.js, monaco-setup.js, sfc-compiler.js
+│           └── lib/              ← ★ xterm-setup.js, monaco-setup.js, sfc-compiler.js
 │
 ├── scripts/                      ← ★ 运维脚本（跨平台：setup_env.bat / .sh 双入口）
-│   ├── setup_env.py              ← 环境初始化（核心逻辑：检测平台 + 安装依赖 + 配置）
+│   ├── setup_env.py              ← ★ 环境初始化（核心逻辑：检测平台 + 安装依赖 + 配置）
 │   ├── setup_env.bat             ← Windows 入口：`python scripts\setup_env.py`
 │   ├── setup_env.sh              ← Linux/Mac 入口：`python scripts/setup_env.py`
-│   ├── seed_data.py              ← 测试数据填充
+│   ├── seed_data.py              ← ★ 测试数据填充
 │   └── migrate_db.py             ← ★ 数据库迁移
 │
-├── tests/                        ← 单元测试 + 集成测试
+├── tests/                        ← ★ 单元测试 + 集成测试
 │   ├── unit/
 │   │   ├── test_router.py
 │   │   ├── test_models.py
