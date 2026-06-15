@@ -135,8 +135,8 @@ flypig/
 │   │   ├── sandbox_manager.py    ← ★ SandboxManager（容器生命周期，必须挂载 workspace 目录保持 Git checkpoint 一致）
 │   │   └── builder.py            ← ★ Dockerfile 生成 + 镜像构建
 │   │
-│   ├── usage/                      ← ★ 用量追踪（SQLite 统计）
-│   │   ├── sqlite_tracker.py     ← ★ SqliteUsageTracker（IUsageTracker 的 SQLite 实现）
+│   ├── usage/                      ← ★ 用量追踪（存入 conversation.db 的 turn_usages/call_usages 表）
+│   │   ├── sqlite_tracker.py     ← ★ SqliteUsageTracker（IUsageTracker 实现，共享 conversations.db）
 │   │   ├── pricing.py            ← ★ PricingFetcher（价格获取 + 缓存）
 │   │   └── usage_handler.py       ← ★ 用量事件处理器（订阅 hooks，自动记录 token/cost）
 │   │
