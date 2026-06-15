@@ -101,7 +101,8 @@ flypig/
 │   │   │   ├── tool_read.py          ← ★ 读文件（支持 start/end 范围 / symbol 符号定位）
 │   │   │   ├── tool_write.py         ← ★ 写文件（新建/全量重写）
 │   │   │   ├── tool_patch_file.py    ← ★ 局部更新（按 anchor 定位修改）
-│   │   │   └── tool_delete.py        ← ★ 删除文件
+│   │   │   ├── tool_delete.py        ← ★ 删除文件
+│   │   │   └── tool_list_dir.py      ← ★ 列出目录内容（轻量版，不用 project_scan）
 │   │   ├── review/               ← ★ 代码审查（改完后检查质量）
 │   │   │   ├── tool_change_review.py ← ★ 变更审查数据生成（§3.8.7）
 │   │   │   ├── tool_lint.py          ← ★ 代码规范自动检查（Ruff, §3.8.8）
