@@ -200,13 +200,13 @@ flypig/
 │           │   │                   InlinePreview, LivePreview, FilePreview(多类型),
 │           │   │                   DataTable, ChartView, FormGenerator, DashboardWidget,
 │           │   │                   CodeExecBlock, DiffViewer, CommandCard,
-│           │   │                   MemoryBubble, ThinkingIndicator, ToolCallCard,
+│           │   │                   MemoryBubble(☆), ThinkingIndicator, ToolCallCard,
 │           │   │                   TaskListCard, ImagePreview
-│           │   ├── file/         ← ★ FilePreview 子组件（跨文件类型预览）
-│           │   │   ├── ExcelViewer.vue   ← ★ SheetJS
-│           │   │   ├── PdfViewer.vue     ← ★ PDF.js
-│           │   │   ├── DocxViewer.vue    ← ★ mammoth.js
-│           │   │   └── PptxViewer.vue   ← ★ pptxjs
+│           │   ├── file/         ← ☆ FilePreview 子组件（跨文件类型预览，P1）
+│           │   │   ├── ExcelViewer.vue   ← ☆ SheetJS（P1）
+│           │   │   ├── PdfViewer.vue     ← ☆ PDF.js（P1）
+│           │   │   ├── DocxViewer.vue    ← ☆ mammoth.js（P1）
+│           │   │   └── PptxViewer.vue   ← ☆ pptxjs（P1）
 │           │   ├── terminal/     ← ★ TerminalPanel, TerminalTab, XtermViewer, OutputViewer
 │           │   ├── init/         ← ★ InitWizard, WorkspaceStep, ModelStep, ApiKeyStep
 │           │   └── common/       ← ★ MarkdownRender, CodeBlock, LoadingSpinner,
@@ -216,7 +216,7 @@ flypig/
 │           │                       useEditor, useLayout, useMarkdownRender, useTheme,
 │           │                       useCommandPalette, useTasks, useDraft, useFileDrop,
 │           │                       useEventRouter, useUxEnhancements,
-│           │                       useAchievements, useTimeTravel
+│           │                       useAchievements(☆), useTimeTravel(☆)
 │           └── lib/              ← ★ xterm-setup.js, monaco-setup.js, sfc-compiler.js
 │
 ├── scripts/                      ← ★ 运维脚本（跨平台：setup_env.bat / .sh 双入口）
