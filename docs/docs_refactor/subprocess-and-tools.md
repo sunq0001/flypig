@@ -681,19 +681,26 @@ AI 调 tool_bash("npm install")
 后台沙箱数量无上限，会话销毁时全部清理。
 ```
 
-### 交互式命令
+### 执行优先级链
 
 ```
-沙箱模式下:
+🥇 AI subprocess 在沙箱内    ← pip install, git status（默认，最快）
+🥇 AI 交互式在沙箱内          ← python REPL, vim，提示用户去沙箱终端
+🥇 用户交互式在沙箱内          ← 用户手动开终端 → docker exec -it sandbox
+🥈 AI subprocess 在沙箱外    ← Docker 不可用时的降级
+🥉 用户 PTY 在沙箱外          ← Docker 不可用时用户手动终端
+```
 
+```
 AI 运行 python（交互式）
-  → subprocess 卡住 → AI 识别为交互式
-  → 提示用户去终端手动运行
-  → 终端面板显示 [🔒 沙箱终端]
-  → 用户终端实际是 docker exec -it sandbox_<session> bash
-  → Vim / REPL / 交互式脚本全部正常
+  → 沙箱内 subprocess 卡住
+  → AI 识别为交互式
+  → "请在下方终端手动运行 python（已在沙箱内）"
+  → 用户终端面板显示 [🔒 沙箱终端]
+  → 实际是 docker exec -it sandbox_<session> bash
+  → Vim / REPL / 交互式脚本全部正常 ✅
 
-降级模式（无 Docker）:
+沙箱外的执行:
   → 终端面板显示 [🔓 本地终端]
   → 直接宿主机 bash
 ```
