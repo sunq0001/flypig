@@ -681,6 +681,34 @@ AI 调 tool_bash("npm install")
 后台沙箱数量无上限，会话销毁时全部清理。
 ```
 
+### 沙箱内自愈（优先于降级）
+
+AI 在沙箱内执行命令失败时，应先在沙箱内安装缺少的工具，而不是立刻切到宿主机：
+
+```
+AI: npm install
+  → 沙箱内报错 "npm: command not found"
+
+❌ 立刻降级：
+  → [🔓 本地] npm install
+
+✅ 沙箱内自愈：
+  → 检查系统 → apt-get install npm
+  → 重新 npm install
+  → 如果还是失败 → 尝试 nvm / 看项目有没 package-lock
+  → 实在不行 → [降级到本地] npm install ← 标注让用户知情
+```
+
+不需要代码实现，通过 system prompt 约束 AI 行为：
+
+```
+# domain/prompts/roles/developer.md 加一句：
+"你运行的命令都在沙箱（Docker 容器）里。
+如果缺少工具，优先在沙箱内安装（apt/pip/npm）。
+只有反复安装失败才切换到宿主机执行。
+切换时注明 [降级到本地] 通知用户。"
+```
+
 ### 执行优先级链
 
 ```
