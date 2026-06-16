@@ -643,6 +643,110 @@ class CommandHistory:
 
 > **关联文档**: `backend-modules.md`（CheckpointStore）、`adversarial-system.md`（驳回处理）
 
+---
+
+## 沙箱执行（P1 可选）
+
+### 沙箱生命周期
+
+| 阶段 | 动作 | 生命周期 |
+|:----:|------|:--------:|
+| **主沙箱** | 会话第一条 subprocess 时 `docker run` | 随会话销毁 |
+| **后台沙箱** | AI 启动长服务时新建独立容器 | 服务停止或会话销毁 |
+| **降级** | Docker 不可用 → 直接宿主机 subprocess | 当前命令 |
+
+```
+AI 调 tool_bash("npm install")
+  → SandboxManager.check()
+    ├── Docker 可用 → docker exec sandbox_<session> npm install
+    │                 → 成功：[🔒 沙箱] npm install ...
+    │                 → 失败（容器挂了）→ 重建 → 重试
+    └── Docker 不可用 → 宿主机 subprocess
+                        → [🔓 本地] npm install ...
+```
+
+### 沙箱分配策略
+
+```
+主沙箱（一个会话一个，复用）:
+  pip install flask
+  git status
+  grep def login
+
+后台沙箱（每个长服务一个）:
+  [🔒 后端] python server.py        ← 容器 1
+  [🔒 前端] npm run dev             ← 容器 2
+
+所有沙箱挂载同一 workspace 目录。
+后台沙箱数量无上限，会话销毁时全部清理。
+```
+
+### 交互式命令
+
+```
+沙箱模式下:
+
+AI 运行 python（交互式）
+  → subprocess 卡住 → AI 识别为交互式
+  → 提示用户去终端手动运行
+  → 终端面板显示 [🔒 沙箱终端]
+  → 用户终端实际是 docker exec -it sandbox_<session> bash
+  → Vim / REPL / 交互式脚本全部正常
+
+降级模式（无 Docker）:
+  → 终端面板显示 [🔓 本地终端]
+  → 直接宿主机 bash
+```
+
+### 终端实现
+
+```python
+# backend/terminal.py
+class Terminal:
+    async def open(self, session_id: str, sandbox_id: str = None):
+        if sandbox_id:
+            # 沙箱模式 → 连到容器
+            self.proc = await asyncio.create_subprocess_exec(
+                "docker", "exec", "-it", sandbox_id, "bash"
+            )
+            self.env_label = "🔒 沙箱"
+        else:
+            # 本地模式 → 宿主机 shell
+            self.proc = await asyncio.create_subprocess_exec("bash")
+            self.env_label = "🔓 本地"
+```
+
+### SSE 事件
+
+```python
+# tool_call 结果中携带沙箱状态
+{"type": "tool_call",
+ "tool": "bash",
+ "args": "npm install",
+ "sandbox": "active",         # active / fallback / none
+ "result": "added 152 packages..."}
+
+# terminal 连接时
+{"type": "terminal_open",
+ "sandbox": "active",
+ "label": "🔒 沙箱终端"}
+```
+
+### 沙箱降级配置
+
+| 策略 | 行为 |
+|------|------|
+| `always` | 强制沙箱，不可用时报错 |
+| `prefer` | 优先沙箱，不可用降级本地（默认） |
+| `never` | 永远不用沙箱 |
+
+```python
+# config.py
+SANDBOX_MODE: str = "prefer"  # always / prefer / never
+```
+
+---
+
 ## Token 优化
 
 ### 1. 工具输出源头截断
