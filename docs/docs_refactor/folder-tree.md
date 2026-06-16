@@ -132,7 +132,7 @@ flypig/
 │   ├── sandbox/                  ← ★ Docker 沙箱
 │   │   ├── sandbox_config.py     ← ★ SandboxConfig 数据类
 │   │   ├── path_validator.py     ← ★ PathValidator（路径安全验证）
-│   │   ├── sandbox_manager.py    ← ★ SandboxManager（容器生命周期，必须挂载 workspace 目录保持 Git checkpoint 一致）
+│   │   ├── sandbox_manager.py    ← ★ SandboxManager（容器生命周期 + 状态检测，失败降级时通知前端显示沙箱/本地标识）
 │   │   └── builder.py            ← ★ Dockerfile 生成 + 镜像构建
 │   │
 │   ├── usage/                      ← ★ 用量追踪（存入 conversation.db 的 turn_usages/call_usages 表）
@@ -200,7 +200,7 @@ flypig/
 │           │   │                   InlinePreview, LivePreview, FilePreview(多类型),
 │           │   │                   DataTable, ChartView, FormGenerator, DashboardWidget,
 │           │   │                   CodeExecBlock, DiffViewer, CommandCard,
-│           │   │                   MemoryBubble(☆), ThinkingIndicator, ToolCallCard,
+│           │   │                   MemoryBubble(☆), ThinkingIndicator, ToolCallCard（含沙箱/本地标识）,
 │           │   │                   TaskListCard, ImagePreview
 │           │   ├── file/         ← ☆ FilePreview 子组件（跨文件类型预览，P1）
 │           │   │   ├── ExcelViewer.vue   ← ☆ SheetJS（P1）
