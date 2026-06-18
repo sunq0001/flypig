@@ -1,7 +1,7 @@
 # 任务管理系统（Plan/Task System）
 
 > **来源**: 新增模块，作为 `IConversationStore` 的扩展
-> **关联文档**: `extensions.md`（IConversationStore 接口）、`frontend-arch.md`（前端组件）、`api-reference.md`（查询端点）、`langgraph-graph.md`（AgentState）、`usage-tracking.md`（与用量追踪的数据层次差异）
+> **关联文档**: `memories.md`（长期记忆总览 - 表结构/接口/反馈体系）、`frontend-arch.md`（前端组件）、`api-reference.md`（查询端点）、`langgraph-graph.md`（AgentState）
 
 ## 概述
 

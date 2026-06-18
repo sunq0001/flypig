@@ -1,7 +1,7 @@
 # 长期记忆系统（Memories）
 
 > **来源**: `architecture-refactor.md` §3.7, §3.9
-> **关联文档**: `short-term-memory.md`（上下文压缩）、`backend-modules.md`（DI 注册）、`api-reference.md`（查询端点）
+> **关联文档**: `short-term-memory.md`（上下文压缩）、`backend-modules.md`（DI 注册）、`api-reference.md`（查询端点）、`plan-task-system.md`（任务系统详细设计：AI 集成/SSE/前端组件/回溯）
 > 所有持久化数据的统一描述：对话记录、任务、用量、checkpoint、反馈。
 
 ## 概述
