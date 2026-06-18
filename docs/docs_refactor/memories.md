@@ -538,6 +538,54 @@ P0 用 NoOp 实现，P1 基于 tree-sitter AST 构建。**这也是长期记忆*
 
 ---
 
+## LangMem 集成（P2 选项）
+
+LangMem 不是 ConversationStore 的替代品，而是**额外的知识层**——AI 主动调用的工具。
+
+### 和 ConversationStore 的对比
+
+| 维度 | ConversationStore | LangMem |
+|------|-----------------|---------|
+| 存什么 | 对话记录 + 任务 + 用量 | 知识片段（"用户喜欢 FastAPI"） |
+| 谁写 | 系统自动 | AI 主动调 `manage_memory()` |
+| 谁读 | Pipeline 自动读 → 压缩 → 喂 LLM | AI 主动调 `search_memory()` |
+| 写入频率 | 每轮 1 次 | AI 觉得有必要时才写 |
+| 检索 | turn_id / timestamp / 全文 | 向量嵌入 + 语义搜索 |
+| 数据量 | 全部对话（可能很大） | 精选知识点（轻量） |
+
+### 集成方式
+
+```python
+from langmem import create_manage_memory_tool, create_search_memory_tool
+
+memory_tools = [
+    create_manage_memory_tool(namespace=("memories",), store=store_backend),
+    create_search_memory_tool(namespace=("memories",), store=store_backend),
+]
+```
+
+AI 在对话中自行决定何时调用：
+
+```
+用户: "还是按上次说的那个方案"
+  AI 调 search_memory("上次说的方案") → "用户偏好 FastAPI + SQLite"
+
+用户: "记住，我喜欢用 Pydantic"
+  AI 调 manage_memory("用户喜欢用 Pydantic")
+```
+
+### 实现演进
+
+| 阶段 | 方式 | 说明 |
+|------|------|------|
+| **P0（MVP）** | 不用 LangMem | ConversationStore 的 get_recent_turns 已经够用 |
+| **P1（有用户）** | LangMem + SQLite | AI 能查/存知识点，后台自动提取 |
+| **P2（向量库）** | LangMem + pgvector | 语义搜索精度提升 |
+
+> LangMem 不是架构依赖。`IConversationStore.search()` 是对历史对话的搜索，LangMem 是对"提炼后的知识片段"的搜索，两者独立。
+
+---
+
 ## 数据关系总览
 
 ```
