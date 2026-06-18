@@ -1,7 +1,7 @@
 # 架构图
 
 > **来源**: `architecture-refactor.md` §2
-> **关联文档**: `folder-tree.md`（文件结构）、`architecture-guide.md`（总览）、`usage-tracking.md`（用量追踪）
+> **关联文档**: `folder-tree.md`（文件结构）、`architecture-guide.md`（总览）、`mem_convStore_usage.md`（用量追踪）
 > 此图与主文档 §2 同步更新。
 
 ```

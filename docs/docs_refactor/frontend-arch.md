@@ -220,7 +220,7 @@ AI 生成的 HTML/Vue SFC 代码在对话中通过 iframe 沙箱渲染为可交�
 
 ## TaskBoard 任务看板
 
-> 完整设计文档见 `plan-task-system.md`。本节只写前端组件规格。
+> 完整设计文档见 `mem_convStore_tasks.md`。本节只写前端组件规格。
 
 ### 组件树
 

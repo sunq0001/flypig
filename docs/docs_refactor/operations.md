@@ -1,7 +1,7 @@
 # 运维部署
 
 > **来源**: `architecture-refactor.md` §6
-> **关联文档**: `migration-roadmap.md`（迁移步骤）、`tech-stack.md`（技术选型）、`usage-tracking.md`（数据持久化说明）、`resilience.md`（日志/迁移/崩溃恢复）
+> **关联文档**: `migration-roadmap.md`（迁移步骤）、`tech-stack.md`（技术选型）、`mem_convStore_usage.md`（数据持久化说明）、`resilience.md`（日志/迁移/崩溃恢复）
 > 日志系统和 Schema 迁移的完整实现详见 `resilience.md`。
 
 ---

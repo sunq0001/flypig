@@ -1,7 +1,8 @@
-# 任务管理系统（Plan/Task System）
+# mem_convStore_tasks：任务管理
 
-> **来源**: 新增模块，作为 `IConversationStore` 的扩展
-> **关联文档**: `memories.md`（长期记忆总览 - 表结构/接口/反馈体系）、`frontend-arch.md`（前端组件）、`api-reference.md`（查询端点）、`langgraph-graph.md`（AgentState）
+> **来源**: `memories.md`（长期记忆总览）
+> **关联文档**: `memories.md`（表结构/接口）、`frontend-arch.md`（前端组件）、`api-reference.md`（查询端点）、`langgraph-graph.md`（AgentState）
+> 任务系统是 ConversationStore 的内置扩展，共享同一条数据库连接。
 
 ## 概述
 

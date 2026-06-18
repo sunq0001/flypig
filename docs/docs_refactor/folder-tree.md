@@ -1,7 +1,7 @@
 # 项目文件夹树（统一标准）
 
 > **来源**: 全文档提取（`architecture-refactor.md` §3.1-§10）
-> **关联文档**: `architecture-guide.md`（总览）、`backend-modules.md`（模块职责）、`usage-tracking.md`（usage/ 模块）
+> **关联文档**: `architecture-guide.md`（总览）、`backend-modules.md`（模块职责）、`mem_convStore_usage.md`（usage/ 模块）
 > **本树是唯一标准**，所有内联文件夹树以此为准。改结构时只需改这里，其他地方删掉冗余树。
 
 ---

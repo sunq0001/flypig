@@ -1,7 +1,7 @@
 # 数据流
 
 > **来源**: `architecture-refactor.md` §8
-> **关联文档**: `api-reference.md`（事件格式）、`frontend-arch.md`（前端消费）、`usage-tracking.md`（response_end 用量摘要）、`plan-task-system.md`（任务数据流）
+> **关联文档**: `api-reference.md`（事件格式）、`frontend-arch.md`（前端消费）、`mem_convStore_usage.md`（response_end 用量摘要）、`mem_convStore_tasks.md`（任务数据流）、`mem_convStore_checkpoints.md`（Checkpoint）
 > 改数据流时，需同步检查 api-reference.md 中的事件格式。
 
 ## 当前（复杂且有问题）

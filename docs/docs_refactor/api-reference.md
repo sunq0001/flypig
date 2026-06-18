@@ -1,7 +1,7 @@
 # API 参考
 
 > **来源**: `architecture-refactor.md` §3.1, §3.8.2-3.8.5, §8.3
-> **关联文档**: `frontend-arch.md`（前端消费）、`data-flow.md`（数据流）、`usage-tracking.md`（用量查询端点）、`plan-task-system.md`（任务端点）、`resilience.md`（导出/恢复端点）
+> **关联文档**: `frontend-arch.md`（前端消费）、`data-flow.md`（数据流）、`mem_convStore_usage.md`（用量查询端点）、`mem_convStore_tasks.md`（任务端点）、`mem_convStore_checkpoints.md`（Checkpoint）、`resilience.md`（导出/恢复端点）
 > 新增端点或改 SSE 事件格式时，需同步检查 frontend-arch.md 和 data-flow.md。
 
 ## REST 端点

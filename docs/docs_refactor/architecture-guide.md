@@ -87,7 +87,7 @@ class ToolBash:
 | 查看变更审查、Lint、对抗建议 | `adversarial-system.md` |
 | 查看 Docker Compose 部署和 CI/CD | `operations.md` |
 | 查看对话存储、上下文压缩、LangMem 记忆 | `memories.md` + `short-term-memory.md` |
-| 查看用量追踪（Token/Cost/缓存统计） | `usage-tracking.md` |
+| 查看用量追踪（Token/Cost/缓存统计） | `mem_convStore_usage.md` |
 | 查看迁移路线和 MVP 迭代 | `migration-roadmap.md` |
 | 查看代码理解服务（搜索/知识图谱/向量库） | `folder-tree.md` → `infrastructure/search/` |
 | 查看崩溃恢复/日志/数据迁移 | `resilience.md` |
@@ -112,7 +112,7 @@ class ToolBash:
 | 改模式配置(温度/工具) | `mode-matrix.md` → `domain/models/mode.py` |
 | 改权限规则 | `backend-modules.md` → `infrastructure/policies/` + Casbin 策略文件 |
 | 改会话持久化 | `memories.md` → `orchestration/conversation_store.py` |
-| 改用量追踪 | `usage-tracking.md` → `infrastructure/usage/` + `SqliteUsageTracker` |
+| 改用量追踪 | `mem_convStore_usage.md` → `infrastructure/usage/` + `SqliteUsageTracker` |
 | 断点恢复（关掉再开继续） | `api-reference.md` → `GET /api/sessions/<id>/restore` + `SessionService.restore()` |
 | 改终端管理 | `subprocess.md` → `backend/terminal.py` |
 | 工具安全限制（路径白名单） | `subprocess.md` → `infrastructure/tools/tool_bash.py` |
