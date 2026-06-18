@@ -192,7 +192,7 @@ flypig/
 │           │   ├── theme-cute.css
 │           │   └── base.css
 │           ├── components/
-│           │   ├── layout/       ← ★ MainLayout, ResizeHandle, StatusBar
+│           │   ├── layout/       ← ★ MainLayout, ResizeHandle, StatusBar（含后台进程指示器）
 │           │   ├── sidebar/      ← ★ Sidebar, FileTree, FileTreeNode, Dashboard（含反馈打标）, TaskBoard
 │           │   ├── editor/       ← ★ EditorArea, EditorTabs, MonacoEditor
 │           │   ├── chat/         ← ★ ChatPanel, MessageList, InputBox, MessageItem,
