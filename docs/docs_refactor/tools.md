@@ -508,3 +508,46 @@ async def execute_batch(self, tool_calls: list[ToolCall]) -> list:
 - AI 批量查 git：`git("status")` + `git("log -5")` → **同时返回**
 
 > 依赖关系由 AI 自行保证——同一轮 `tool_calls` 数组中的顺序不代表先后依赖。
+
+---
+
+## 文件上传与压缩解压
+
+前端 Element Plus Upload 组件（支持拖拽、多文件）→ `POST /api/upload` → 保存到工作区临时目录。
+
+检测到压缩包（.zip/.7z/.tar/.rar）自动解压。`tool_extract_archive` 供 AI 直接调用：
+
+```python
+def _safe_extract_zip(archive: zipfile.ZipFile, target_dir: Path):
+    for entry in archive.infolist():
+        resolved = (target_dir / entry.filename).resolve()
+        if not str(resolved).startswith(str(target_dir.resolve())):
+            raise SecurityError(f"拒绝路径穿越: {entry.filename}")
+        archive.extract(entry, target_dir)
+
+def _safe_extract_tar(archive: tarfile.TarFile, target_dir: Path):
+    for entry in archive.getmembers():
+        resolved = (target_dir / entry.name).resolve()
+        if not str(resolved).startswith(str(target_dir.resolve())):
+            raise SecurityError(f"拒绝路径穿越: {entry.name}")
+        archive.extract(entry, target_dir)
+
+def tool_extract_archive(archive_path: str, target_dir: str = None) -> str:
+    target = Path(target_dir or Path(archive_path).parent).resolve()
+    ext = Path(archive_path).suffix.lower()
+    extractors = {
+        ".zip": lambda: _safe_extract_zip(zipfile.ZipFile(archive_path), target),
+        ".tar": lambda: _safe_extract_tar(tarfile.open(archive_path), target),
+        ".7z": lambda: py7zr.SevenZipFile(archive_path).extractall(target),
+        ".rar": lambda: rarfile.RarFile(archive_path).extractall(target),
+    }
+    if ext not in extractors:
+        raise ValueError(f"不支持的压缩格式: {ext}")
+    try:
+        extractors[ext]()
+        return f"解压完成: {archive_path} -> {target}"
+    except SecurityError as e:
+        return f"解压失败 - 安全限制: {e}"
+```
+
+**安全要点**：Zip Slip 防护（检查解析后路径以目标目录开头）+ `.7z` 内置检查。依赖 `zipfile`/`tarfile`（标准库）+ `py7zr`/`rarfile`（可选）。
