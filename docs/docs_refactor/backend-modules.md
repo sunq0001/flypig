@@ -35,7 +35,7 @@ routes/
 | `SuggestionEngine` | ★ 评分→建议映射：generate_suggestion()（原 OrchestrationService 拆分） | ≤40 |
 | `EventSubscriptions` | ★ 事件订阅编排：声明谁订阅哪些事件 | ≤60 |
 | `GitCheckpointManager` | ★ Agent Git checkpoints 管理（init/commit/restore） | ≤80 |
-| `CheckpointStore` | ★ SQLite 映射表（turn_id → commit_hash → summary） | ≤60 |
+| `CheckpointStore` | ★ SQLite 映射表（turn_id → commit_hash → summary，conversation_store 内置） | ≤60 |
 | `SummaryGenerator` | ★ 根据本轮交互生成 ≤50 字摘要 | ≤40 |
 | `UsageTrackerService` | ★ 用量追踪：通过 EventSubscriptions 自动记录 turn/call 级 token、cost、缓存 | ≤60 |
 | `TaskService` | ★ 任务管理：封装 IConversationStore 的 task CRUD（可选 Service 层） | ≤50 |

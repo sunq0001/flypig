@@ -79,10 +79,9 @@ flypig/
 │   ├── graph_config.yaml         ← ☆ 图构建配置（P1 配置驱动化，MVP 硬编码建图）
 │   ├── suggestion_engine.py      ← ★ 评分→建议映射：generate_suggestion()
 │   ├── event_subscriptions.py    ← ★ 事件订阅编排：声明哪个模块订阅哪些事件
-│   ├── git_checkpoint_manager.py ← ★ Agent Git checkpoint 管理
-│   ├── checkpoint_store.py       ← ★ CheckpointStore：turn_id → commit_hash → summary（长期存储）
+│   ├── git_checkpoint_manager.py ← ★ Agent Git checkpoint 管理（init/commit/restore，映射存在 conversation_store 中）
 │   ├── context_pipeline.py       ← ★ 短期记忆：预 LLM 上下文压缩（Truncate+Trim+Fold，每轮从 ConversationStore 读取后压缩）
-│   ├── conversation_store.py     ← ★ 长期记忆：对话/checkpoint/任务/user_feedback/用量统一 SQLite 存储（6 表）
+│   ├── conversation_store.py     ← ★ 长期记忆：对话/checkpoint/映射/任务/user_feedback/用量统一 SQLite 存储（7 表）
 │   ├── usage_tracker_service.py  ← ★ 用量追踪编排（IUsageTracker + PricingFetcher）
 │   ├── export_service.py         ← ☆ P1 导入/导出服务（NotImplemented 预留）
 │   ├── model_fallback_service.py ← ☆ P1 多模型 fallback（P0 仅记录）
