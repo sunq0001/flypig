@@ -1,7 +1,7 @@
 # mem_convStore_usage：用量追踪
 
-> **来源**: `memories.md`（长期记忆总览）
-> **关联文档**: `memories.md`（表结构/接口）、`backend-modules.md`（DI注册）、`api-reference.md`（查询端点）、`operations.md`（数据持久化策略）
+> **来源**: `mem_convStore.md`（对话存储总览）
+> **关联文档**: `mem_convStore.md`（表结构/接口）、`backend-modules.md`（DI注册）、`api-reference.md`（查询端点）、`operations.md`（数据持久化策略）
 > 用量追踪与 ConversationStore 共用 conversations.db。
 
 ## 概述
@@ -630,4 +630,4 @@ async def check_usage_storage():
         }
 ```
 
-> **关联文档**: `memories.md`（长期记忆总览 - 表结构/接口）、`backend-modules.md`（DI注册）、`api-reference.md`（查询端点）、`operations.md`（数据持久化+备份）、`resilience.md`（Schema 迁移 + 日志系统）
+> **关联文档**: `mem_convStore.md`（对话存储总览）、`backend-modules.md`（DI注册）、`api-reference.md`（查询端点）、`operations.md`（数据持久化+备份）、`resilience.md`（Schema 迁移 + 日志系统）

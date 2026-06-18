@@ -1,7 +1,7 @@
 # 短期记忆：上下文压缩（ContextPipeline）
 
 > **来源**: `architecture-refactor.md` §3.7.3
-> **关联文档**: `memories.md`（长期记忆 ConversationStore）、`backend-modules.md`（DI 注册）
+> **关联文档**: `mem_convStore.md`（对话存储总览）、`backend-modules.md`（DI 注册）
 > 短期记忆不存储，只在调 LLM 之前压缩。
 
 ## 职责

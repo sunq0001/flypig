@@ -1,7 +1,7 @@
 # mem_convStore_checkpoints：Checkpoint 系统
 
-> **来源**: `memories.md`（长期记忆总览）
-> **关联文档**: `memories.md`（表结构/接口）、`backend-modules.md`（TurnCheckpointHook）、`data-flow.md`（恢复数据流）、`subprocess.md`（实时停止执行）
+> **来源**: `mem_convStore.md`（对话存储总览）
+> **关联文档**: `mem_convStore.md`（表结构/接口）、`backend-modules.md`（TurnCheckpointHook）、`data-flow.md`（恢复数据流）、`subprocess.md`（实时停止执行）
 
 ## 双层 Checkpoint
 
