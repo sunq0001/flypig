@@ -6,13 +6,15 @@
 
 ## 概述
 
-长期记忆统一存储在 `conversations.db`（SQLite WAL 模式），共 7 张表：
+长期记忆统一存储在 `conversations.db`（SQLite WAL 模式），共 9 张表：
 
 | 表 | 用途 | 写入者 |
 |:--:|------|:------:|
+| `sessions` | 会话元数据（创建/最后活跃时间） | ConversationStore |
 | `turns` | 对话轮次（含 partial 标记） | ConversationStore |
 | `tasks` | 任务列表（含 user_feedback） | AI（tool_add_task） |
 | `task_status_log` | 任务状态变更历史 | ConversationStore |
+| `suggestions` | 对抗建议反馈记录 | ConversationStore |
 | `turn_usage` | 每轮用量聚合 | SqliteUsageTracker |
 | `call_usage` | 每次调用明细 | SqliteUsageTracker |
 | `model_pricing` | 模型价格快照（每日） | PricingFetcher |
@@ -24,7 +26,22 @@
 
 > 替代原来散落的 IRepository / IHistoryStore / CheckpointStore。
 
-### 表 1：`turns`
+### 表 1：`sessions`
+
+```sql
+CREATE TABLE sessions (
+    id TEXT PRIMARY KEY,                  -- session_001
+    user_id TEXT NOT NULL,
+    title TEXT,                            -- 会话标题（可自动生成）
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_active_at TIMESTAMP,
+    turn_count INTEGER DEFAULT 0,
+    workspace TEXT                         -- 关联的工作区路径
+);
+CREATE INDEX idx_sessions_user ON sessions(user_id);
+```
+
+### 表 2：`turns`
 
 ```sql
 CREATE TABLE turns (
@@ -107,6 +124,61 @@ class IConversationStore(ABC):
 ---
 
 ## 任务系统
+
+任务是 AI 拆解用户需求后生成的**结构化代办清单**。每个任务记录一件事（"重构路由"、"写测试"），有明确的状态流转和用户反馈。
+
+### 核心哲学
+
+- **没有 Plan 层级**——扁平的任务列表，一个方案天然由多个任务组成
+- **每个任务都要记录**，不分大小。AI 拆解了子任务就写入数据库
+- **通过 `turn_id` 串联**：任务创建、状态变更、checkpoint 都通过 `turn_id` 对齐
+- **回溯时任务状态跟着回**：恢复某 turn 时，文件回退 + 任务状态也回到当时快照
+- **无反馈 = 通过**：用户不评价 = `ok`，表扬 = `good`，抱怨 = `not_work`
+
+### 任务状态
+
+```
+       ┌──────────┐
+       │  pending  │ ← 创建后的初始状态
+       └─────┬────┘
+             │
+    ┌────────┼────────┐
+    ▼        ▼        ▼
+┌────────┐ ┌──────────┐ ┌───────────┐
+│blocked │ │in_progress│ │ cancelled │
+└────┬───┘ └─────┬────┘ └───────────┘
+     │          │
+     │     ┌────┴─────┐
+     │     ▼          ▼
+     │  ┌────────┐ ┌──────────┐
+     │  │completed│ │ cancelled│
+     │  └────────┘ └──────────┘
+     │
+     └──────→ 恢复后可重新 in_progress
+```
+
+| 状态 | 含义 | 可转换到 |
+|------|------|---------|
+| `pending` | 已规划但未开始 | in_progress / cancelled |
+| `in_progress` | 正在执行 | completed / blocked / cancelled |
+| `blocked` | 中断/阻塞，等条件恢复 | in_progress / cancelled |
+| `cancelled` | 决定不做 | — |
+| `completed` | 已完成 | — |
+
+### user_feedback 反馈体系
+
+AI 任务执行完成后，用户通过三种渠道反馈：
+
+| 渠道 | 触发条件 | 写入值 |
+|------|---------|:------:|
+| AI 自动推断 | 用户在对话中表达不满/表扬，AI 在下一轮回答中调 `update_feedback` | good / not_work |
+| AI 主动询问 | AI 不确定用户指哪个任务 → 调 `ask_choice` 让用户选 | good / not_work |
+| 用户手动打标 | 在 Dashboard/TaskBoard 中点任务打标 | ok / good / not_work |
+| 默认 | 用户不反馈 | ok |
+
+`user_feedback` 的用途：
+- Dashboard 展示任务质量看板（good/ok/not_work 占比）
+- AI 知道哪些任务用户不满意，下次对话中主动提出修复
 
 ### 表 2：`tasks`
 
@@ -247,6 +319,39 @@ def update_feedback(task_id: str, feedback: str) -> str:
 
 ---
 
+## 对抗建议反馈（Suggestions）
+
+### 表 4：`suggestions`
+
+```sql
+CREATE TABLE suggestions (
+    id TEXT PRIMARY KEY,
+    turn_id INTEGER NOT NULL,
+    session_id TEXT NOT NULL,
+    text TEXT NOT NULL,
+    rule_name TEXT,
+    adopted INTEGER,                    -- 0=拒绝, 1=采纳, NULL=未反馈
+    feedback_timestamp TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_suggestions_turn ON suggestions(turn_id);
+CREATE INDEX idx_suggestions_session ON suggestions(session_id);
+```
+
+用户采纳/拒绝 AI 的对抗建议时记录到 `adopted` 字段，用于后续分析建议质量。
+
+```python
+@dataclass
+class SuggestionItem:
+    id: str
+    text: str
+    rule_name: str
+    adopted: bool | None       # None=未反馈, True=采纳, False=拒绝
+    feedback_timestamp: datetime | None
+```
+
+---
+
 ## Checkpoint 系统
 
 ### 双层 Checkpoint
@@ -306,7 +411,7 @@ class GitCheckpointManager:
 
 ## 用量追踪（Usage Tracker）
 
-### 表 4：`turn_usage`
+### 表 7：`turn_usage`
 
 ```sql
 CREATE TABLE turn_usage (
@@ -329,7 +434,7 @@ CREATE INDEX idx_turn_ts ON turn_usage(timestamp);
 CREATE INDEX idx_turn_sid ON turn_usage(session_id);
 ```
 
-### 表 5：`call_usage`
+### 表 8：`call_usage`
 
 ```sql
 CREATE TABLE call_usage (
@@ -352,7 +457,7 @@ CREATE INDEX idx_call_turn ON call_usage(turn_id);
 CREATE INDEX idx_call_ts ON call_usage(timestamp);
 ```
 
-### 表 6：`model_pricing`
+### 表 9：`model_pricing`
 
 ```sql
 CREATE TABLE model_pricing (
@@ -402,6 +507,25 @@ chat:after  → 聚合写入 turn_usage  + call_usage
 
 ## 代码知识图谱（IKnowledgeGraph，P1）
 
+### 表 10：`code_graph`（P1 新增）
+
+P1 阶段在 conversations.db 中新增代码关系网络表：
+
+```sql
+CREATE TABLE code_graph (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    entity_name TEXT NOT NULL,
+    entity_type TEXT NOT NULL,         -- class / function / module
+    file_path TEXT NOT NULL,
+    line_start INTEGER,
+    line_end INTEGER,
+    relations TEXT,                    -- JSON 数组：关联实体列表
+    indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_code_entity ON code_graph(entity_name);
+CREATE INDEX idx_code_file ON code_graph(file_path);
+```
+
 ```python
 class IKnowledgeGraph(ABC):
     async def index_project(project_root) -> None: ...
@@ -419,15 +543,18 @@ P0 用 NoOp 实现，P1 基于 tree-sitter AST 构建。**这也是长期记忆*
 ```
 conversations.db
 ┌─────────────────────────────────────────────────────┐
-│  turns (对话轮次)                                    │
-│    turn_5 → turn_6 → turn_7                          │
-│    每个 turn 关联:                                    │
-│    ├── tasks (本轮创建/更新的任务)                     │
-│    ├── turn_usage + call_usage (本轮用量)             │
-│    ├── checkpoint_mappings (本轮 git commit hash)     │
-│    └── user_feedback (本轮任务评价)                    │
+│  sessions (会话管理)                                  │
+│    └── turns (对话轮次)                               │
+│         turn_5 → turn_6 → turn_7                      │
+│         每个 turn 关联:                                │
+│          ├── tasks (本轮创建/更新的任务)               │
+│          ├── suggestions (本轮对抗建议)               │
+│          ├── turn_usage + call_usage (本轮用量)       │
+│          ├── checkpoint_mappings (本轮 git hash)      │
+│          └── user_feedback (本轮任务评价)              │
 │                                                       │
 │  tasks ←→ task_status_log (任务变更历史)               │
+│  suggestions (对抗建议反馈记录)                        │
 │                                                       │
 │  turn_usage ←→ call_usage (1:N，用量明细)              │
 │                                                       │
