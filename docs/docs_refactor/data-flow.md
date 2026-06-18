@@ -81,7 +81,7 @@ SSE 事件流 → Vercel AI SDK 自动渲染
 ## Checkpoint 数据流
 
 ```
-AI 执行 write_file/edit_file 等文件变更
+AI 执行 write_file/patch_file 等文件变更
   → ToolNode 返回成功
   → GitCheckpointManager 执行 git add -A + commit
     → commit 到 .flypig_checkpoints（独立 Agent Git，不影响用户 .git）

@@ -42,7 +42,7 @@
 | `read_file` | ✅ | ✅ | ✅ |
 | `bash`（执行命令） | ❌ | ❌ | ✅ |
 | `write_file`（写文件） | ❌ | ❌ | ✅ |
-| `edit_file`（编辑文件） | ❌ | ❌ | ✅ |
+| `patch_file`（编辑文件） | ❌ | ❌ | ✅ |
 | `task_log`（后台日志） | ❌ | ❌ | ✅ |
 | `lint`（代码格式化） | ❌ | ❌ | ✅ |
 | `change_review`（变更审查） | ❌ | ❌ | ✅ |
@@ -131,7 +131,7 @@ def chat_node(state: AgentState) -> dict:
     # ★ 如果 LLM 调了 write/edit 工具，注入 intent 和 changes 参数
     # 这些数据会用于前端 ChangeSummary 卡片渲染
     for tool_call in response.get("tool_calls", []):
-        if tool_call["name"] in ("write_file", "edit_file"):
+        if tool_call["name"] in ("write_file", "patch_file"):
             enrich_change_intent(tool_call)  # 自动补全 intent + changes
 
     return {"messages": [response]}

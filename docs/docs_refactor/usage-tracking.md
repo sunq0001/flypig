@@ -1,7 +1,7 @@
 # 用量追踪系统（IUsageTracker）
 
 > **来源**: `architecture-refactor.md` §3.9（新增）
-> **关联文档**: `backend-modules.md`（DI注册）、`api-reference.md`（查询端点）、`operations.md`（数据持久化策略）、`memories.md`（与 IConversationStore 的关系）
+> **关联文档**: `memories.md`（长期记忆总览 - 表结构/接口）、`backend-modules.md`（DI注册）、`api-reference.md`（查询端点）、`operations.md`（数据持久化策略）
 
 ## 概述
 
@@ -629,4 +629,4 @@ async def check_usage_storage():
         }
 ```
 
-> **关联文档**: `backend-modules.md`（DI注册）、`api-reference.md`（查询端点）、`operations.md`（数据持久化+备份）、`plan-task-system.md`（IConversationStore vs UsageTracker 对比）、`resilience.md`（Schema 迁移 + 日志系统）
+> **关联文档**: `memories.md`（长期记忆总览 - 表结构/接口）、`backend-modules.md`（DI注册）、`api-reference.md`（查询端点）、`operations.md`（数据持久化+备份）、`resilience.md`（Schema 迁移 + 日志系统）
