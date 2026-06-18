@@ -82,7 +82,8 @@ class ToolBash:
 | 查看 SSE 事件类型（reasoning/change_plan 等） | `api-reference.md` → SSE 事件格式 |
 | 查看前端架构和技术栈 | `frontend-arch.md` |
 | 查看后端各层模块职责 | `backend-modules.md` |
-| 查看 subprocess 执行策略和 task_log | `subprocess-and-tools.md` |
+| 查看 subprocess 执行策略和 task_log | `subprocess.md` |
+| 查看工具定义和参数设计 | `tools.md` |
 | 查看变更审查、Lint、对抗建议 | `adversarial-system.md` |
 | 查看 Docker Compose 部署和 CI/CD | `operations.md` |
 | 查看对话存储、上下文压缩、LangMem 记忆 | `extensions.md` |
@@ -102,7 +103,7 @@ class ToolBash:
 | AI 对话流程 | `langgraph-graph.md` → `domain/agent/nodes.py` |
 | 图构建/路由注册 | `langgraph-graph.md` → `orchestration/graph_factory.py` |
 | 换 AI 模型 | `backend-modules.md` → `infrastructure/llm/` |
-| 加工具 | `subprocess-and-tools.md` → `infrastructure/tools/`（按 file/search/system/mcp 分组） |
+| 加工具 | `tools.md` → `infrastructure/tools/`（按 file/search/system/mcp 分组） |
 | 改 SSE 事件 | `api-reference.md` → `backend/routes/chat.py` |
 | 改前端消息渲染 | `frontend-arch.md` → `static_vite/src/components/chat/` |
 | 改变更审查逻辑 | `adversarial-system.md` → `infrastructure/tools/review/tool_change_review.py` |
@@ -113,8 +114,8 @@ class ToolBash:
 | 改会话持久化 | `extensions.md` → `orchestration/conversation_store.py` |
 | 改用量追踪 | `usage-tracking.md` → `infrastructure/usage/` + `SqliteUsageTracker` |
 | 断点恢复（关掉再开继续） | `api-reference.md` → `GET /api/sessions/<id>/restore` + `SessionService.restore()` |
-| 改终端管理 | `subprocess-and-tools.md` → `backend/terminal.py` |
-| 工具安全限制（路径白名单） | `subprocess-and-tools.md` → `infrastructure/tools/tool_bash.py` |
+| 改终端管理 | `subprocess.md` → `backend/terminal.py` |
+| 工具安全限制（路径白名单） | `subprocess.md` → `infrastructure/tools/tool_bash.py` |
 | 敏感信息检测 | `backend-modules.md` → `domain/agent/nodes.py`（chat_node 输出前） |
 | 死循环检测 + 节点异常保护 | `langgraph-graph.md` → `domain/agent/nodes.py + router.py` |
 | DI 容器装配 | `backend-modules.md` → `core/container.py` |
@@ -124,9 +125,9 @@ class ToolBash:
 | 配置即代码 | `backend-modules.md` → YAML + `@dataclass ModelConfig` |
 | 部署 / 运维 / CI/CD | `operations.md` → Docker Compose + GitHub Actions + 环境变量 |
 | 数据类型规范 | `backend-modules.md` → `@dataclass` 替代 `dict` |
-| 工具自动注册 | `subprocess-and-tools.md` → `@tool()` 装饰器 |
-| 工具调用幂等性 | `subprocess-and-tools.md` → 各 `tool_*.py` 实现时注意 |
-| 文件编辑策略 | `subprocess-and-tools.md` → `FileEditStrategy` 策略模式 |
+| 工具自动注册 | `tools.md` → `@tool()` 装饰器 |
+| 工具调用幂等性 | `tools.md` → 各 `tool_*.py` 实现时注意 |
+| 文件编辑策略 | `tools.md` → `FileEditStrategy` 策略模式 |
 | SQLite WAL + trace_id | `backend-modules.md` → 健壮性章节 |
 | 敏感信息检测 | `backend-modules.md` → 健壮性章节 |
 | 优雅关闭 / 工具执行追踪 | `backend-modules.md` → 健壮性章节 |
@@ -134,6 +135,6 @@ class ToolBash:
 | LangMem 长期记忆 | `extensions.md`（LangMem 集成）→ 注册到 ToolNode 作为 AI 可调用工具 |
 | 建议反馈记录 | `adversarial-system.md`（建议反馈记录）→ `backend/routes/feedback.py` → `store.update_suggestion_feedback()` |
 | 变更计划（改前预览） | `adversarial-system.md` → `change_plan` 节点，用户逐项批准后才执行 |
-| 思考过程实时推流 | `subprocess-and-tools.md` → chat_node 中 yield `reasoning` 事件 |
-| 实时停止执行 | `subprocess-and-tools.md` → `/api/agent/stop` + kill 子进程 |
+| 思考过程实时推流 | `subprocess.md` → chat_node 中 yield `reasoning` 事件 |
+| 实时停止执行 | `subprocess.md` → `/api/agent/stop` + kill 子进程 |
 | SSE 事件类型列表 | `api-reference.md` → SSE 事件格式（含 reasoning / change_plan） |

@@ -553,7 +553,7 @@ result = await chain.handle(ReviewContext(file_path, diff))
 
 **效果**：加一个新审核环节 = 写一个新 Handler 类 + 一行 `.set_next(NewHandler())`，不用改 graph.py 的路由逻辑。
 
-> **关联文档**: `subprocess-and-tools.md`（ToolLint）、`langgraph-graph.md`（节点路由）
+> **关联文档**: `tools.md`（ToolLint）、`langgraph-graph.md`（节点路由）
 
 ---
 

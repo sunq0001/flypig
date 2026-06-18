@@ -1,7 +1,7 @@
 # 扩展预留
 
 > **来源**: `architecture-refactor.md` §3.7, §3.9
-> **关联文档**: `backend-modules.md`（接口定义）、`subprocess-and-tools.md`（MCP 工具）、`usage-tracking.md`（用量追踪系统）、`plan-task-system.md`（任务管理系统）、`resilience.md`（许可/更新/导出接口）
+> **关联文档**: `backend-modules.md`（接口定义）、`tools.md`（MCP 工具）、`usage-tracking.md`（用量追踪系统）、`plan-task-system.md`（任务管理系统）、`resilience.md`（许可/更新/导出接口）
 > 当前只定义接口 + 空实现(NoOp)，不实现具体逻辑。P1/P2 阶段再做完整实现。
 
 ## MCP 协议集成

@@ -1,7 +1,7 @@
 # 后端模块
 
 > **来源**: `architecture-refactor.md` §3.1-3.5, §3.10
-> **关联文档**: `langgraph-graph.md`（AgentState）、`subprocess-and-tools.md`（工具执行）、`usage-tracking.md`（用量追踪）、`plan-task-system.md`（任务系统）、`resilience.md`（崩溃恢复/日志/迁移）
+> **关联文档**: `langgraph-graph.md`（AgentState）、`subprocess.md`（命令执行）、`usage-tracking.md`（用量追踪）、`plan-task-system.md`（任务系统）、`resilience.md`（崩溃恢复/日志/迁移）
 
 ## Backend Layer — 用户界面适配
 
