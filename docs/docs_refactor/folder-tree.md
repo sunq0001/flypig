@@ -36,8 +36,8 @@ flypig/
 │   │   ├── ihook.py              ← ★ IHook（事件钩子）
 │   │   ├── iagent.py             ← ★ IAgent
 │   │   ├── isearch.py            ← ★ ISearch（全文/语义/代码结构搜索抽象）
-│   │   ├── iknowledge_graph.py   ← ☆ IKnowledgeGraph（代码关系图，P1）
-│   │   ├── ivector_store.py      ← ☆ IVectorStore（语义向量检索，P2）
+│   │   ├── iknowledge_graph.py   ← ☆ IKnowledgeGraph（代码关系图，P1，长期知识）
+│   │   ├── ivector_store.py      ← ☆ IVectorStore（语义向量检索，P2，长期记忆）
 │   │   ├── iranker.py            ← ☆ IRanker（多源结果融合排序，P2）
 │   │   ├── iast_parser.py        ← ★ IASTParser（AST 解析：symbol→行号，P0 NoOp）
 │   │   └── ilsp_diagnostics.py   ← ★ ILspDiagnostics（LSP 诊断，P0 NoOp）
@@ -80,9 +80,9 @@ flypig/
 │   ├── suggestion_engine.py      ← ★ 评分→建议映射：generate_suggestion()
 │   ├── event_subscriptions.py    ← ★ 事件订阅编排：声明哪个模块订阅哪些事件
 │   ├── git_checkpoint_manager.py ← ★ Agent Git checkpoint 管理
-│   ├── checkpoint_store.py       ← ★ CheckpointStore（turn_id → commit_hash → summary 映射表）
-│   ├── context_pipeline.py       ← ★ 预 LLM 上下文压缩（Truncate+Trim+Fold）
-│   ├── conversation_store.py     ← ★ 对话存储 SQLite（IConversationStore 实现）
+│   ├── checkpoint_store.py       ← ★ CheckpointStore：turn_id → commit_hash → summary（长期存储）
+│   ├── context_pipeline.py       ← ★ 短期记忆：预 LLM 上下文压缩（Truncate+Trim+Fold，每轮从 ConversationStore 读取后压缩）
+│   ├── conversation_store.py     ← ★ 长期记忆：对话/checkpoint/任务/user_feedback/用量统一 SQLite 存储（6 表）
 │   ├── usage_tracker_service.py  ← ★ 用量追踪编排（IUsageTracker + PricingFetcher）
 │   ├── export_service.py         ← ☆ P1 导入/导出服务（NotImplemented 预留）
 │   ├── model_fallback_service.py ← ☆ P1 多模型 fallback（P0 仅记录）
@@ -141,7 +141,7 @@ flypig/
 │   │   ├── pricing.py            ← ★ PricingFetcher（价格获取 + 缓存）
 │   │   └── usage_handler.py       ← ★ 用量事件处理器（订阅 hooks，自动记录 token/cost）
 │   │
-│   ├── search/                    ← ★ 代码理解服务（被工具/节点调用，AI 不直接调）
+│   ├── search/                    ← ★ 长期记忆：代码理解服务（被工具/节点调用，AI 不直接调）
 │   │   ├── search_grep.py        ← ★ MVP: grep 全文搜索（实现 ISearch）
 │   │   ├── search_ast.py         ← ☆ P1: tree-sitter AST 搜索（实现 ISearch）
 │   │   ├── ast_parser.py         ← ★ P0: tree-sitter AST 解析（实现 IASTParser）
