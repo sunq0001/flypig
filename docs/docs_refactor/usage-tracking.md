@@ -1,7 +1,7 @@
 # 用量追踪系统（IUsageTracker）
 
 > **来源**: `architecture-refactor.md` §3.9（新增）
-> **关联文档**: `backend-modules.md`（DI注册）、`api-reference.md`（查询端点）、`operations.md`（数据持久化策略）、`extensions.md`（与 IConversationStore 的关系）
+> **关联文档**: `backend-modules.md`（DI注册）、`api-reference.md`（查询端点）、`operations.md`（数据持久化策略）、`memories.md`（与 IConversationStore 的关系）
 
 ## 概述
 

@@ -551,3 +551,78 @@ def tool_extract_archive(archive_path: str, target_dir: str = None) -> str:
 ```
 
 **安全要点**：Zip Slip 防护（检查解析后路径以目标目录开头）+ `.7z` 内置检查。依赖 `zipfile`/`tarfile`（标准库）+ `py7zr`/`rarfile`（可选）。
+
+---
+
+## OCR（光学字符识别，P1）
+
+从图片中提取文字，用于扫描代码截图、PDF、白板照片等。
+
+**技术选型**：PaddleOCR（国产，中英文效果好） > Tesseract（备选）
+
+```python
+# infrastructure/tools/system/tool_ocr.py
+class ToolOCR:
+    """AI 调用的 OCR 工具"""
+    def __call__(self, image_path: str, lang: str = "ch+en") -> str:
+        raise NotImplementedError("P1 实现，P0 走 vision 模型直接识图")
+```
+
+| 阶段 | 方案 | 说明 |
+|------|------|------|
+| **P0** | 不单独 OCR | 用 vision 模型直接看图 |
+| **P1** | PaddleOCR | 大规模截图扫描，比 vision 模型便宜 100 倍 |
+| **P2** | OCR + LLM 级联 | 处理模糊/手写场景 |
+
+---
+
+## 图片理解（Vision）
+
+AI 直接看到图片内容，不走 OCR 中间层。
+
+**原理**：前端将图片转为 base64 data URL，拼接在 user message 中传给 vision 模型。
+
+```python
+# 前端消息格式
+message = {
+    "role": "user",
+    "content": [
+        {"type": "text", "text": "这个报错是什么意思？"},
+        {"type": "image", "image": "data:image/png;base64,..."},
+    ]
+}
+
+# 后端处理（chat_node 中）
+for part in user_message.content:
+    if part["type"] == "image":
+        if not model_supports_vision(state["model"]):
+            text = tool_ocr(part["image"])
+            part = {"type": "text", "text": f"[图片OCR结果]:\n{text}"}
+```
+
+| 模型 | 支持视觉 |
+|------|---------|
+| DeepSeek-VL2 | ✅ |
+| GPT-4o | ✅ |
+| Claude 3.5 Sonnet | ✅ |
+| DeepSeek-Chat (V3) | ❌ 自动降级 OCR |
+| Qwen-VL | ✅ |
+
+---
+
+## 内置搜索（非 MCP 依赖，P1）
+
+当前搜索依赖 MCP `web-search` 服务器（需 Node.js），P1 改用 `duckduckgo-search` pip 包：
+
+```python
+# infrastructure/tools/search/tool_web_search.py
+class ToolWebSearch:
+    def __call__(self, query: str, max_results: int = 5) -> str:
+        raise NotImplementedError("P1 实现，P0 依赖 MCP web-search")
+```
+
+| 阶段 | 方案 | 依赖 | API Key |
+|------|------|------|---------|
+| **P0** | MCP web-search | Node.js | ❌ |
+| **P1** | DuckDuckGo（`duckduckgo-search`） | 零 | ❌ |
+| **P2** | SerpAPI / Bing Search API | 可选 | ✅ |
