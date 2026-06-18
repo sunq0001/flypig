@@ -133,7 +133,7 @@ class Container:
         repo = SqliteConversationStore("data/conversations.db")  # 实现 IConversationStore
         policy = PolicyService(config.permissions)      # 权限规则
         prompts = MultiRoleManager()                    # 多角色 prompt
-        knowledge = NoOpKnowledgeStore()                # 知识库空实现
+        knowledge = IKnowledgeGraph(NoOp)                # 知识图谱空实现
         graph_factory = GraphFactory(
             tools=tools, prompts=prompts, policy=policy
         )
@@ -302,7 +302,7 @@ def test_router_falls_back_to_chat():
 # tests/unit/test_event_subscriptions.py  
 @pytest.mark.asyncio
 async def test_cancellable_hook_denies():
-    service = HookService()
+    service = EventSubscriptions()
     service.register("tool:before", DenyAllHook(), priority=100)
     result = await service.emit("tool:before", {"tool": "bash"}, cancellable=True)
     assert result.denied is True
@@ -423,7 +423,7 @@ async def retry(func, max_retries=2, backoff=1.0, retryable_exceptions=(TimeoutE
 | `flypig_circuit_breaker_state` | Gauge | 断路器状态（0=关闭, 1=开启, 2=半开） |
 
 ```python
-# application/services/metrics.py
+# orchestration/metrics.py
 from prometheus_client import Counter, Histogram, Gauge, start_http_server
 
 requests_total = Counter("flypig_requests_total", "Total requests", ["endpoint", "status"])
@@ -574,7 +574,7 @@ class ChatService:
             yield PolicyBlocked()
             return
 
-        # Step 2: 触发前置事件（中介者通知 HookService）
+        # Step 2: 触发前置事件（中介者通知 EventSubscriptions）
         await self.event_subscriptions.emit("chat:before", {
             "session_id": session_id, "message": user_msg
         })
@@ -594,7 +594,7 @@ class ChatService:
         await self.event_subscriptions.emit("chat:after", {"session_id": session_id})
 
 # 各服务之间没有任何直接引用：
-# GraphFactory 不知道 HookService 存在
+# GraphFactory 不知道 EventSubscriptions 存在
 # SuggestionEngine 不知道 PolicyService 存在
 # 新增服务只需加一行 self.xxx = Container.get("xxx") + 在 process_message 中编排
 ```

@@ -497,10 +497,10 @@ AI 会在对话中**自行决定**何时调用：
 
 > LangMem 不是架构依赖。`IConversationStore.search()` 是对历史对话的全文/向量搜索，LangMem 是对"提炼后的知识片段"的搜索，两者独立。
 
-## IKnowledgeStore（代码知识图谱）
+## IKnowledgeGraph（代码知识图谱）
 
 ```python
-class IKnowledgeStore(ABC):
+class IKnowledgeGraph(ABC):
     async def index_project(project_root) -> None: ...
     async def search_entity(name, type) -> list[EntityLocation]: ...
     async def get_entity_relations(entity_name) -> list[Relation]: ...
@@ -682,7 +682,7 @@ class NoOpUpdateService(IUpdateService):
 ### ExportService（P1 — 导入导出）
 
 ```python
-# application/services/export_service.py
+# orchestration/export_service.py
 class ExportService:
     """P0 只定义方法签名，全部 raise NotImplementedError"""
     async def export_chat(self, session_id: str, format: str = "markdown") -> str:

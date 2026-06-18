@@ -222,7 +222,7 @@ tar czf flypig-logs.tar.gz ~/.flypig/logs/
 
 ### 问题
 
-SQLite schema 随版本变化。v1.0 的 `tasks` 表在 v1.1 可能新增 `priority` 列，`conversations.db` / `usage.db` / `langgraph.db` 三个库都需要管理版本。
+SQLite schema 随版本变化。v1.0 的 `tasks` 表在 v1.1 可能新增 `priority` 列，`conversations.db` 统一库中 6 张表都需要管理版本。
 
 ### 方案：`_SCHEMA_VERSION` + 自动迁移
 
@@ -292,9 +292,9 @@ def _init_db(self):
 ### 三库统一管理
 
 ```
-conversations.db → SqliteConversationStore._init_db() 管理自身 schema
-usage.db         → SqliteUsageTracker._init_db()      管理自身 schema
-langgraph.db     → LangGraph Checkpointer 自身管理（LangGraph SDK 负责）
+conversations.db → ConversationStore + SqliteUsageTracker 各自管理自己的表
+                   LangGraph Checkpointer 也使用同一文件（由 LangGraph SDK 管理）
+                   SqliteSaver.from_conn_string("data/conversations.db?mode=wal")
 ```
 
 ### 降级保护
@@ -308,7 +308,7 @@ class SchemaVersionHook:
     async def on_event(self, ctx):
         for db_name, db_path in [
             ("conversations", "data/conversations.db"),
-            ("usage", "data/conversations.db"),
+            ("usage", "data/conversations.db"),  # 统一库，用量表在 conversations.db 中
         ]:
             if Path(db_path).exists():
                 version = self._get_version(db_path)

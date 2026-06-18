@@ -287,7 +287,7 @@ class UsageTrackerHook:
 
 ```python
 # 在 Container.configure() 中添加:
-usage_tracker = SqliteUsageTracker("data/usage.db")  # 实现 IUsageTracker
+usage_tracker = SqliteUsageTracker("data/conversations.db")  # 实现 IUsageTracker，共享统一库
 usage_hook = UsageTrackerHook(usage_tracker)
 cls.register("usage_tracker", usage_tracker, singleton=True)
 # hook_service 自动注册所有 hook 函数
@@ -369,7 +369,7 @@ cls.register("usage_tracker", usage_tracker, singleton=True)
 
 每次 `response_end` 事件中推送本轮用量给前端→客户端 IndexedDB 实时写入→用户即时看到。IndexedDB 在每次 SSE 连接建立时将缓冲数据同步到服务端。
 
-> **P0 简化**：仅服务端 SQLite `data/usage.db`，不做 IndexedDB 缓冲和同步。P1 再补客户端侧。
+> **P0 简化**：仅服务端 SQLite `data/conversations.db`（用量表合并），不做 IndexedDB 缓冲和同步。P1 再补客户端侧。
 
 ---
 
@@ -382,7 +382,7 @@ cls.register("usage_tracker", usage_tracker, singleton=True)
 | 数据量 | 每轮 1 条（大，含完整内容） | 每轮 N+1 条（小，仅有统计量） |
 | 生命周期 | 永久保留 | 可滚动/聚合（90 天后用户决定） |
 | 是否可选 | 必需 | 可选（没它也能跑） |
-| 存储 | `data/conversations.db` | `data/usage.db`（独立库） |
+| 存储 | `data/conversations.db`（统一库，用量表合并） | `data/conversations.db` |
 
 ---
 
@@ -418,12 +418,12 @@ EventSubscriptions 事件流                          SSE 响应
 chat:before → 初始化 TurnUsage              response_end
 tool:before → 创建 CallUsage              → { usage: {...} }
 tool:after  → 补充 token/cost/cache       → 前端渲染摘要行
-chat:after  → 聚合写入 usage.db           → (无 SSE 事件)
+chat:after  → 聚合写入 conversations.db 的 turn_usages/call_usages 表 → (无 SSE 事件)
 
                     ↓
           ┌─────────────────┐
           │  SqliteUsageTracker  │
-          │  data/usage.db   │
+          │  conversations.db (turn_usages 表) │
           │  WAL 模式        │
           └────────┬────────┘
                    ↓
@@ -437,9 +437,9 @@ chat:after  → 聚合写入 usage.db           → (无 SSE 事件)
 
 ```python
 class SqliteUsageTracker(IUsageTracker):
-    """IUsageTracker 的 SQLite 实现。数据文件: data/usage.db"""
+    """IUsageTracker 的 SQLite 实现。数据文件: data/conversations.db（共享）"""
 
-    def __init__(self, db_path: str = "data/usage.db"):
+    def __init__(self, db_path: str = "data/conversations.db"):
         self.db_path = db_path
         self._init_db()
 

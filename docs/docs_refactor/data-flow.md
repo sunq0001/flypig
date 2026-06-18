@@ -32,7 +32,7 @@
 Vercel AI SDK (前端)
   │ POST /api/chat
   ▼
-ChatService (应用层)
+ChatService (编排层)
   │
   ▼
 LangGraph.chat_node (LLM 对话)

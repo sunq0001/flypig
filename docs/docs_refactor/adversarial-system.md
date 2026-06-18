@@ -336,7 +336,7 @@ def handle_adversarial_decision(state: AgentState, user_choice: dict) -> dict:
 |------|------------|----------------------|
 | 存储内容 | 对话消息列表 + 成本记录 + 用户偏好 | LangGraph 状态快照（含审批挂起点） |
 | 用途 | **跨会话**：历史记录、关掉再开、会话列表 | **单会话内**：中断恢复、回滚到上一轮 |
-| 持久化 | 长期（SQLite/PostgreSQL） | 短期（SqliteSaver 持久化到 langgraph.db） |
+| 持久化 | 长期（SQLite/PostgreSQL） | 短期（SqliteSaver 持久化到 conversations.db） |
 | 恢复方式 | 前端 `useChat({ initialMessages })` 加载 | LangGraph 从 Checkpointer 恢复状态 |
 
 ### 全部通过 SuggestionCard 触发

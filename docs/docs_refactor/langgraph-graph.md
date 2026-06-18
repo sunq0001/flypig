@@ -38,7 +38,7 @@
 当前 chat 可用工具:     P1 加知识图谱后:      P2 加向量库后:
 ├── tool_file.read      ├── + kg_query        ├── + vector_search
 ├── tool_search         ├── + kg_get_related   ├── + semantic_search
-└── tool_project_scan   └── + ...              └── + ...
+└── tool_list_dir      └── + ...              └── + ...
   仅本地文件搜索         代码结构理解          语义理解
 ```
 
@@ -221,7 +221,7 @@ tool_file.write → 磁盘满
 | `change_review` | 变更后审查（对比变更计划与实际结果） | **固定边**（lint → change_review 自动触发） | Domain | `domain/agent/nodes.py` |
 | `suggestion` | 对抗建议 | **固定边**（change_review → suggestion 自动触发） | Domain | `domain/agent/nodes.py` |
 | `approval` | 审批（伪装成 tool_call） | **条件边**（router 检测 pending_approval） | Domain | `domain/agent/nodes.py` |
-| **图构建** | 编译 StateGraph（导入 nodes + router） | — | **Application** | `application/services/graph_factory.py` |
+| **图构建** | 编译 StateGraph（导入 nodes + router） | — | **Orchestration** | `orchestration/graph_factory.py` |
 
 > **回滚（ROLLBACK）不是独立节点**：回滚由 AI 在 execute 节点内通过 `tool_bash` 调用 git 命令实现，或用户通过 `/api/rollback` API 触发 GitCheckpointManager。不需要专门的 LangGraph 节点。
 
@@ -363,7 +363,7 @@ def chat_node(state: AgentState) -> dict:
 |------|---------|---------|------|
 | `messages` | chat, execute, approval | router, chat | AI 对话历史，所有节点可追加 |
 | `turn_id` | chat_node（每轮+1） | 全局 | 每轮对话自增，用于 checkpoint 和回滚 |
-| `persona` | PromptManager.switch | chat, suggestion | developer/reviewer/tester/architect/documenter |
+| `persona` | MultiRoleManager.switch | chat, suggestion | developer/reviewer/tester/architect/documenter |
 | `mode` | chat_node（AI 或用户选择） | 全局 | explore / plan / execute，决定 context 约束 |
 | `pending_approval` | approval_node | router, approval | 待审批请求，非空时 router 自动导向 approval |
 | `change_review` | change_review_node | 前端渲染 | 变更审查数据，输出后由用户逐项确认 |
@@ -519,13 +519,13 @@ Execute Mode Context:
 }
 ```
 
-## PromptManager
+## MultiRoleManager
 
 多角色 prompt 按需懒加载，不一股脑塞给 LLM。有五个 prompt 角色文件在 `domain/prompts/` 下。
 
 ```python
-# domain/prompt_manager.py
-class PromptManager:
+# domain/prompts/multirole_manager.py
+class MultiRoleManager:
     """按需加载 prompt，不一股脑塞给 LLM"""
 
     _cache = {}

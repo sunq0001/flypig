@@ -197,7 +197,6 @@ class ToolExecutor:
 | **system** | tool_bash | subprocess 命令 |
 | | tool_git | ★ Git 操作代替裸 bash |
 | | tool_fetch_url | ★ 网页抓取（httpx，零依赖） |
-| | tool_list_dir | ★ 目录浏览 |
 | | tool_datetime | ★ 当前时间/时区/日期计算 |
 | | tool_calc | ★ 安全数学计算 |
 | | tool_task | task_status + task_list + task_log |

@@ -80,6 +80,7 @@ flypig/
 │   ├── suggestion_engine.py      ← ★ 评分→建议映射：generate_suggestion()
 │   ├── event_subscriptions.py    ← ★ 事件订阅编排：声明哪个模块订阅哪些事件
 │   ├── git_checkpoint_manager.py ← ★ Agent Git checkpoint 管理
+│   ├── checkpoint_store.py       ← ★ CheckpointStore（turn_id → commit_hash → summary 映射表）
 │   ├── context_pipeline.py       ← ★ 预 LLM 上下文压缩（Truncate+Trim+Fold）
 │   ├── conversation_store.py     ← ★ 对话存储 SQLite（IConversationStore 实现）
 │   ├── usage_tracker_service.py  ← ★ 用量追踪编排（IUsageTracker + PricingFetcher）

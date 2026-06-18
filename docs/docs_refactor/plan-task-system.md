@@ -587,7 +587,7 @@ Dashboard.vue / TaskBoard.vue 中每个任务右侧加反馈按钮组：
 | 查询模式 | 按 session 取任务列表 | 按时间范围聚合 |
 | 数据量 | 每轮 ≤10 条 | 每轮 N+1 条（大） |
 | 生命周期 | 不删除，永久保留 | 用户决定归档/删除 |
-| 存储 | `conversations.db`（共享） | `usage.db`（独立） |
+| 存储 | `conversations.db`（统一库） | `conversations.db`（统一库） |
 | 可选性 | 必需（核心 UX） | 可选 |
 
 ---
