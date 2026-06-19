@@ -400,3 +400,38 @@ const convertNullToZero = (val) => val === null ? 0 : val
 | `nginx.conf` | 反向代理 + 静态文件 + SSL | operations.md §Nginx |
 | `mcp.json` | MCP 服务器预配清单 | mcp.md §第一层基础配置 |
 | `Makefile` | 常用命令聚合 | operations.md §开发工作流 |
+| `serve_docs.py` | Python 文档预览服务器（8765 端口） | docstring-index.md §文档生成工具链 |
+| `scripts/generate-vue-docs.cjs` | Vue 组件 + JS 文档自动生成脚本 | docstring-index.md §文档生成工具链 |
+
+---
+
+## 文档生成工具链
+
+### 方案概览
+
+| 源文件类型 | 解析工具 | 输出 | 触发方式 |
+|-----------|---------|------|---------|
+| `.py`（Python 后端） | **pdoc**（原生支持 `"""` docstring） | `docs/api-docs/`（HTML） | `make docs-pdoc` |
+| `.vue`（Vue 组件） | **vue-docgen-api** + 自定义脚本 | `docs/api-docs-vue/src/**/*.md` | `make docs-vue` |
+| `.js`（composables/lib/stores） | **自研 JSDoc 解析器**（`generate-vue-docs.cjs`） | `docs/api-docs-vue/src/**/*.md` | `make docs-vue` |
+| `.md`（架构文档） | **serve_docs.py** 极简 markdown 渲染 | 浏览器实时预览 | `make docs-serve` |
+
+### 核心文件
+
+- **`docs/serve_docs.py`** — 文档服务器，聚合架构文档 + pdoc + vue-docgen；端口 8765，`--watch` 热重载
+  - `api-docs/`：pdoc 静态 HTML
+  - `api-docs-vue/`：Vue/JS markdown 渲染（含链接导航 + 表格）
+- **`flypig/frontend/static_vite/scripts/generate-vue-docs.cjs`** — 一键扫描生成脚本
+  - `.vue`：`vue-docgen-api` 解析 `defineProps/defineEmits/defineExpose` + HTML 注释提取需求/方案/效果
+  - `.js`：自研解析器提取 `@module/@description/@property/@param/@returns/@example`
+
+### 使用
+
+```bash
+# 全量生成文档
+cd flypig/frontend/static_vite && npm run docs:build
+
+# 启动预览（8000 端口热重载）
+npm run docs:dev
+# → http://localhost:8765/
+```
