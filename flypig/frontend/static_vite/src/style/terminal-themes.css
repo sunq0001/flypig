@@ -1,0 +1,7 @@
+/* terminal-themes：xterm.js 终端配色
+   为什么做：终端需要适配当前主题的配色方案，不能硬编码黑底白字。
+   实现方法：为每个主题定义 xterm.js 的 theme 配置（foreground/background/cursor/selection）。
+   实现效果：终端颜色随主题切换自动变化。
+   技术栈：xterm.js theme
+   层&依赖：frontend.style
+   细节见文档：docs/docs_refactor/chat-ux.md → §StatusBar */

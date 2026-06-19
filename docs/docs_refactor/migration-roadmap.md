@@ -1,10 +1,9 @@
 # 迁移路线
 
-> **来源**: `architecture-refactor.md` §6, §10
-> **关联文档**: 所有子文档（执行到对应 Step 时参考对应文档）
+> **关联文档**: 所有 `docs/docs_refactor/*.md`（执行到对应 Step 时参考对应文档）
 > 改迁移顺序或 MVP 范围时，需同步检查所有子文档的依赖关系。
 
-> **总原则**：重写而非重构。旧 `flypig/` 整体归档为 `archive/flypig/`，新代码从零搭建，不依赖任何旧文件。
+> **总原则**：重写而非重构。旧 `flypig/` 整体归档为 `flypig-archive/`（同级目录），新代码从零搭建，不依赖任何旧文件。
 
 ---
 
@@ -12,18 +11,16 @@
 
 | Step | 名称 | 说明 |
 |------|------|------|
-| **Step -2** | 旧代码归档 | `flypig/` 全部移入 `archive/flypig/`，只保留 `.gitkeep` 占位 |
-| **Step -1** | 建空骨架 | 按 `folder-tree.md` 创建目录 + 所有 `__init__.py` + 空文件 |
+| **Step -2** | 旧代码归档 | `flypig/` → `flypig-archive/` |
+| **Step -1** | 建空骨架 | 按 `folder-tree.md` 创建目录 + 所有空文件 + docstring 模板 |
 | **Step 0** | 开发者工具链 | MkDocs + mkdocstrings、Ruff D、interrogate、pre-commit |
 
 ### Step -2：旧代码归档
 
 | 动作 | 说明 |
 |------|------|
-| 创建 `archive/` 目录 | 存放旧版 FlyPig 代码 |
-| 移动 `flypig/` → `archive/flypig/` | 全部文件（含前端和后台） |
-| 验证：`archive/flypig/` 结构完整 | 确保未遗漏文件，日后可回溯 |
-| 在 `flypig/` 根目录留 `.gitkeep` | 避免空目录提交丢失 |
+| 重命名 `flypig/` → `flypig-archive/` | 同级目录，原样保留全部旧文件，日后可回溯 |
+| 验证：`flypig-archive/` 结构完整 | `flypig-archive/flypig/` 应包含所有旧代码 |
 
 ### Step -1：建空骨架
 
@@ -31,12 +28,38 @@
 |------|------|
 | 对照 `folder-tree.md` 创建所有目录 | `flypig/core/`, `flypig/domain/`, `flypig/orchestration/` … 共约 30+ 个子目录 |
 | 在每个目录创建 `__init__.py` | 保证 Python 包可导入 |
-| 创建所有空 `.py` 文件 | 每个文件顶部写模块 docstring 骨架（`"""... TODO: implement"""`） |
+| 创建所有空 `.py` 文件，每个文件顶部写 **5 段式 docstring 模板** | 见下方 docstring 模板规范 |
+| 前端 `.vue/.js/.css` 文件只写文件头注释 | 不写 docstring 模板 |
 | 创建根级配置文件 | `pyproject.toml`, `Dockerfile`, `docker-compose.yml`, `nginx.conf`, `mcp.json`, `.env.example`, `Makefile` |
 | 新建 `tests/` 目录 | 含 `conftest.py`, `pytest.ini`, `unit/`, `integration/`, `fixtures/` |
 | 新建 `frontend/` 骨架 | `frontend/static/` + `frontend/static_vite/` 含 `package.json`, `vite.config.js`, `index.html`, `src/main.js` |
 | 新建 `scripts/` 目录 | `setup_env.py`（核心）+ `setup_env.bat` + `setup_env.sh`（入口）, `seed_data.py`, `migrate_db.py` |
 | 验证：`python -c "import flypig"` | 确保包结构可导入，不报错 |
+
+#### Docstring 模板规范
+
+每个 `.py` 文件的 module-level docstring 格式如下：
+
+```python
+"""
+[模块名]：一句话概括（用户/开发都能懂）
+
+为什么做：需求场景。不说技术细节，让任何人读了一句话就能理解这个模块存在的意义。
+实现方法：核心思路（1-3句）。简明说明「怎么实现的」，不写伪代码。
+实现效果：用户在使用过程中能感知到的变化，以及什么样的体验。
+技术栈：这个模块用到的关键库/框架/技术（如 asyncio, sqlite3, httpx, pydantic, dependency-injector, loguru 等）
+
+层&依赖：domain / application / infrastructure / presentation 中的哪一层，能依赖谁不能依赖谁。
+细节见文档：docs/docs_refactor/xxx.md → §章节 → 子标题
+"""
+```
+
+**关键原则**：
+- **前 3 段**：写给**人**看的——项目经理、未来的你、任何点开文件的人
+- **技术栈**：一眼知道这个文件依赖什么，不用去翻 import 行
+- **层&依赖**：写给**开发者和 AI**看的——防止 import 违规，保证分层纪律
+- **细节见文档**：既是引用也是约束，"具体怎么做" 只写在 docs 里，docstring 和 docs 不脱节但互不重复
+- **不留 `TODO: implement`**：骨架阶段 docstring 就是完整版本，不占位
 
 ### Step 0：开发者工具链搭建
 
