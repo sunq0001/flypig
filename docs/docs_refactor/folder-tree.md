@@ -188,6 +188,8 @@ flypig/
 │       ├── index.html            ← ★ 仅 <div id="app"> 入口
 │       └── src/
 │           ├── main.js           ← ★ Vue app.createApp + mount
+│           ├── scripts/           ← ★ 文档生成脚本
+│           │   └── generate-vue-docs.cjs  ← ★ vue-docgen-api + JSDoc 自动生成
 │           ├── App.vue           ← ★ 根组件（三栏布局 + 终端面板）
 │           ├── style/
 │           │   ├── variables.css
