@@ -1,6 +1,6 @@
 # 架构图
 
-> **来源**: `architecture-refactor.md` §2
+> **历史来源**: `architecture_refactor_old.md` §2
 > **关联文档**: `folder-tree.md`（文件结构）、`architecture-guide.md`（总览）、`mem_convStore_usage.md`（用量追踪）
 > 此图与主文档 §2 同步更新。
 
@@ -44,13 +44,13 @@
 │  │   back       │ │  (健康检查)   │ │  (文件上传)   │ │   /search      │ │  /status       │                             │
 │  │  (Git回滚)   │ │              │ │  (+解压)      │ │  (历史搜索)     │ │  + /stop       │                             │
 │  └─────────────┘ └──────────────┘ └──────────────┘ └────────────────┘ └───────────────┘                             │
-│  ┌─────────────┐ ┌──────────────────┐                                                                                │
-│  │ /api/usage   │ │ /api/feedback    │ ← 建议反馈                                                                       │
-│  │  /turn       │ │  /suggestion     │                                                                                │
-│  │  /session    │ │                  │                                                                                │
-│  │  /range      │ │                  │                                                                                │
-│  │  /cache-stats│ │                  │                                                                                │
-│  └─────────────┘ └──────────────────┘                                                                                │
+│  ┌─────────────┐ ┌──────────────────┐ ┌──────────────┐                                                               │
+│  │ /api/usage   │ │ /api/feedback    │ │ /api/mcp     │ ← 能力管理（MCP）                                               │
+│  │  /turn       │ │  /suggestion     │ │  /install     │                                                               │
+│  │  /session    │ │                  │ │  /toggle      │                                                               │
+│  │  /range      │ │                  │ │  /marketplace  │                                                               │
+│  │  /cache-stats│ │                  │ │  /config           │                                                               │
+│  └─────────────┘ └──────────────────┘ └──────────────────┘                                                               │
 │       │                                                                                                               │
 ├───────┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │       ▼                                                                                                               │
@@ -151,7 +151,7 @@ flowchart TD
         P2["💬 对话面板<br/>MessageList / MessageItem / ThinkingIndicator<br/>InputBox / Markdown / Mermaid / LivePreview"]
         P3["📇 对话框富组件<br/>ChoiceCard / ChangeReview / SuggestionCard<br/>InlinePreview / CodeExecBlock / DataTable<br/>DiffViewer / CommandCard / FilePreview"]
         P4["🖥️ 终端面板<br/>XtermViewer / OutputViewer / TerminalTab"]
-        P5["📁 侧边栏<br/>FileTree / Dashboard / TaskBoard"]
+        P5["📁 侧边栏<br/>FileTree / Dashboard / TaskBoard / MCP 能力面板"]
     end
     PRESENTATION -->|"SSE<br/>+<br/>WS"| BACKEND
 
@@ -161,6 +161,7 @@ flowchart TD
         I2["/ws/pty (手动终端)<br/>/api/sessions · /api/rollback"]
         I3["/api/health · /api/upload<br/>/api/history/search · /api/agent<br/>/api/feedback/suggestion"]
         I4["/api/usage/*<br/>(用量查询: turn/session/range/cache-stats)"]
+        I5["/api/mcp/*<br/>(能力管理: install/toggle/marketplace/config)"]
     end
     BACKEND --> ORCHESTRATION
 
@@ -188,7 +189,7 @@ flowchart TD
     subgraph INFRASTRUCTURE["🔧 基础设施层"]
         direction TB
         F1["Model Adapter<br/>openai / anthropic / local"]
-        F2["Tools（6组）<br/>📄 file/ 文件CRUD<br/>🔎 review/ 审查+lint<br/>🔍 search/ 搜索+懒加载<br/>⚡ system/ bash+任务<br/>🔌 mcp/ 加载+管理<br/>💬 interact/ 选择题"]
+        F2["Tools（6组）<br/>📄 file/ 文件CRUD<br/>🔎 review/ 审查+lint<br/>🔍 search/ 搜索+懒加载<br/>⚡ system/ bash+任务<br/>🔌 mcp/ 加载+管理+启停+发现+API<br/>💬 interact/ 选择题"]
         F3["Sandbox（Docker）<br/>ConversationStore（SQLite）<br/>Usage（SqliteUsageT+PricingFetcher）<br/>PermissionChecker<br/>ProcessManager / Hooks"]
     end
 

@@ -1,6 +1,6 @@
 # Subprocess 执行策略
 
-> **来源**: `architecture-refactor.md` §3.4.2, §3.4.3
+> **历史来源**: `architecture_refactor_old.md` §3.4.2, §3.4.3
 > **关联文档**: `tools.md`（工具定义）、`backend-modules.md`（模块职责）
 > 只涉及命令执行策略，工具注册和参数设计见 `tools.md`。
 

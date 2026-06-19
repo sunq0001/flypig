@@ -1,0 +1,28 @@
+{
+  "name": "flypig-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "docs:dev": "python ../../docs/serve_docs.py --port 8765 --watch",
+    "docs:pdoc": "cd ../../flypig && python -m pdoc --output-dir ../docs/api-docs domain/",
+    "docs:vue": "node scripts/generate-vue-docs.cjs",
+    "docs:build": "npm run docs:pdoc && npm run docs:vue"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.0",
+    "element-plus": "^2.7.0",
+    "pinia": "^2.1.0",
+    "vue": "^3.4.0",
+    "vue-router": "^4.3.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.4.0",
+    "vue-docgen-api": "^4.79.0"
+  }
+}

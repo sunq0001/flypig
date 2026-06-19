@@ -1,6 +1,6 @@
 # 对抗体系：审查 / Lint / 评分 / 建议
 
-> **来源**: `architecture-refactor.md` §3.8.6-3.8.9
+> **历史来源**: `architecture_refactor_old.md` §3.8.6-3.8.9
 > **关联文档**: `mode-matrix.md`（模式权限）、`langgraph-graph.md`（相关节点）
 > 改对抗逻辑或阈值时，需同步检查 langgraph-graph.md 中的 suggestion/change_review 节点。
 

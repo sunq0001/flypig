@@ -1,6 +1,6 @@
 ﻿# 前端架构
 
-> **来源**: `architecture-refactor.md` §4
+> **历史来源**: `architecture_refactor_old.md` §4
 > **关联文档**: `chat-ux.md`（对话框交互设计）、`api-reference.md`（SSE 事件格式）、`folder-tree.md`（完整文件结构）
 > 对话框内的交互体验、情绪价值设计、富交互组件清单请见 `chat-ux.md`。
 
@@ -18,6 +18,54 @@
 - **vue-draggable-next** — 拖拽排序
 - **v-viewer** 或 **medium-zoom** — 图片放大预览
 
+## 全局布局（参照 VS Code）
+
+```
+┌─────────┬──────────────────┬──────────────────────┬────────┐
+│ Activity│  Sidebar          │  Main (Editor Area)   │ Panel  │
+│  Bar    │                   │                       │        │
+│         │                   │                       │        │
+│  📁 文件│  (根据 Activity    │  聊天对话 / 编辑器    │ 终端   │
+│  🧩 能力│   切换内容)       │                       │        │
+│  📋 任务│                   │                       │        │
+│  📊 统计│                   │                       │        │
+│  ⚙ 设置│                   │                       │        │
+└─────────┴──────────────────┴──────────────────────┴────────┘
+```
+
+- **Activity Bar**：左侧图标列，切换 Sidebar 内容
+- **Sidebar**：根据 Activity 显示文件树 / 能力管理 / 任务看板等
+- **Main Area**：聊天对话（默认）+ 编辑器
+- **Panel**：终端 / 输出
+
+## 能力管理面板（参照 VS Code 扩展面板布局）
+
+参考 VS Code Extensions 面板的左右分栏结构：
+
+```
+┌─ 能力面板 ─────────────────────────────────────────┐
+│                                                      │
+│  左侧列表（~40%宽度）         右侧详情（~60%宽度）    │
+│  ┌─────────────────┐         ┌────────────────────┐ │
+│  │ ◉ 已安装   商店  │         │ 🗄️ 数据库能力       │ │
+│  │                  │         │                    │ │
+│  │ 🔍 搜索能力...   │         │ v0.3.2 · 860 次调用│ │
+│  │                  │         │                    │ │
+│  │ 🗄️ 数据库   ✓   │         │ [启用] [设置] [卸载]│ │
+│  │ 📖 翻译     ✓   │         │                    │ │
+│  │ 🔍 文件搜索 内置 │         │ 可用工具:           │ │
+│  │ 🌐 网页抓取 ✓   │         │ ✓ query_db          │ │
+│  │                  │         │ ✓ list_tables       │ │
+│  │ 📧 邮件          │         │                    │ │
+│  │ 📅 日历          │         │ ┌ 配置 ─────────┐  │ │
+│  │ 🤖 自动化        │         │ │ 路径: ...     │  │ │
+│  └─────────────────┘         │ └───────────────┘  │ │
+│                               └────────────────────┘ │
+└─────────────────────────────────────────────────────┘
+```
+
+> 详细设计见 `mcp.md`
+
 ## 目标目录结构
 
 > 完整组件树、composables、lib 见 `folder-tree.md` → `flypig/frontend/static_vite/`。
@@ -25,17 +73,22 @@
 ```
 frontend/static_vite/src/
 ├── main.js                     ← Vue app 挂载
-├── App.vue                     ← 根组件（三栏布局 + 终端面板）
+├── App.vue                     ← 根组件（Activity Bar + Sidebar + Main + Panel）
 ├── style/                      ← 5 个 CSS 文件（变量/主题/base）
 ├── components/
-│   ├── layout/                 ← MainLayout, ResizeHandle, StatusBar
-│   ├── sidebar/                ← Sidebar, FileTree, TaskBoard, Dashboard
-│   ├── editor/                 ← EditorArea, EditorTabs, MonacoEditor
-│   ├── chat/                   ← ★ 全部对话框组件（见 chat-ux.md）
-│   ├── terminal/               ← TerminalPanel, XtermViewer, OutputViewer
-│   ├── init/                   ← InitWizard, WorkspaceStep, ModelStep, ApiKeyStep
-│   └── common/                 ← MarkdownRender, CodeBlock, CommandPalette 等
-├── composables/                ← useChat, useFileTree, useUxEnhancements 等
+│   ├── layout/                 ← ★ 布局骨架（ActivityBar, InteractBar, MainLayout, ResizeHandle, StatusBar）
+│   ├── resource/               ← ★ 左侧资源栏（ResourceBar, FileTreeBar, McpBar, StatsBar,
+│   │                              FileTree, FileTreeNode, McpDashboard/List/Item/Detail/Config/Marketplace）
+│   ├── viewer/                 ← ★ 中间查看栏（ViewBar, FileBar, EditorPane,
+│   │                              EditorArea, EditorTabs, MonacoEditor,
+│   │                              ExcelViewer, PdfViewer, DocxViewer, PptxViewer）
+│   ├── chat/                   ← ★ 对话功能（ChatPanel, MessageList, InputBox 等 22 个组件）
+│   ├── terminal/               ← ★ 终端功能（TermBar, TerminalPanel, XtermViewer 等 6 个组件）
+│   ├── dashboard/              ← 工作区首页（Dashboard）
+│   ├── tasks/                  ← 任务看板（TaskBoard）
+│   ├── init/                   ← 初始化向导（InitWizard, WorkspaceStep, ModelStep, ApiKeyStep）
+│   └── common/                 ← 通用组件（MarkdownRender, CodeBlock, CommandPalette 等 7 个组件）
+├── composables/                ← useChat, useFileTree, useLayout, useMcp, useUxEnhancements 等
 └── lib/                        ← xterm-setup.js, monaco-setup.js, sfc-compiler.js
 ```
 
@@ -151,13 +204,17 @@ const COMPONENT_MAP = {
 
 ## InitWizard 初始化向导
 
-启动时的强制初始化流程，按步骤进行：
+启动时的工作区选择流程，仅一步：
 
 1. **WorkspaceStep** — 选择工作区目录（输入路径或浏览）
-2. **ModelStep** — 选择 AI 模型（DeepSeek / Qwen / GLM / Claude / 自定义 API）
-3. **ApiKeyStep** — 输入对应模型的 API Key（支持多个 Key 并存）
+   - POST /api/config/workspace 持久化到 config.yaml
+   - 下次启动 GET /api/config 返回 workspace 则跳过 InitWizard
 
-三个步骤完成后进入主界面。每个步骤独立验证，不允许跨步骤操作。
+模型选择和 API Key 配置不在 InitWizard 中处理，而是在聊天界面的 model-bar 中：
+- 输入框上方 model-bar 显示当前模型名（来自 /api/config.default_model）
+- ⚙ 图标弹窗输入 API Key
+- 用户点发送时若该模型无 API Key 则弹出输入框，不直接发送
+- 每次 POST /api/chat 请求必须带 model 参数，后端拒绝无 model 请求
 
 ## ChoiceCard 组件（Explore 选择题）
 
@@ -228,7 +285,7 @@ AI 生成的 HTML/Vue SFC 代码在对话中通过 iframe 沙箱渲染为可交�
 components/
 ├── chat/
 │   └── TaskListCard.vue       ← 对话流中任务状态卡片
-├── sidebar/
+├── tasks/
 │   └── TaskBoard.vue          ← 侧边栏任务看板
 └── common/
     └── TaskHistoryDialog.vue  ← 任务历史弹窗

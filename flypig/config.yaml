@@ -1,0 +1,7 @@
+agent:
+  recent_workspaces:
+  - C:\Users\mss\WorkBuddy\mydemo
+  workspace: C:\Users\mss\WorkBuddy\mydemo
+api_keys: {}
+llm:
+  default_model: deepseek-v4-flash

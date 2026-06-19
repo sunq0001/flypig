@@ -77,6 +77,7 @@ class ToolBash:
 | 理解三种模式（Explore/Plan/Execute）的权限 | `mode-matrix.md` |
 | 理解 LangGraph 节点、router、状态 | `langgraph-graph.md` |
 | 查看所有 API 端点和 SSE 事件格式 | `api-reference.md` |
+| 查看能力管理（Dashboard/Marketplace/配置） | `mcp.md`（能力管理章节）+ `frontend-arch.md`（能力面板布局） |
 | 查看对话框交互设计和组件 | `frontend-arch.md` + `chat-ux.md` |
 | 查看所有富交互组件清单和情绪价值设计 | `chat-ux.md` |
 | 查看 SSE 事件类型（reasoning/change_plan 等） | `api-reference.md` → SSE 事件格式 |

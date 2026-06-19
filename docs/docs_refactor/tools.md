@@ -1,6 +1,6 @@
 # 工具定义与设计
 
-> **来源**: `architecture-refactor.md` §3.7.2, §3.8.7-3.8.9
+> **历史来源**: `architecture_refactor_old.md` §3.7.2, §3.8.7-3.8.9
 > **关联文档**: `subprocess.md`（命令执行策略）、`backend-modules.md`（模块职责）、`folder-tree.md`（文件结构）
 > 只涉及工具注册、参数设计、编辑策略。命令执行逻辑见 `subprocess.md`。
 

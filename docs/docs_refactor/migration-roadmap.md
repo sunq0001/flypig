@@ -7,6 +7,10 @@
 
 ---
 
+> **核心原则：前端即验证终端**。这是一个 AI Agent 项目，核心交互是**对话流**，不是 HTTP 响应。每轮后端只新增"当前轮次需要的最小功能"，前端量刚好够验证这一轮的工作流。每轮结束都**打开浏览器，和 AI 对话确认这一轮功能正常**，再开始下一轮。
+
+---
+
 ## 第 0 轮：地基搭建（基础设施 + 骨架）
 
 | Step | 名称 | 说明 |
@@ -47,9 +51,9 @@
 为什么做：需求场景。不说技术细节，让任何人读了一句话就能理解这个模块存在的意义。
 实现方法：核心思路（1-3句）。简明说明「怎么实现的」，不写伪代码。
 实现效果：用户在使用过程中能感知到的变化，以及什么样的体验。
-技术栈：这个模块用到的关键库/框架/技术（如 asyncio, sqlite3, httpx, pydantic, dependency-injector, loguru 等）
+技术栈：这个模块用到的关键库/技术（如 asyncio, sqlite3, httpx, pydantic 等）
 
-层&依赖：domain / application / infrastructure / presentation 中的哪一层，能依赖谁不能依赖谁。
+层&依赖：domain / orchestration / infrastructure / backend 中的哪一层，能依赖谁不能依赖谁。
 细节见文档：docs/docs_refactor/xxx.md → §章节 → 子标题
 """
 ```
@@ -72,192 +76,373 @@
 | 安装 pre-commit | `pip install pre-commit` + `pre-commit install`，创建 `.pre-commit-config.yaml` 含 ruff D + interrogate 钩子 |
 | 验证工具链 | `ruff check flypig/` → 无 D 规则报错；`interrogate flypig/` → 覆盖率通过 |
 
----
+### 开发环境热加载（开发期间全程使用）
 
-## 第 1 轮：后端核心（LangGraph + DI + 接口）
+前后端均使用热加载，改代码后无需手动重启。Docker 只用于最终部署（R7），开发期间在本地跑。
 
-| Step | 名称 | 说明 |
-|------|------|------|
-| **Step 1** | 领域层 + DI 容器 | 定义所有接口、数据模型、AgentState、DI 容器 |
-| **Step 2** | 工具系统 | 从零写全部工具，注册到 ToolNode |
-| **Step 3** | LangGraph 图 | 写 graph_factory、nodes、router、ChatService |
+**启动方式**（创建 `scripts/dev.bat` + `dev.sh`）：
 
-### Step 1：领域层 + DI 容器
+```bash
+# 终端 1：后端热加载（uvicorn --reload 监听 .py 文件变更自动重启）
+cd flypig && pip install -r requirements.txt && uvicorn backend.server:app --reload --host 0.0.0.0 --port 8000
 
-| 动作 | 说明 |
-|------|------|
-| 安装 langgraph, langchain-core, langchain-openai | 新增依赖 |
-| 定义 `domain/interfaces/` 全部接口（IModel, IToolExecutor, IConversationStore, IContextPipeline, IHook, IAgent, IUsageTracker, ILicenseService, IUpdateService） | 新写，含 Google 风格 docstring |
-| 定义 `domain/models/` 全部数据类（Message, Session, Mode, ChangeScore, Task） | 新写 |
-| 定义 `domain/agent/state.py`（AgentState TypedDict） | 新写 |
-| 定义 `domain/exceptions.py`（统一异常体系） | 新写 |
-| 定义 `domain/config/config.py` + `domain/config/model_registry.py` | 新写 |
-| 编写 `domain/prompts/multirole_manager.py` + `domain/prompts/` 5 份 prompt | 新写 |
-| 配置 `di/container.py`（dependency-injector，注册所有接口和实现） | 新写 |
-| 验证：`pytest --collect-only` 通过 | 包结构完整 |
+# 终端 2：前端热加载（Vite HMR 毫秒级替换 .vue/.js 模块）
+cd flypig/frontend/static_vite && npm install && npm run dev -- --host
+```
 
-### Step 2：工具系统
+浏览器打开 `http://localhost:5173`，前端通过 Vite proxy 转发 `/api/*` 到 `localhost:8000`。
 
-| 动作 | 说明 |
-|------|------|
-| 创建 `infrastructure/tools/` 包 | 所有工具从零新写 |
-| 写 `executor.py`（ToolExecutor 调度器） | 核心调度逻辑 |
-| 写 `file/` 一组：tool_read.py, tool_write.py, tool_patch_file.py, tool_delete.py, tool_list_dir.py + `review/` 一组：tool_change_review.py, tool_lint.py, tool_change_score.py | 代码编辑+审查工具链 |
-| 写 `search/` 一组：tool_search.py, tool_web_search.py, tool_ask_choice.py | 搜索/调研工具 |
-| 写 `system/` 一组：tool_bash.py, tool_git.py, tool_fetch_url.py, tool_list_dir.py, tool_datetime.py, tool_calc.py, tool_task.py, tool_task_manager.py, tool_ocr.py, tool_extract_archive.py | 系统工具 |
-| 写 `mcp/` 一组：tool_mcp_loader.py, tool_mcp_manager.py | MCP 协议工具 |
-| 写 `tools/utils.py` | 公共工具函数 |
-| 注册全部工具到 LangGraph ToolNode | 在 container.py 中串联 |
-
-### Step 3：LangGraph 图 + 对话编排
-
-| 动作 | 说明 |
-|------|------|
-| 写 `domain/agent/nodes.py`（chat/ask_choice/execute/lint/review/suggest 节点函数） | 新写 |
-| 写 `domain/agent/router.py`（条件边路由逻辑） | 新写 |
-| 写 `domain/agent/context.py`（Explore/Plan/Execute context 约束） | 新写 |
-| 写 `orchestration/graph_factory.py`（组装 nodes + router → 编译 StateGraph） | 新写 |
-| 写 `orchestration/chat_service.py`（对话编排主服务） | 新写 |
-| 写 `orchestration/event_subscriptions.py`（事件订阅编排） | 新写 |
-| 写 `orchestration/suggestion_engine.py`（评分→建议映射） | 新写 |
-| 写 `orchestration/context_pipeline.py`（上下文压缩） | 新写 |
-| 写 `orchestration/git_checkpoint_manager.py`（Agent Git checkpoint） | 新写 |
-| 写 `orchestration/conversation_store.py`（SQLite 实现） | 新写 |
-| 写 `orchestration/summary_generator.py`（短语摘要） | 新写 |
-| 写 `orchestration/session_service.py` + `config_service.py` + `policy_service.py` | 新写 |
-| 写 `infrastructure/hooks.py`（钩子实现） + `process_manager.py`（后台任务） | 新写 |
-| 验证：可运行单轮对话（SSE 事件流输出） | 功能验证 |
+**热加载覆盖范围**：
+- 后端 `.py` → uvicorn 监听到文件变更 → 自动重启进程（< 1 秒）
+- 前端 `.vue` / `.js` / `.css` → Vite HMR 直接替换模块（毫秒级，不刷新页面）
+- 配置文件 `.yaml` / `.toml` → uvicorn 重启也覆盖
+- 新增 Python 依赖 → 在终端 `pip install` 后 uvicorn 自动重启（进程重启时加载新包）
 
 ---
 
-## 第 2 轮：后端层 + 基础设施
-
-| Step | 名称 | 说明 |
-|------|------|------|
-| **Step 4** | Web 层 | Quart 路由 + SSE 队列 |
-| **Step 5** | 基础设施 | 模型适配、终端、沙箱、权限、用量追踪 |
-
-### Step 4：Web 层
-
-| 动作 | 说明 |
-|------|------|
-| 写 `backend/server.py`（app 声明 + 路由注册） | 新写 |
-| 写 `backend/routes/` 全部路由（chat.py, config.py, files.py, sessions.py, health.py, upload.py, rollback.py, agent_routes.py, history.py, usage.py, tasks.py, feedback.py） | 新写 |
-| 写 `backend/sse_queue.py` + `backend/file_watcher.py` | 新写 |
-| 写 `__main__.py`（接口选择 + DI 初始化 + 启动） | 入口点 |
-
-### Step 5：基础设施
-
-| 动作 | 说明 |
-|------|------|
-| 写 `infrastructure/llm/`（openai_adapter.py, anthropic.py, local.py） | 模型适配 |
-| 写 `infrastructure/sandbox/`（Docker 沙箱配置、路径验证、生命周期、镜像构建） | 新写 |
-| 写 `infrastructure/terminal.py`（精简版，仅用户手动 PTY WebSocket，无 AI 注入） | 新写 |
-| 写 `infrastructure/policies/permission_checker.py`（file/term/git/test, allow/ask/deny） | 新写 |
-| 写 `infrastructure/policies/`（Casbin 初始化配置） | 新写 |
-| 写 `infrastructure/usage/`（sqlite_tracker.py, pricing.py, usage_handler.py） | 用量追踪 |
+> **核心原则**：每一轮结束时都**打开浏览器，和 AI 对话来验证**这一轮新增的功能。不使用 curl/pytest/http 客户端验证工作流。前端的量只够验证当轮功能即可，不多写。
 
 ---
 
-## 第 3 轮：前端
+## 第 1 轮：最小可对话（Round 1 — Hello, AI）
 
-| Step | 名称 | 说明 |
-|------|------|------|
-| **Step 6** | 前端 Vite + Vue | 从零搭建 Vite + Vue + Element Plus |
+**目标**：浏览器里输入文字 → 看到 AI 流式回复。全过程通过**和 AI 对话验证**。
 
-### Step 6：前端 Vite + Vue
+> 不写任何工具、记忆、context pipeline、模式区分。后端就是"接收 prompt → LLM stream → 推送 SSE"。
 
-| 动作 | 说明 |
-|------|------|
-| 初始化 `frontend/static_vite/`（package.json, vite.config.js, index.html） | 新写 |
-| 安装 Vercel AI SDK, Element Plus, mermaid, marked, highlight.js | 新增依赖 |
-| 写 `src/main.js` + `src/App.vue`（三栏布局 + 终端面板） | 新写 |
-| 写 `src/style/`（5 个 CSS 文件：变量、终端主题 ×2、base） | 新写 |
-| 写 `src/components/layout/`（MainLayout, ResizeHandle, StatusBar） | 新写 |
-| 写 `src/components/sidebar/`（Sidebar, FileTree, FileTreeNode, Dashboard, TaskBoard） | 新写 |
-| 写 `src/components/editor/`（EditorArea, EditorTabs, MonacoEditor） | 新写 |
-| 写 `src/components/chat/`（ChatPanel, MessageList, InputBox, ChoiceCard, ChangeReviewCard, SuggestionCard, MermaidDiagram, LivePreview, MessageItem, ThinkingIndicator, ToolCallCard, TaskListCard, FilePreview, ImagePreview） | 新写 |
-| 写 `src/components/terminal/`（TerminalPanel, TerminalTab, XtermViewer, OutputViewer） | 新写 |
-| 写 `src/components/init/`（InitWizard, WorkspaceStep, ModelStep, ApiKeyStep） | 新写 |
-| 写 `src/components/common/`（MarkdownRender, CodeBlock, LoadingSpinner, ThemeSwitcher, CommandPalette, TaskHistoryDialog, RecoveryDialog） | 新写 |
-| 写 `src/composables/`（useChat, useMessages, useTerminal, useFileTree, useEditor, useLayout, useMarkdownRender, useTheme, useCommandPalette, useTasks, useDraft, useFileDrop） | 新写 |
-| 写 `src/lib/`（xterm-setup.js, monaco-setup.js, sfc-compiler.js） | 新写 |
-| 用 useChat 连接后端 SSE | 前后端联调 |
+| 子步骤 | 后端写什么 | 前端写什么 | 验证 |
+|--------|-----------|-----------|------|
+| **R1.1** 骨架填充 | `core/*`（config, container, logging, events, app）+ `domain/interfaces/imodel.py` + `domain/interfaces/iagent.py` + `domain/exceptions.py` + `domain/config/config.py` + `domain/config/model_registry.py` | — | `pytest --collect-only` |
+| **R1.2** Prompt 系统 | `domain/prompts/multirole_manager.py` + `domain/prompts/__init__.py` + `domain/prompts/roles/developer.md`（仅主 prompt，其余留空） | — | `python -c "from flypig.domain.prompts import *"` |
+| **R1.3** LLM 适配器 | `infrastructure/llm/openai_adapter.py` | — | 写个最小脚本调通 LLM stream |
+| **R1.4** 最小 LangGraph | `domain/models/message.py`（Message dataclass）+ `domain/agent/state.py` + `domain/agent/nodes.py`（仅 chat_node）+ `orchestration/graph_factory.py`（1 个节点 + 1 条边）+ `orchestration/chat_service.py`（简化版：接收→调 LLM→推 SSE） | — | 同上脚本调通 |
+| **R1.5** 后端配置+路由 | `backend/server.py`（Quart 工厂 + 蓝图注册 + CORS）+ `backend/routes/config.py`（GET /api/config 返回全部运行时配置，POST 工作区/POST API Key）+ `backend/routes/chat.py` + `backend/routes/health.py` + `backend/sse_queue.py` + `__main__.py` | — | `curl -N localhost:8000/api/config` 看到完整配置 → `localhost:8000/api/health` 返回 OK |
+| **R1.6** 最小前端+初始化 | `style/variables.css` + `style/base.css` | `index.html` + `main.js` + `App.vue`（onMounted 调 /api/config，无 workspace 显示 InitWizard，有则进聊天）+ `InitWizard.vue` + `WorkspaceStep.vue` + `ChatPanel.vue`（含 model-bar 模型下拉+⚙ API Key）+ `InputBox.vue` + `MessageList.vue` + `MessageItem.vue` + `useChat.js`（每次发送带 model 参数） | **浏览器：打开 → 无工作区 → 显示 InitWizard → 选目录 → 进聊天 → 输入"你好" → AI 流式回复** |
+
+> **R1 测试剧本**（浏览器中执行，验证对话流）：
+> ```
+> 第1步：输入"你好，请介绍一下你自己"
+>   → 应看到 AI 逐字流式回复（不是一次性输出，也不是刷屏）
+>   → 检查点：打字机效果是否流畅？每 token 间隔是否均匀？
+>
+> 第2步（接上）：输入"用中文回复，说三句关于 Python 的话"
+>   → 应看到 AI 在同一个对话上下文中回复，知道之前说了什么
+>   → 检查点：多轮对话消息列表是否正常追加？滚动是否自动跟随？
+>
+> 第3步（接上）：输入"刚才我让你干嘛了"
+>   → 应看到 AI 利用当前对话上下文中已有的消息历史做出回答
+>   → 检查点：AI 是否能引用前两轮的具体内容？
+> ```
+
+**本轮结束后可验证的工作流**：
+- 对话流：用户输入 → SSE 推流 → 前端流式渲染
+- LLM 调用：prompt → model.stream → 逐 token 输出
+- 前后端联调：Vite dev → 后端 API → SSE 消费
+
+**本轮不做的功能**：
+工具调用、记忆、context 压缩、多节点路由、ChoiceCard 等富卡片、模式区分、文件功能
 
 ---
 
-## 第 4 轮：容器化 + 验证
+## 第 2 轮：可见的工具调用（Round 2 — Tool Calls）
 
-| Step | 名称 | 说明 |
-|------|------|------|
-| **Step 7** | Docker Compose | 容器化部署 |
-| **Step 8** | 清理 + 验证 | 全流程回归 |
+**目标**：AI 可以调用工具，前端能看到 tool_call 卡片和结果。
 
-### Step 7：Docker Compose 容器化
+| 子步骤 | 后端写什么 | 前端写什么 | 验证 |
+|--------|-----------|-----------|------|
+| **R2.1** 工具系统 | `domain/interfaces/itool_executor.py` + `infrastructure/tools/executor.py` + `infrastructure/tools/utils.py` + `domain/interfaces/isearch.py` | — | `python -c "... 调一个工具"` |
+| **R2.2** 文件工具 | `infrastructure/tools/file/tool_read.py` + `tool_write.py` + `tool_patch_file.py` + `tool_delete.py` + `tool_list_dir.py` | — | 同上 |
+| **R2.3** 搜索+懒加载工具 | `infrastructure/tools/search/tool_search.py` + `tool_search_tools.py` + `tool_call_direct.py` + `infrastructure/search/search_grep.py`（实现 ISearch）+ `infrastructure/search/ast_parser.py`（P0 NoOp 实现 IASTParser）+ `infrastructure/search/lsp_diagnostics.py`（P0 NoOp 实现 ILspDiagnostics） | — | 同上 |
+| **R2.4** 系统工具 | `infrastructure/tools/system/tool_bash.py` + `tool_git.py` + `tool_fetch_url.py` + `tool_datetime.py` + `tool_calc.py` + `tool_task.py` + `tool_task_manager.py` + `tool_extract_archive.py` | — | 同上 |
+| **R2.5** 注册到 LangGraph | 更新 `nodes.py`（加 ToolNode）+ 更新 `graph_factory.py` + 更新 `core/container.py` | — | `curl` 看到 tool_call 事件 |
+| **R2.6** 前端 tool 展示 | — | `ToolCallCard.vue`（显示工具名+参数+结果）+ `ThinkingIndicator.vue` + `CodeBlock.vue` + 更新 `MessageItem.vue` 支持 tool 消息 + `useEventRouter.js` | **浏览器：让 AI 搜索或读文件 → 看到 ToolCallCard 渲染** |
+
+**本轮结束后可验证的工作流**：
+- AI 自主决定调工具 → 触发 ToolNode → 结果返回 → 前端展示 ToolCallCard
+- 文件读写工具链完整
+- 搜索（grep）工具完整
+- 系统工具（bash/url/日期/计算）完整
+
+**本轮不做的功能**：
+记忆（conversation_store）、多节点路由、ChoiceCard、ChangeReview、SuggestionCard、模式区分
+
+> **R2 测试剧本**（浏览器中执行，验证工具调用）：
+> ```
+> 第1步：输入"读一下 __main__.py 的前 10 行"
+>   → 应看到 ThinkingIndicator 闪烁 → ToolCallCard 展示工具名/参数/结果
+>   → 检查点：工具调用的展示是否自然？是否打断了对话流？
+>
+> 第2步（接上）：输入"搜索包含 'container' 的文件"
+>   → AI 应调 tool_search，展示匹配文件列表
+>   → 检查点：搜索结果格式是否可读？
+>
+> 第3步（接上）：输入"在第一个匹配文件里找到 import 语句，读给我看"
+>   → AI 应结合上一步搜索结果 + 调 tool_read 定位读取
+>   → 检查点：AI 是否能利用上一步的工具输出作为下一步的上下文？
+>
+> 第4步（接上）：输入"给我算一下 2 的 10 次方"
+>   → AI 应调 tool_calc，返回计算结果
+>   → 检查点：简单计算工具是否正常工作？
+>
+> 第5步（回到默认上下文）：输入"刚才你帮我搜了啥？"
+>   → AI 应引用前面的搜索结果（当前上下文内有工具调用记录）
+>   → 检查点：工具调用的输出是否进入对话消息历史？
+> ```
+
+---
+
+## 第 3 轮：记忆与多轮对话（Round 3 — Memory）
+
+**目标**：AI 记得之前说过的话，切换会话后不丢失上下文。
+
+| 子步骤 | 后端写什么 | 前端写什么 | 验证 |
+|--------|-----------|-----------|------|
+| **R3.1** 对话存储 | `domain/interfaces/iconversation_store.py` + `orchestration/conversation_store.py`（SQLite）+ `domain/models/session.py` | — | `pytest` 读写验证 |
+| **R3.2** 会话服务 | `orchestration/session_service.py` + `orchestration/config_service.py` + `orchestration/event_subscriptions.py` | — | 测试创建/切换/恢复会话 |
+| **R3.3** Context 压缩 | `domain/interfaces/icontext_pipeline.py` + `orchestration/context_pipeline.py` | — | 测试长对话压缩 |
+| **R3.4** 注入 ChatService | 更新 `chat_service.py` + `core/container.py` 注入 IConversationStore + IContextPipeline + EventSubscriptions | — | `curl` 连续多轮对话 |
+| **R3.5** 会话切换前端 | — | `Sidebar.vue`（会话列表）+ `useChat` 增加 session_id 管理 + `composables/useMessages.js` | **浏览器：多轮对话后发"刚才说了什么" → AI 记得** |
+
+**本轮结束后可验证的工作流**：
+- 多轮对话：AI 记得之前的上下文
+- 会话切换：切换会话后恢复历史
+- 长对话：context 压缩后不影响体验
+
+**本轮不做的功能**：
+ChoiceCard、ChangeReview、SuggestionCard、权限系统、用量追踪
+
+> **R3 测试剧本**（浏览器中执行，验证记忆与多轮）：
+> ```
+> 第1步：输入"我的名字是张三"
+>   → 应正常回复，消息写入消息历史
+>
+> 第2步（接上）：输入"我在做一个 Python 项目"
+>   → 正常回复
+>
+> 第3步（接上）：输入"我叫什么名字？我在做什么项目？"
+>   → AI 应能正确回答"张三"和"Python 项目"
+>   → 检查点：多轮对话上下文是否完整？
+>
+> 第4步：刷新页面（会话丢失场景）
+>   → 左侧 Sidebar 应显示已有会话列表
+>   → 点击刚才的会话 → 历史消息恢复
+>   → 输入"我刚才在做什么？"
+>     → AI 应正确引用会话历史中的内容
+>     → 检查点：会话持久化和恢复是否完整？
+>
+> 第5步（长对话压力测试）：连续输入 20 条短消息（如"说个笑话" × 20）
+>   → 观察第 15 轮后的回复质量是否有明显下降
+>   → 检查点：context 压缩是否生效？长对话是否造成质量退化？
+> ```
+
+---
+
+## 第 4 轮：富交互卡片（Round 4 — Rich Cards）
+
+**目标**：AI 出选择题、展示 diff、对抗建议——前端渲染富卡片。
+
+| 子步骤 | 后端写什么 | 前端写什么 | 验证 |
+|--------|-----------|-----------|------|
+| **R4.1** ChoiceCard 后端 | `domain/interfaces/itool_executor.py`（ask_choice 工具）+ `infrastructure/tools/interact/tool_ask_choice.py` + `domain/agent/nodes.py`（ask_choice_node） | — | `curl` 触发 choice 事件 |
+| **R4.2** ChoiceCard 前端 | — | `ChoiceCard.vue` + 更新 `EventRouter` + `useEventRouter.js` | **浏览器：AI 出选择题 → 看到 ChoiceCard** |
+| **R4.3** 变更审查后端 | `infrastructure/tools/review/`（tool_change_review.py + tool_lint.py + tool_change_score.py）+ `domain/models/change_score.py` + `domain/agent/nodes.py`（review_node + lint_node） | — | `curl` 触发 diff + lint 事件 |
+| **R4.4** 变更审查前端 | — | `DiffViewer.vue` + `ChangeReviewCard.vue` + `CodeBlock.vue` | **浏览器：AI 改文件 → 看到 DiffViewer 卡片** |
+| **R4.5** 对抗建议后端 | `orchestration/suggestion_engine.py` + `domain/agent/nodes.py`（suggest_node） | — | `curl` 触发 suggest 事件 |
+| **R4.6** 对抗建议前端 | — | `SuggestionCard.vue` | **浏览器：AI 提建议 → 看到 SuggestionCard** |
+
+**本轮结束后可验证的工作流**：
+- AI 出选择题 → ChoiceCard → 用户选择 → AI 继续
+- AI 改文件 → DiffViewer → 用户确认 → 写入
+- AI 审查+打分 → 对抗建议 → 用户反馈
+
+**本轮不做的功能**：
+权限系统（Casbin）、用量追踪、Docker 沙箱
+
+> **R4 测试剧本**（浏览器中执行，验证富卡片）：
+> ```
+> 第1步：输入"我想了解一下这个项目的结构，我该从哪里下手？"
+>   → AI 应出 ChoiceCard，展示几个探索方向供选择
+>   → 检查点：ChoiceCard 的选项是否可点击？点击后 AI 是否按选择继续？
+>
+> 第2步（文件变更场景）：输入"帮我创建一个 test.js 文件，里面写一个冒泡排序"
+>   → AI 应创建文件，然后触发 ChangeReviewCard + DiffViewer 展示变更
+>   → 检查点：DiffViewer 是否清晰展示新增的代码行？
+>
+> 第3步（接上）：输入"检查一下代码质量"
+>   → AI 应调 tool_lint 检查代码 → 展示 Lint 结果
+>   → 检查点：lint 卡片是否展示错误行和解释？
+>
+> 第4步（接上）：输入"你觉得这段代码有什么改进空间？"
+>   → AI 应生成对比建议 → 展示 SuggestionCard
+>   → 检查点：SuggestionCard 是否可读？是否提供了有价值的建议？
+> ```
+
+---
+
+## 第 5 轮：权限与系统功能（Round 5 — Permissions & System）
+
+**目标**：权限校验、用量追踪、终端面板。
+
+| 子步骤 | 后端写什么 | 前端写什么 | 验证 |
+|--------|-----------|-----------|------|
+| **R5.1** 权限系统 | `infrastructure/policies/`（model.conf + policy.csv + casbin_setup.py + permission_checker.py）+ `orchestration/policy_service.py` | — | `pytest` Casbin 矩阵测试 |
+| **R5.2** 注入 ChatService | 更新 `chat_service.py` + `core/container.py` policy check | — | 对话中触发 allow/ask/deny |
+| **R5.3** 用量追踪 | `domain/interfaces/iusage_tracker.py` + `infrastructure/usage/`（sqlite_tracker.py + pricing.py + usage_handler.py）+ `orchestration/usage_tracker_service.py` | — | `pytest` + `curl` 验证记录 |
+| **R5.4** 文件监控路由 | `backend/routes/files.py` + `backend/file_watcher.py` + `backend/routes/upload.py` | — | `curl` 文件列表/上传 |
+| **R5.5** 剩余路由补全 | `backend/routes/config.py` + `sessions.py` + `rollback.py` + `agent_routes.py` + `history.py` + `tasks.py` + `feedback.py` + `backend/routes/usage.py` | — | `curl` 各端点返回正常 |
+| **R5.6** 前端文件树 | — | `FileTree.vue` + `FileTreeNode.vue` + `useFileTree.js` + `components/layout/MainLayout.vue` + `ResizeHandle.vue` | **浏览器：看到文件树，点击展开** |
+| **R5.7** 终端面板 | `infrastructure/terminal.py` + `backend/terminal.py` | `TerminalPanel.vue` + `XtermViewer.vue` + `OutputViewer.vue` + `useTerminal.js` + `lib/xterm-setup.js` | **浏览器：终端面板有 xterm.js 渲染** |
+| **R5.8** 前端完整布局 | — | `components/common/LoadingSpinner.vue` + `MarkdownRender.vue` + `StatusBar.vue` + `ThemeSwitcher.vue` + `composables/useLayout.js` + `composables/useTheme.js` + `composables/useMarkdownRender.js` + `style/terminal-themes.css` + `theme-cyberpunk.css` + `theme-cute.css` | **浏览器：布局完善、主题切换正常** |
+
+**本轮结束后可验证的工作流**：
+- 权限校验：AI 尝试删除关键文件 → 弹出确认
+- 用量记录：对话后看到 token 消耗
+- 文件树：左侧面板展示项目文件
+- 终端面板：用户手动操作终端
+
+> **R5 测试剧本**（浏览器中执行，验证权限/用量/布局）：
+> ```
+> 第1步：输入"删除 src/main.js 文件"
+>   → 权限系统应触发 ask（请求用户确认），弹出确认框
+>   → 检查点：确认框是否正常弹出？点允许后是否执行？点拒绝后是否不执行？
+>
+> 第2步：切换左侧面板到文件树 Tab
+>   → 看到项目的文件树结构，点击文件夹展开/收起
+>   → 检查点：文件树是否正确展示目录结构？
+>
+> 第3步：看底部状态栏
+>   → 应显示当前模型、token 用量、会话信息
+>   → 检查点：用量信息是否随对话更新？
+>
+> 第4步：切换主题
+>   → 应看到 UI 主题切换为暗色/亮色/赛博朋克等风格
+>   → 检查点：主题切换是否流畅？是否有明显闪烁？
+> ```
+
+## 第 6 轮：高级特性（Round 6 — Advanced）
+
+**目标**：模式区分、Mermaid 图表、MCP 集成、Docker 沙箱。
+
+| 子步骤 | 后端写什么 | 前端写什么 | 验证 |
+|--------|-----------|-----------|------|
+| **R6.1** 模式区分 | `domain/models/mode.py` + `domain/models/task.py`（TaskItem dataclass）+ `domain/agent/context.py`（Explore/Plan/Execute）+ `domain/agent/router.py`（条件路由） + 补齐 `domain/prompts/roles/reviewer.md` + `tester.md` + `architect.md` + `documenter.md` | — | **浏览器：切模式后工具集会变** |
+| **R6.2** Mermaid 渲染 | 升级 SSE 事件支持 chart/text 等 | `MermaidDiagram.vue` + `ChartView.vue` + `InlinePreview.vue` + `LivePreview.vue` + `DataTable.vue` + `FormGenerator.vue` + `DashboardWidget.vue` + `CommandCard.vue` + `MemoryBubble.vue` + `ImagePreview.vue` + `FilePreview.vue` | **浏览器：AI 画图 → 看到渲染** |
+| **R6.3** MCP 集成 | `infrastructure/tools/mcp/`（tool_mcp_loader.py + tool_mcp_manager.py）+ `domain/interfaces/imodel.py`（MCP 注册扩展）+ `mcp.json` 配置 | — | **浏览器：加载 MCP → 工具变多** |
+| **R6.4** Docker 沙箱 | `infrastructure/sandbox/`（sandbox_config.py + path_validator.py + sandbox_manager.py + builder.py） | `ToolCallCard` 加沙箱/本地标识 | **浏览器：沙箱运行 → 看到沙箱标识** |
+| **R6.5** Checkpoint + 恢复 | `orchestration/git_checkpoint_manager.py` + `orchestration/summary_generator.py` + `infrastructure/hooks.py` + `infrastructure/process_manager.py` | `RecoveryDialog.vue` + `TaskHistoryDialog.vue` + `CommandPalette.vue` + `composables/useCommandPalette.js` + `composables/useEditor.js` + `composables/useTasks.js` + `composables/useDraft.js` + `composables/useFileDrop.js` + `composables/useUxEnhancements.js` + `lib/monaco-setup.js` + `lib/sfc-compiler.js` | **浏览器：中断后恢复 → 看到 RecoveryDialog** |
+| **R6.6** 多模型适配 | `infrastructure/llm/anthropic.py` + `infrastructure/llm/local.py` + `scripts/seed_data.py` + `scripts/migrate_db.py` | — | **浏览器：切换模型后对话正常** |
+
+---
+
+## 第 7 轮：容器化 + 部署（Round 7 — Ship）
+
+**目标**：Docker Compose 一键部署，全链路回归验证。
 
 | 动作 | 说明 |
 |------|------|
 | 创建 `Dockerfile` | 应用容器化 |
-| 创建 `docker-compose.yml` | api + nginx 编排 |
+| 完善 `docker-compose.yml` | api + nginx 编排 |
 | 创建 `nginx.conf` | 反向代理 + 静态文件 + SSL |
-| 验证：`docker compose up` 正常启动 | 可访问 Web UI |
 
-### Step 8：清理 + 验证
+> **R6 测试剧本**（浏览器中执行，验证高级特性）：
+> ```
+> 第1步（模式切换）：切换到 Plan 模式，输入"帮我重构一下文件结构"
+>   → AI 应生成文件变更计划，调用工具前先输出方案
+>   → 切换到 Execute 模式，输入"执行刚才的重构方案"
+>     → 检查点：模式切换后 AI 行为是否变化？工具可用性是否受约束？
+>
+> 第2步（Mermaid）：输入"画一个用户登录的流程图"
+>   → AI 应生成 Mermaid 代码 → 前端渲染为流程图
+>   → 检查点：Mermaid 渲染是否正常？是否支持交互（缩放/点击）？
+>
+> 第3步（MCP）：加载一个 MCP 服务器（如 filesystem），然后说"用 MCP 列一下文件"
+>   → AI 应调用 MCP 工具而非内置 tool_list_dir
+>   → 检查点：MCP 工具是否注册成功？调用时是否显示 MCP 标识？
+>
+> 第4步（多模型）：在设置中切换到 Claude 模型，重复 R1 测试剧本
+>   → 两个模型应输出不同风格的回答
+>   → 检查点：模型切换是否生效？API Key 管理是否正确？
+> ```
 
-| 动作 | 说明 |
-|------|------|
-| 跑 interrogate 验证 docstring 覆盖率 ≥ 80% | 规范验证 |
-| `mkdocs build` 验证文档站可正常构建 | 文档验证 |
-| 全链路测试：所有模式（Explore/Plan/Execute）的对话流 | 功能验证 |
-| 全链路测试：变更审查 → LINT → 对抗建议 → 用户选择 → 审批 | 流程验证 |
-| 全链路测试：MCP 工具加载 + 调用 | 扩展验证 |
-| 性能回归：启动时间、首次对话延迟、工具调用耗时 | 非功能验证 |
+**验证**：`docker compose up` → 浏览器访问 → 和 AI 对话确认全链路正常。
 
 ---
 
 ## 物理文件映射（完整目标清单）
 
-| 层次 | 文件数 | 分布 |
-|------|--------|------|
-| 领域层 `domain/` | ~25 个 `.py` | 接口、模型、agent、prompts、policies、config |
-| 编排层 `orchestration/` | ~12 个 `.py` | 服务 |
-| 基础设施层 `infrastructure/` | ~30 个 `.py` | 模型适配、工具（~20）、沙箱、终端、用量、权限、Casbin |
-| 后端层 `backend/` | ~15 个 `.py` | 路由（11）、服务（2）、server、terminal、main |
-| 前端 `frontend/` | ~45 个文件 | 组件（~30）、composables（12）、lib（3）、style（5）、配置 |
-| 根级配置 | ~8 个文件 | pyproject.toml, Dockerfile, docker-compose.yml, nginx.conf, mcp.json, model.conf, policy.csv |
-| 测试 `tests/` | ~12 个 `.py` | unit（5）、integration（3）、fixtures、conftest、pytest.ini |
-| **合计** | **~150 个文件** | |
+### 文件→Round 归位表（★ MVP 文件标注归属，☆ P1/P2 预留不列）
+
+| Round | 层 | 文件 |
+|-------|----|------|
+| **R1** | core | `core/*`（5 个）、`__main__.py` |
+| | config | `config.yaml`、`.env.example` |
+| | domain/interfaces | `imodel.py`、`iagent.py` |
+| | domain/config | `config.py`、`model_registry.py` |
+| | domain/prompts | `multirole_manager.py`、`roles/developer.md` |
+| | domain/agent | `state.py`、`nodes.py`（chat_node 初版） |
+| | domain/models | `message.py` |
+| | domain | `exceptions.py` |
+| | orchestration | `graph_factory.py`（初版）、`chat_service.py`（初版） |
+| | infrastructure/llm | `openai_adapter.py` |
+| | backend | `server.py`、`routes/config.py`、`routes/chat.py`、`routes/health.py`、`sse_queue.py` |
+| | frontend | `App.vue`、`InitWizard.vue`、`WorkspaceStep.vue`、`ChatPanel.vue`、`MessageList.vue`、`MessageItem.vue`、`InputBox.vue`、`useChat.js`、`style/variables.css`、`style/base.css` |
+| | config | `vite.config.js`、`package.json`、`.env.example` |
+| |
+| **R2** | domain/interfaces | `itool_executor.py`、`isearch.py` |
+| | infrastructure/tools | `executor.py`、`utils.py`、`file/*`（5 个）、`search/tool_search.py`、`tool_search_tools.py`、`tool_call_direct.py`、`system/*`（8 个） |
+| | infrastructure/search | `search_grep.py`、`ast_parser.py`、`lsp_diagnostics.py` |
+| | domain/agent | `nodes.py`（加 ToolNode） |
+| | orchestration | `graph_factory.py`（更新）、`core/container.py`（更新） |
+| | frontend | `ToolCallCard.vue`、`ThinkingIndicator.vue`、`CodeBlock.vue`、`useEventRouter.js`、`composables/useChat.js`（更新） |
+| |
+| **R3** | domain/interfaces | `iconversation_store.py`、`icontext_pipeline.py` |
+| | domain/models | `session.py` |
+| | orchestration | `conversation_store.py`、`session_service.py`、`config_service.py`、`event_subscriptions.py`、`context_pipeline.py`、`chat_service.py`（更新）、`core/container.py`（更新） |
+| | backend/routes | `sessions.py` |
+| | frontend | `Sidebar.vue`、`useMessages.js` |
+| |
+| **R4** | infrastructure/tools | `interact/tool_ask_choice.py`、`review/*`（3 个） |
+| | domain/models | `change_score.py` |
+| | domain/agent | `nodes.py`（加 ask_choice/review/lint/suggest node） |
+| | orchestration | `suggestion_engine.py` |
+| | frontend | `ChoiceCard.vue`、`DiffViewer.vue`、`ChangeReviewCard.vue`、`SuggestionCard.vue`、`EventRouter`（更新） |
+| |
+| **R5** | infrastructure/policies | `model.conf`、`policy.csv`、`casbin_setup.py`、`permission_checker.py` |
+| | infrastructure/usage | `sqlite_tracker.py`、`pricing.py`、`usage_handler.py` |
+| | infrastructure | `terminal.py` |
+| | orchestration | `policy_service.py`、`usage_tracker_service.py`、`chat_service.py`（更新） |
+| | backend | `routes/files.py`、`routes/upload.py`、`routes/config.py`、`routes/rollback.py`、`routes/agent_routes.py`、`routes/history.py`、`routes/tasks.py`、`routes/feedback.py`、`routes/usage.py`、`routes/sessions.py`（完善）、`file_watcher.py`、`terminal.py` |
+| | frontend | `MainLayout.vue`、`ResizeHandle.vue`、`StatusBar.vue`、`FileTree.vue`、`FileTreeNode.vue`、`TerminalPanel.vue`、`XtermViewer.vue`、`OutputViewer.vue`、`MarkdownRender.vue`、`LoadingSpinner.vue`、`ThemeSwitcher.vue`、`useFileTree.js`、`useTerminal.js`、`useLayout.js`、`useTheme.js`、`useMarkdownRender.js`、`lib/xterm-setup.js`、`style/*.css` |
+| |
+| **R6** | domain/models | `mode.py`、`task.py` |
+| | domain/agent | `context.py`、`router.py` |
+| | domain/prompts | `roles/reviewer.md`、`tester.md`、`architect.md`、`documenter.md` |
+| | infrastructure/sandbox | `sandbox_config.py`、`path_validator.py`、`sandbox_manager.py`、`builder.py` |
+| | infrastructure/tools/mcp | `tool_mcp_loader.py`、`tool_mcp_manager.py` |
+| | infrastructure/llm | `anthropic.py`、`local.py` |
+| | infrastructure | `hooks.py`、`process_manager.py` |
+| | orchestration | `git_checkpoint_manager.py`、`summary_generator.py`、`graph_config.yaml` |
+| | scripts | `seed_data.py`、`migrate_db.py` |
+| | frontend | `MermaidDiagram.vue`、`ChartView.vue`、`InlinePreview.vue`、`LivePreview.vue`、`DataTable.vue`、`FormGenerator.vue`、`DashboardWidget.vue`、`CommandCard.vue`、`MemoryBubble.vue`、`ImagePreview.vue`、`FilePreview.vue`、`RecoveryDialog.vue`、`TaskHistoryDialog.vue`、`CommandPalette.vue`、`useCommandPalette.js`、`useEditor.js`、`useTasks.js`、`useDraft.js`、`useFileDrop.js`、`useUxEnhancements.js`、`lib/monaco-setup.js`、`lib/sfc-compiler.js`、`mcp.json` |
+| |
+| **R7** | config | `Dockerfile`、`docker-compose.yml`、`nginx.conf` |
+| | 测试 | `tests/*`（全部 12 个文件，贯穿各 Round 但 R7 时全部补完） |
+| | tools | `scripts/setup_env.py`、`setup_env.bat`、`setup_env.sh` |
+
+**注意**：上表不列 `__init__.py`（每个包目录都需要，贯穿全程）。所有 ☆ P1/P2 预留接口在任一 Round 不实现，仅保留 docstring 骨架。
 
 ---
 
 ## MVP 迭代建议
 
-| 轮次 | 目标 | Steps | 可演示功能 | 不做 |
-|------|------|-------|-----------|------|
-| **MVP 1** | 骨架 + 后端核心 | -2 → 3 | 单图 LLM 对话 + 工具调用 + SSE 输出 | 模式区分、审查、lint、前端、沙箱 |
-| **MVP 2** | 接口 + 前端 | 4 → 6 | 完整 Web UI + useChat 流式渲染 + 文件管理 | Mermaid、对抗建议、Docker |
-| **MVP 3** | 高级特性 | 7 → 8 | Lint、对抗建议、MCP、Mermaid、Docker | — |
+| 轮次 | Rounds | 核心验证方式 | 可演示功能 | 不做 |
+|------|--------|------------|-----------|------|
+| **MVP 1** | -2 → R1 | **浏览器：和 AI 对话** | 用户输入→SSE→AI 流式回复 | 工具调用、记忆、富卡片 |
+| **MVP 2** | R2 → R3 | **浏览器：和 AI 对话** | 工具调用卡、多轮记忆、文件树 | 对抗建议、Mermaid、Docker |
+| **MVP 3** | R4 → R5 | **浏览器：和 AI 对话** | ChoiceCard、DiffViewer、权限、用量 | MCP、Sandbox |
+| **MVP 4** | R6 → R7 | **浏览器：和 AI 对话** | 模式区分、Mermaid、MCP、Docker | — |
 
-## MVP 1 不做的功能
-
-| 功能 | 原因 |
-|------|------|
-| 模式区分（Explore/Plan/Execute） | 先不区分，LLM 直接对话+调工具 |
-| 变更审查（ChangeReview） | 先不做卡片，用户直接看 diff |
-| Lint 自动修复 | 先不集成 ruff |
-| 对抗建议（SuggestionCard） | 先不做评分 |
-| 富内容图表（Mermaid/LivePreview） | 先只支持文本和 Markdown |
-| MCP 集成 | 先不装任何 MCP 服务器 |
-| 前端 Web UI | MVP 1 仅用 curl/wscat 测试 SSE |
-| Docker 沙箱 | MVP 1 仅本机 subprocess |
-
-## MVP 2 不做的功能
-
-| 功能 | 原因 |
-|------|------|
-| Mermaid 渲染 | 第 3 轮做 |
-| 对抗建议卡片 | 第 3 轮做 |
-| Docker Compose | 第 4 轮做 |
+**核心不变**：所有 MVP 的验证方式都是"打开浏览器，和 AI 说话"，没有例外。
 
 ## DevOps 架构
 

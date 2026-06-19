@@ -1,6 +1,6 @@
 # mem_convStore：对话存储总览
 
-> **来源**: `architecture-refactor.md` §3.7, §3.9
+> **历史来源**: `architecture_refactor_old.md` §3.7, §3.9
 > **关联文档**: `mem_convStore_tasks.md`（任务）、`mem_convStore_usage.md`（用量）、`mem_convStore_checkpoints.md`（Checkpoint）、`short-term-memory.md`（上下文压缩）
 
 ## 数据文件

@@ -1,4 +1,5 @@
-/* useUxEnhancements：UX 增强
+/** useUxEnhancements：UX 增强
+ * @module useUxEnhancements
    为什么做：打字机效果/焦点跟随/情绪价值等细节体验优化，放在一个 composable 集中管理。
    实现方法：打字机逐字渲染、消息自动聚焦、错误时的安抚动画。
    实现效果：对话体验流畅有温度。

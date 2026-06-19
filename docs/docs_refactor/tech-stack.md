@@ -1,6 +1,6 @@
 # 技术栈
 
-> **来源**: `architecture-refactor.md` §3.12
+> **历史来源**: `architecture_refactor_old.md` §3.12
 > **关联文档**: `architecture-guide.md`（总览）、`folder-tree.md`（文件结构）、`mem_convStore_usage.md`（成本追踪取代方案）、`resilience.md`（loguru 日志系统）
 > **核心原则**：能用成熟开源的绝不自研。
 

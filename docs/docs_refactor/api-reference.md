@@ -1,6 +1,6 @@
 # API 参考
 
-> **来源**: `architecture-refactor.md` §3.1, §3.8.2-3.8.5, §8.3
+> **历史来源**: `architecture_refactor_old.md` §3.1, §3.8.2-3.8.5, §8.3
 > **关联文档**: `frontend-arch.md`（前端消费）、`data-flow.md`（数据流）、`mem_convStore_usage.md`（用量查询端点）、`mem_convStore_tasks.md`（任务端点）、`mem_convStore_checkpoints.md`（Checkpoint）、`resilience.md`（导出/恢复端点）
 > 新增端点或改 SSE 事件格式时，需同步检查 frontend-arch.md 和 data-flow.md。
 
@@ -42,6 +42,13 @@
 | `/api/license/activate` | POST | ☆ P2 许可激活 |
 | `/api/update/check` | GET | ☆ P2 检查更新 |
 | `/api/update/install` | POST | ☆ P2 安装更新 |
+| `/api/mcp` | GET | 列出所有能力（内置工具 + 已安装 MCP Server），含状态/调用统计 |
+| `/api/mcp/<name>` | GET | 查看单个能力详情（描述/工具列表/配置/统计） |
+| `/api/mcp/install` | POST | 从 MCP Registry 安装新能力，返回安装结果 |
+| `/api/mcp/<name>/uninstall` | POST | 卸载指定能力（移除 MCP Server） |
+| `/api/mcp/<name>/toggle` | POST | 启用/禁用指定能力（不卸载但暂停工具注册） |
+| `/api/mcp/marketplace?q=xx` | GET | 搜索 MCP Registry，返回匹配的能力列表 |
+| `/api/mcp/<name>/config` | PUT | 更新能力的配置参数（如数据库路径、API Key） |
 
 ## SSE 事件格式（/api/chat）
 

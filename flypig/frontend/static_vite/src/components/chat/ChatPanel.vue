@@ -1,11 +1,29 @@
 <!--
-ChatPanel：对话框面板
+ChatPanel：对话框面板容器
 
-为什么做：用户与 AI 对话的核心界面，需要展示消息列表和输入框，支持渐进揭露——复杂内容折叠在卡片里。
-实现方法：Vue 3 组合 MessageList + InputBox，通过 useChat composable 连接后端 SSE。消息卡片按类型分发（文本/选择/审查/建议/工具调用）。
-实现效果：所有对话交互不出面板，代码执行/文件预览/图表渲染都在对话流中完成。
+为什么做：用户在对话区域需要消息列表 + 输入框进行交互。
+实现方法：MessageList（消息滚动区域）+ InputBox（文本输入框），支持流式渲染。
+实现效果：对话上下滚动查看历史，底部输入框发送消息，AI 实时回复。
 
-技术栈：Vue 3 SFC, @ai-sdk/vue useChat, Element Plus, marked + highlight.js
-层&依赖：frontend.presentation → chat 组件群 + composables/useChat.js
-细节见文档：docs/docs_refactor/chat-ux.md → §产品哲学：对话框即是终点
+技术栈：Vue 3 SFC
+层&依赖：frontend.presentation → chat 组件群
+细节见文档：docs/docs_refactor/frontend-arch.md → §Vercel AI SDK 集成
 -->
+<template>
+  <div class="chat-panel">
+    <MessageList />
+    <InputBox />
+  </div>
+</template>
+<script setup>
+/**
+ * @module ChatPanel
+ * @description 对话框面板容器 — 消息列表 + 输入框
+ * @see frontend-arch.md → §Vercel AI SDK 集成
+ */
+import MessageList from './MessageList.vue'
+import InputBox from './InputBox.vue'
+</script>
+<style scoped>
+.chat-panel{width:100%;height:100%;display:flex;flex-direction:column;overflow:hidden;background:#1e1e1e}
+</style>

@@ -1,10 +1,42 @@
 """Quart 应用入口 + 路由注册
 
-为什么做：所有 API 端点需要注册到 Quart 实例，并配置中间件（CORS/日志/SSE）。
-实现方法：create_app() 工厂函数，注册 12 个路由蓝图 → 配置 SSE 队列 → CORS → 日志中间件 → Hypercorn 启动。
-实现效果：新增蓝图只需在工厂中加一行，路由代码独立专注业务。
-技术栈：Quart, blueprint, SSE, CORS, Hypercorn
+为什么做：所有 API 端点需要注册到 Quart 实例，并配置 CORS。
 
-层&依赖：backend 层，依赖 backend/routes 所有蓝图 + core/app + infrastructure 中间件
-细节见文档：docs/docs_refactor/api-reference.md → §REST 端点
+实现方法：create_app() 工厂函数，接收 Config 实例 → 注册蓝图 → CORS → 返回 app。
+
+实现效果：启动时传入 Config，各路由通过 app.config 访问同一配置实例。
+
+技术栈：Quart, Blueprint, CORS
+
+热加载验证：改此文件后 uvicorn --reload 会自动重启服务器
 """
+
+from pathlib import Path
+
+from quart import Quart
+from quart_cors import cors
+
+from domain.config.config import Config
+
+
+def create_app(config: Config | None = None) -> Quart:
+    app = Quart(__name__)
+
+    if config is None:
+        config = Config()
+
+    app.config["flypig_config"] = config
+
+    # CORS（Vite proxy 在开发时处理跨域，生产用 nginx）
+    app = cors(app, allow_origin="*")
+
+    # 注册蓝图
+    from backend.routes.config import config_bp
+
+    app.register_blueprint(config_bp)
+
+    @app.route("/api/health")
+    async def health():
+        return {"status": "ok", "version": "0.1.0"}
+
+    return app

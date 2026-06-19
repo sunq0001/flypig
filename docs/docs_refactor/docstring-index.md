@@ -37,6 +37,44 @@
 
 ---
 
+## 函数级文档规则（JSDoc / Python docstring）
+
+用于 composables、工具函数、Python 公共方法等。**不适用于 `.vue` 文件头部 docstring**（那些走文件级模板）。
+
+### 4 条大白话规则
+
+| # | 规则 | 说明 | 示例 |
+|---|------|------|------|
+| 1 | **只看 export** | 只有 `export`/`def` 出去的公共函数才写完整 docstring。内部 private 函数不写。 | composables 导出的 `useChat()` 要写，内部 `const calc = () => {}` 不写 |
+| 2 | **禁止废话参数** | `@param` 不重复类型名，必须写**业务含义**和**取值范围**。 | ❌ `@param {string} name - 名字` → ✅ `@param {string} name - 用户真实姓名，2~10 个中文字符，不含特殊符号` |
+| 3 | **绕弯的地方贴示例** | 异步、副作用、复杂传参必须附 `@example` 代码段。 | API 请求、路由跳转、复杂表单校验时必加 |
+| 4 | **私有函数闭嘴** | 内部函数严禁 `/** ... */` JSDoc，最多一行 `//` 注释交代「为什么这么写」。 | `// 后端返回 null 会导致 NaN，强制转 0 兜底` |
+
+### 正确 vs 错误示范
+
+```javascript
+// ❌ 错误：废话参数，无业务语义
+/**
+ * 设置用户
+ * @param {string} name - 用户名
+ * @param {number} age - 年龄
+ */
+
+// ✅ 正确：带业务约束 + 示例
+/**
+ * 设置用户信息
+ * @param {string} name - 用户真实姓名，必须为 2~10 个中文字符，不允许特殊符号
+ * @param {number} age - 用户年龄，取值范围 1~120，超出抛出异常
+ * @example
+ * setUser({ name: '张三', age: 25 })
+ */
+
+// ✅ 内部私有函数：最多一行单行注释
+const convertNullToZero = (val) => val === null ? 0 : val
+```
+
+---
+
 ## core/
 
 | 文件 | 一句话概括 | 技术栈 | 引用文档 |
@@ -161,6 +199,9 @@
 | `tools/mcp/__init__.py` | MCP 工具子包 | — | — |
 | `tool_mcp_loader.py` | MCP 服务器加载注册 | mcp-auto-install, 启动时加载 mcp.json → ToolNode | mcp.md §三层策略 |
 | `tool_mcp_manager.py` | MCP 自助安装 | 调 mcp-auto-install 的 install_mcp_server 工具 | mcp.md §第二层+第三层 |
+| `tool_mcp_controller.py` | MCP 管理 REST 接口 | Quart REST, tool_mcp_lifecycle, tool_mcp_discovery | mcp.md §后端 API |
+| `tool_mcp_discovery.py` | MCP Registry 搜索 | httpx, 官方 MCP Registry API | mcp.md §第二层+第三层 |
+| `tool_mcp_lifecycle.py` | MCP 服务器生命周期管理 | subprocess, asyncio, 进程启停/健康检查 | mcp.md §文件结构 |
 | `sandbox/__init__.py` | 沙箱子包 | — | — |
 | `sandbox_config.py` | 沙箱配置数据类 | @dataclass, Docker 配置 + 资源限制 | subprocess.md §沙箱策略 |
 | `path_validator.py` | 路径安全验证 | 白名单/黑名单/cwd 限制, 越权弹 SuggestionCard | subprocess.md §沙箱路径验证 |
@@ -208,6 +249,7 @@
 | `usage.py` | 用量查询 | Quart, turn/session/range/cache-stats | api-reference.md §REST 端点、mem_convStore_usage.md §查询 |
 | `tasks.py` | 任务 CRUD + 搜索 | Quart, CRUD + search + stats + history/snapshot | api-reference.md §REST 端点、mem_convStore_tasks.md §CRUD |
 | `feedback.py` | 建议反馈记录 | Quart, POST, suggestion_id + adopted | api-reference.md §REST 端点 |
+| `mcp.py` | 能力管理路由（MCP） | Quart, blueprint, 委托 mcp controller | mcp.md §后端 API |
 | `sse_queue.py` | SSE 队列抽象 | asyncio.Queue, event 类型分发 | data-flow.md §SSE 事件流 |
 | `file_watcher.py` | 文件变更监控 | watchdog, 文件修改→通知前端 | data-flow.md §文件变更流 |
 
@@ -227,17 +269,31 @@
 | `src/style/theme-cyberpunk.css` | 赛博朋克主题 | CSS 变量覆盖 | chat-ux.md §主题切换 |
 | `src/style/theme-cute.css` | 可爱主题 | CSS 变量覆盖 | chat-ux.md §主题切换 |
 | `src/style/base.css` | 全局样式重置 | CSS reset, 布局基础 | chat-ux.md §情感设计 |
+| `src/components/resource/McpDashboard.vue` | MCP 能力管理面板（左右分栏容器） | Vue 3 SFC, flex 布局 | frontend-arch.md §能力管理面板 |
+| `src/components/resource/McpList.vue` | MCP 能力列表（搜索+tab+列表） | Vue 3 SFC, Element Plus input/tab | frontend-arch.md §能力管理面板 |
+| `src/components/resource/McpItem.vue` | MCP 列表单项 | Vue 3 SFC, Element Plus 组件 | frontend-arch.md §能力管理面板 |
+| `src/components/resource/McpDetail.vue` | MCP 能力详情（右侧） | Vue 3 SFC, Element Plus card/form | frontend-arch.md §能力管理面板 |
+| `src/components/resource/McpConfig.vue` | MCP 能力配置面板 | Vue 3 SFC, Element Plus form | frontend-arch.md §能力管理面板 |
+| `src/components/resource/McpMarketplace.vue` | MCP 能力商店 | Vue 3 SFC, /api/mcp/marketplace | frontend-arch.md §能力管理面板 |
+| `src/components/layout/ActivityBar.vue` | Activity Bar 图标列 | Vue, 文件/能力/统计/设置图标切换 | frontend-arch.md §全局布局 |
+| `src/components/layout/InteractBar.vue` | 右侧交互栏（对话+终端） | Vue, ChatPanel + TermBar 切换 | frontend-arch.md §全局布局 |
 | `src/components/layout/MainLayout.vue` | 三栏主布局 | Vue, ResizeHandle, 可拖拽分栏 | chat-ux.md §布局 |
-| `src/components/layout/ResizeHandle.vue` | 分栏拖拽手柄 | vue-draggable-next | chat-ux.md §布局 |
+| `src/components/layout/ResizeHandle.vue` | 分栏拖拽手柄 | Vue, 鼠标拖拽, 水平/垂直 | chat-ux.md §布局 |
 | `src/components/layout/StatusBar.vue` | 状态栏 | 模式/模型/用量/主题 | chat-ux.md §StatusBar 增强 |
-| `src/components/sidebar/Sidebar.vue` | 侧边栏容器 | Vue, 文件树/任务看板切换 | frontend-arch.md §目标目录结构 |
-| `src/components/sidebar/FileTree.vue` | 文件树 | Vue, 递归组件 | frontend-arch.md §目标目录结构 |
-| `src/components/sidebar/FileTreeNode.vue` | 树节点 | Vue, 展开/折叠/图标 | frontend-arch.md §目标目录结构 |
-| `src/components/sidebar/Dashboard.vue` | 工作区首页 | Vue, 最近工作区/快速开始/用量概览 | chat-ux.md §Welcome/Dashboard |
-| `src/components/sidebar/TaskBoard.vue` | 任务看板面板 | Vue, 任务列表/状态/搜索 | mem_convStore_tasks.md §任务状态 |
-| `src/components/editor/EditorArea.vue` | 编辑器区域容器 | Vue, EditorTabs + MonacoEditor | frontend-arch.md §目标目录结构 |
-| `src/components/editor/EditorTabs.vue` | 文件标签栏 | Vue, 多文件切换/关闭 | frontend-arch.md §目标目录结构 |
-| `src/components/editor/MonacoEditor.vue` | 代码编辑器 | Monaco Editor, Vue wrapper, diff/readonly | frontend-arch.md §技术栈 |
+| `src/components/resource/ResourceBar.vue` | 左侧资源栏容器 | Vue, 文件树/能力/统计切换 | frontend-arch.md §目标目录结构 |
+| `src/components/resource/FileTreeBar.vue` | 文件树标题栏 | Vue, 文件操作按钮 | frontend-arch.md §目标目录结构 |
+| `src/components/resource/FileTree.vue` | 文件树 | Vue, 递归组件 | frontend-arch.md §目标目录结构 |
+| `src/components/resource/FileTreeNode.vue` | 树节点 | Vue, 展开/折叠/图标 | frontend-arch.md §目标目录结构 |
+| `src/components/resource/McpBar.vue` | 能力管理标题栏 | Vue, 搜索/过滤 | frontend-arch.md §目标目录结构 |
+| `src/components/resource/StatsBar.vue` | 统计面板标题栏 | Vue, 用量概览 | frontend-arch.md §目标目录结构 |
+| `src/components/dashboard/Dashboard.vue` | 工作区首页 | Vue, 最近工作区/快速开始/用量概览 | chat-ux.md §Welcome/Dashboard |
+| `src/components/tasks/TaskBoard.vue` | 任务看板面板 | Vue, 任务列表/状态/搜索 | mem_convStore_tasks.md §任务状态 |
+| `src/components/viewer/ViewBar.vue` | 中间查看栏容器 | Vue, FileBar + 查看区域 | frontend-arch.md §目标目录结构 |
+| `src/components/viewer/FileBar.vue` | 文件标签栏 | Vue, 多文件切换/关闭 | frontend-arch.md §目标目录结构 |
+| `src/components/viewer/EditorPane.vue` | 编辑器面板容器 | Vue, 编辑器/预览切换 | frontend-arch.md §目标目录结构 |
+| `src/components/viewer/EditorArea.vue` | 编辑器区域容器 | Vue, EditorTabs + MonacoEditor | frontend-arch.md §目标目录结构 |
+| `src/components/viewer/EditorTabs.vue` | 文件标签栏 | Vue, 多文件切换/关闭 | frontend-arch.md §目标目录结构 |
+| `src/components/viewer/MonacoEditor.vue` | 代码编辑器 | Monaco Editor, Vue wrapper, diff/readonly | frontend-arch.md §技术栈 |
 | `src/components/chat/ChatPanel.vue` | 对话框面板 | Vue, MessageList + InputBox, 渐进揭露 | chat-ux.md §产品哲学 |
 | `src/components/chat/MessageList.vue` | 消息列表 | Vue, 虚拟滚动/自动滚动 | chat-ux.md §渐进揭露 |
 | `src/components/chat/InputBox.vue` | 输入框 | Element Plus input, 拖拽文件缩略图, uuid | chat-ux.md §输入框 |
@@ -260,10 +316,12 @@
 | `src/components/chat/ToolCallCard.vue` | 工具调用卡片 | Vue, 沙箱/本地标识 | chat-ux.md §工具调用 |
 | `src/components/chat/TaskListCard.vue` | 任务列表卡片 | Vue, 当前轮次任务 | mem_convStore_tasks.md §任务状态 |
 | `src/components/chat/ImagePreview.vue` | 图片预览 | medium-zoom, 缩略图→大图 | tech-stack.md §图片预览 |
-| `src/components/file/ExcelViewer.vue` | Excel 预览 (P1) | SheetJS (xlsx), 浏览器内 workbook | tech-stack.md §Excel 预览 |
-| `src/components/file/PdfViewer.vue` | PDF 预览 (P1) | PDF.js, 指定页码渲染 | tech-stack.md §PDF 预览 |
-| `src/components/file/DocxViewer.vue` | Word 预览 (P1) | mammoth.js, HTML 渲染 | tech-stack.md §Word 预览 |
-| `src/components/file/PptxViewer.vue` | PPT 预览 (P1) | pptxjs, 缩略图轮播 | tech-stack.md §PPT 预览 |
+| `src/components/viewer/ExcelViewer.vue` | Excel 预览 (P1) | SheetJS (xlsx), 浏览器内 workbook | tech-stack.md §Excel 预览 |
+| `src/components/viewer/PdfViewer.vue` | PDF 预览 (P1) | PDF.js, 指定页码渲染 | tech-stack.md §PDF 预览 |
+| `src/components/viewer/DocxViewer.vue` | Word 预览 (P1) | mammoth.js, HTML 渲染 | tech-stack.md §Word 预览 |
+| `src/components/viewer/PptxViewer.vue` | PPT 预览 (P1) | pptxjs, 缩略图轮播 | tech-stack.md §PPT 预览 |
+| `src/components/terminal/TermBar.vue` | 终端标签栏 | Vue, 终端标签/折叠按钮 | frontend-arch.md §目标目录结构 |
+| `src/components/terminal/TerminalBar.vue` | 终端栏容器 | Vue, TermBar + 终端区域, 可折叠 | frontend-arch.md §目标目录结构 |
 | `src/components/terminal/TerminalPanel.vue` | 终端面板容器 | Vue, xterm.js + 多个终端 tab | frontend-arch.md §目标目录结构 |
 | `src/components/terminal/TerminalTab.vue` | 终端标签页 | Vue, tab 切换 | frontend-arch.md §目标目录结构 |
 | `src/components/terminal/XtermViewer.vue` | xterm 终端 | xterm.js, Vue wrapper, WebSocket | frontend-arch.md §技术栈 |
@@ -284,7 +342,8 @@
 | `src/composables/useTerminal.js` | 终端 WebSocket | WebSocket, xterm.js 集成 | frontend-arch.md §终端面板 |
 | `src/composables/useFileTree.js` | 文件树状态 | fetch /api/tree, 展开/选中 | frontend-arch.md §侧边栏 |
 | `src/composables/useEditor.js` | 编辑器状态 | Monaco Editor, 文件打开/编辑 | frontend-arch.md §编辑器 |
-| `src/composables/useLayout.js` | 布局状态 | Vue reactive, 分栏宽度/侧边栏开关 | frontend-arch.md §布局 |
+| `src/composables/useLayout.js` | 布局状态 | Vue reactive, 分栏宽度/侧边栏开关/Activity Bar 切换 | frontend-arch.md §布局 |
+| `src/composables/useMcp.js` | MCP 能力管理逻辑 | /api/mcp/* CRUD + 启停 + 搜索 | frontend-arch.md §能力管理面板 |
 | `src/composables/useMarkdownRender.js` | Markdown 渲染扩展 | marked extension, 自定义渲染 | frontend-arch.md §Markdown |
 | `src/composables/useTheme.js` | 主题切换状态 | CSS 变量, localStorage 持久化 | chat-ux.md §主题切换 |
 | `src/composables/useCommandPalette.js` | 命令面板状态 | Ctrl+K, 命令搜索/执行 | chat-ux.md §Command Palette |

@@ -1,6 +1,6 @@
 # 项目文件夹树（统一标准）
 
-> **来源**: 全文档提取（`architecture-refactor.md` §3.1-§10）
+> **历史来源**: 全文档提取（`architecture_refactor_old.md` §3.1-§10）
 > **关联文档**: `architecture-guide.md`（总览）、`backend-modules.md`（模块职责）、`mem_convStore_usage.md`（usage/ 模块）
 > **本树是唯一标准**，所有内联文件夹树以此为准。改结构时只需改这里，其他地方删掉冗余树。
 
@@ -124,9 +124,12 @@ flypig/
 │   │   │   ├── tool_task_manager.py  ← ★ 任务看板：add_task / update_task / update_feedback
 │   │   │   ├── tool_ocr.py           ← ☆ P1 OCR 文字识别（PaddleOCR）
 │   │   │   └── tool_extract_archive.py ← ★ 压缩解压 + Zip Slip 防护（§3.7.2）
-│   │   ├── mcp/                  ← ★ MCP 协议工具
-│   │   │   ├── tool_mcp_loader.py    ← ★ 加载 MCP 服务器并注册到 ToolNode
-│   │   │   └── tool_mcp_manager.py   ← ★ MCP 自助安装（用 mcp-auto-install 现成方案）
+│   │   ├── mcp/                  ← ★ MCP 协议工具（前端显示为"能力"）
+│   │   │   ├── tool_mcp_loader.py    ← ★ 加载 mcp.json，连接服务器，注册到 ToolNode
+│   │   │   ├── tool_mcp_manager.py   ← ★ MCP 自助安装（调用 mcp-auto-install）
+│   │   │   ├── tool_mcp_controller.py ← ★ /api/mcp/* REST 接口
+│   │   │   ├── tool_mcp_discovery.py ← ★ MCP Registry 搜索
+│   │   │   └── tool_mcp_lifecycle.py ← ★ 启停/健康检查
 │   │   └── utils.py              ← ★ 工具辅助函数（ANSI 清理/编码解码）
 │   │
 │   ├── sandbox/                  ← ★ Docker 沙箱
@@ -172,7 +175,8 @@ flypig/
 │   │   ├── history.py            ← ★ /api/history/search
 │   │   ├── usage.py              ← ★ /api/usage/*（用量查询）
 │   │   ├── tasks.py              ← ★ /api/tasks/*（任务看板 CRUD + 搜索）
-│   │   └── feedback.py           ← ★ /api/feedback/suggestion（建议反馈）
+│   │   ├── feedback.py           ← ★ /api/feedback/suggestion（建议反馈）
+│   │   └── mcp.py                ← ★ /api/mcp/*（能力管理 REST，委托 infrastructure/tools/mcp/）
 │   ├── sse_queue.py              ← ★ SSE 队列抽象
 │   └── file_watcher.py           ← ★ 文件变更监控
 │
@@ -192,9 +196,12 @@ flypig/
 │           │   ├── theme-cute.css
 │           │   └── base.css
 │           ├── components/
-│           │   ├── layout/       ← ★ MainLayout, ResizeHandle, StatusBar（含后台进程指示器）
-│           │   ├── sidebar/      ← ★ Sidebar, FileTree, FileTreeNode, Dashboard（含反馈打标）, TaskBoard
-│           │   ├── editor/       ← ★ EditorArea, EditorTabs, MonacoEditor
+│           │   ├── layout/       ← ★ 布局骨架：ActivityBar, InteractBar, MainLayout, ResizeHandle, StatusBar
+│           │   ├── resource/     ← ★ 左侧资源栏：ResourceBar, FileTreeBar, FileTree, FileTreeNode,
+│           │   │                   McpBar, McpDashboard/List/Item/Detail/Config/Marketplace, StatsBar
+│           │   ├── viewer/       ← ★ 中间查看栏：ViewBar, FileBar, EditorPane,
+│           │   │                   EditorArea, EditorTabs, MonacoEditor,
+│           │   │                   ExcelViewer, PdfViewer, DocxViewer, PptxViewer
 │           │   ├── chat/         ← ★ ChatPanel, MessageList, InputBox, MessageItem,
 │           │   │                   ChoiceCard, ChangeReviewCard, SuggestionCard,
 │           │   │                   InlinePreview, LivePreview, FilePreview(多类型),
@@ -202,18 +209,15 @@ flypig/
 │           │   │                   CodeExecBlock, DiffViewer, CommandCard,
 │           │   │                   MemoryBubble(☆), ThinkingIndicator, ToolCallCard（含沙箱/本地标识）,
 │           │   │                   TaskListCard, ImagePreview
-│           │   ├── file/         ← ☆ FilePreview 子组件（跨文件类型预览，P1）
-│           │   │   ├── ExcelViewer.vue   ← ☆ SheetJS（P1）
-│           │   │   ├── PdfViewer.vue     ← ☆ PDF.js（P1）
-│           │   │   ├── DocxViewer.vue    ← ☆ mammoth.js（P1）
-│           │   │   └── PptxViewer.vue   ← ☆ pptxjs（P1）
-│           │   ├── terminal/     ← ★ TerminalPanel, TerminalTab, XtermViewer, OutputViewer
+│           │   ├── terminal/     ← ★ TerminalPanel, TerminalTab, XtermViewer, OutputViewer, TermBar
+│           │   ├── dashboard/    ← 工作区首页：Dashboard
+│           │   ├── tasks/        ← 任务看板：TaskBoard
 │           │   ├── init/         ← ★ InitWizard, WorkspaceStep, ModelStep, ApiKeyStep
 │           │   └── common/       ← ★ MarkdownRender, CodeBlock, LoadingSpinner,
 │           │                       ThemeSwitcher, CommandPalette, TaskHistoryDialog,
 │           │                       RecoveryDialog ← ★ 崩溃恢复弹窗
 │           ├── composables/      ← ★ useChat, useMessages, useTerminal, useFileTree,
-│           │                       useEditor, useLayout, useMarkdownRender, useTheme,
+│           │                       useMcp, useEditor, useLayout, useMarkdownRender, useTheme,
 │           │                       useCommandPalette, useTasks, useDraft, useFileDrop,
 │           │                       useEventRouter, useUxEnhancements,
 │           │                       useAchievements(☆), useTimeTravel(☆)
@@ -243,6 +247,7 @@ flypig/
 ├── .env.example                  ← ★ 环境变量模板
 ├── Makefile                      ← ★ 常用命令（dev/test/lint/docs/build）
 ├── mcp.json                      ← ★ MCP 服务器配置（§3.7.1）
+├── config.yaml                   ← ★ 运行时配置（工作区/模型/API Key/模式）
 ├── pyproject.toml                ← ★ Ruff 配置 + 项目元数据（§3.8.8）
 ├── Dockerfile                    ← ★ 应用容器化（§6）
 ├── docker-compose.yml            ← ★ Docker Compose 编排：api + nginx（§6）

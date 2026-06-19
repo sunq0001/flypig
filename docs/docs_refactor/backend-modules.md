@@ -1,6 +1,6 @@
 # 后端模块
 
-> **来源**: `architecture-refactor.md` §3.1-3.5, §3.10
+> **历史来源**: `architecture_refactor_old.md` §3.1-3.5, §3.10
 > **关联文档**: `langgraph-graph.md`（AgentState）、`subprocess.md`（命令执行）、`mem_convStore_usage.md`（用量追踪）、`mem_convStore_tasks.md`（任务系统）、`mem_convStore_checkpoints.md`（Checkpoint）、`resilience.md`（崩溃恢复/日志/迁移）
 
 ## Backend Layer — 用户界面适配
@@ -21,6 +21,7 @@ routes/
 ├── usage.py        # /api/usage/*（用量查询）
 ├── tasks.py        # /api/tasks/*（任务 CRUD + 搜索 + 回溯快照）
 └── feedback.py     # /api/feedback/suggestion（建议反馈记录）
+└── mcp.py         # /api/mcp/*（能力管理，委托 infrastructure/tools/mcp/）
 ```
 
 ## Orchestration Layer — 业务编排
@@ -190,6 +191,31 @@ class Container:
     @classmethod
     def get(cls, name): ...
 ```
+
+## MCP 工具模块（infrastructure/tools/mcp/）
+
+MCP（Model Context Protocol）服务器是 FlyPig Agent 的能力扩展系统，底层是标准 MCP 协议，
+前端显示为"能力"（Capabilities）。后端模块文件：
+
+```
+infrastructure/tools/mcp/
+├── __init__.py                    # 子包声明
+├── tool_mcp_loader.py            # 启动时加载 mcp.json，连接服务器，注册到 ToolNode
+├── tool_mcp_manager.py           # MCP 自助安装（调用 mcp-auto-install）
+├── tool_mcp_controller.py        # /api/mcp/* REST 接口（CRUD/启停）
+├── tool_mcp_discovery.py         # MCP Registry 搜索（商店功能）
+└── tool_mcp_lifecycle.py         # MCP 服务器进程生命周期（start/stop/restart/health）
+```
+
+| 文件 | 职责 | 技术栈 | 参考文档 |
+|------|------|--------|---------|
+| `tool_mcp_loader.py` | 启动时加载 mcp.json，启动 MCP 进程，注册 tools 到 ToolNode | subprocess, JSON | mcp.md §第一层 |
+| `tool_mcp_manager.py` | AI 按需安装 MCP Server，调 mcp-auto-install | mcp-auto-install | mcp.md §第二层+第三层 |
+| `tool_mcp_controller.py` | 能力面板 REST API，委托 loader/lifecycle/discovery | Quart REST | mcp.md §后端 API |
+| `tool_mcp_discovery.py` | 搜索官方 MCP Registry，返回 Server 元信息 | httpx | mcp.md §第二层+第三层 |
+| `tool_mcp_lifecycle.py` | 管理 MCP 进程启停、健康检查、状态持久化 | subprocess, asyncio | mcp.md §文件结构 |
+
+前端对应 API 路由：`backend/routes/mcp.py` → `/api/mcp/*`
 
 ## 可测试性（TDD + DI）
 
