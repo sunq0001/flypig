@@ -9,3 +9,18 @@ ThemeSwitcher：主题切换
 层&依赖：frontend.presentation → common 组件群
 细节见文档：docs/docs_refactor/chat-ux.md → §主题切换
 -->
+<template>
+  <div class="themeSwitcher">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * ThemeSwitcher -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.themeSwitcher { }
+</style>

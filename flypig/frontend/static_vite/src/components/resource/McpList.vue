@@ -9,3 +9,18 @@ McpList：MCP 能力列表（搜索 + 分类 tab + 列表）
 层&依赖：frontend.presentation → mcp 组件群
 细节见文档：docs/docs_refactor/frontend-arch.md → §能力管理面板
 -->
+<template>
+  <div class="mcpList">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * McpList -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.mcpList { }
+</style>

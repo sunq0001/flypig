@@ -9,3 +9,18 @@ DocxViewer：Word 预览 (P1)
 层&依赖：frontend.presentation → file 组件群（P1 预留）
 细节见文档：docs/docs_refactor/tech-stack.md → §Word 预览
 -->
+<template>
+  <div class="docxViewer">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * DocxViewer -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.docxViewer { }
+</style>

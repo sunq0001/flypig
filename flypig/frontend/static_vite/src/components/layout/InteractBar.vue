@@ -30,8 +30,8 @@ InteractBar：右侧交互栏容器（对话/终端标签切换）
  * @description 用户需要在对话和终端之间切换查看，右侧面板空间有限需要标签页。 顶部标签栏（💬 对话 / 🖥 终端），根据 activeTab 显示 ChatPanel 或 TermBar。 右侧面板一个位置承载两种功能，标签切换即换内容。
  */
 import { ref } from 'vue'
-import ChatPanel from '../chat/ChatPanel.vue'
-import TermBar from '../terminal/TermBar.vue'
+import ChatPanel from '../interact/chat/ChatPanel.vue'
+import TermBar from '../interact/terminal/TermBar.vue'
 defineProps({ model: { type: String, default: '' } })
 const activeTab = ref('chat')
 const tabs = [

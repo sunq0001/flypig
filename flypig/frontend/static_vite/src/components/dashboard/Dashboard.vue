@@ -9,3 +9,18 @@ Dashboard：工作区首页
 层&依赖：frontend.presentation → sidebar 组件群
 细节见文档：docs/docs_refactor/chat-ux.md → §Welcome/Dashboard
 -->
+<template>
+  <div class="dashboard">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * Dashboard -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.dashboard { }
+</style>

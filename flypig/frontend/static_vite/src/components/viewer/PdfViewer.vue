@@ -9,3 +9,18 @@ PdfViewer：PDF 预览 (P1)
 层&依赖：frontend.presentation → file 组件群（P1 预留）
 细节见文档：docs/docs_refactor/tech-stack.md → §PDF 预览
 -->
+<template>
+  <div class="pdfViewer">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * PdfViewer -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.pdfViewer { }
+</style>

@@ -46,3 +46,7 @@ flypig/frontend/static_vite/_test_docgen.cjs
 Vue
 test_output.html
 ruff_output.txt
+
+# Playwright MCP artifacts
+.playwright-cli/
+.playwright-mcp/

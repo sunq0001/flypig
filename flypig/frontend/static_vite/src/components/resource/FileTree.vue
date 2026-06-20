@@ -9,3 +9,18 @@ FileTree：文件树
 层&依赖：frontend.presentation → sidebar 组件群
 细节见文档：docs/docs_refactor/frontend-arch.md → §目标目录结构
 -->
+<template>
+  <div class="fileTree">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * FileTree -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.fileTree { }
+</style>

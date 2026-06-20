@@ -9,3 +9,18 @@ FileTreeBar：资源栏文件树组件
 层&依赖：frontend.presentation → resource 组件群
 细节见文档：docs/docs_refactor/frontend-arch.md → §目标目录结构
 -->
+<template>
+  <div class="fileTreeBar">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * FileTreeBar -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.fileTreeBar { }
+</style>

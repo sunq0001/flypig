@@ -9,3 +9,18 @@ CodeBlock：代码块
 层&依赖：frontend.presentation → common 组件群
 细节见文档：docs/docs_refactor/frontend-arch.md → §技术栈
 -->
+<template>
+  <div class="codeBlock">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * CodeBlock -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.codeBlock { }
+</style>

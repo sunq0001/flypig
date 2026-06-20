@@ -9,3 +9,18 @@ StatsBar：资源栏统计组件
 层&依赖：frontend.presentation → resource 组件群
 细节见文档：docs/docs_refactor/mem_convStore_usage.md → §查询
 -->
+<template>
+  <div class="statsBar">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * StatsBar -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.statsBar { }
+</style>

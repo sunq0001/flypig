@@ -9,3 +9,18 @@ MonacoEditor：代码编辑器
 层&依赖：frontend.presentation → editor 组件群
 细节见文档：docs/docs_refactor/frontend-arch.md → §技术栈
 -->
+<template>
+  <div class="monacoEditor">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * MonacoEditor -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.monacoEditor { }
+</style>

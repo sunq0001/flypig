@@ -9,3 +9,18 @@ McpDetail：MCP 能力详情（右侧面板）
 层&依赖：frontend.presentation → mcp 组件群
 细节见文档：docs/docs_refactor/frontend-arch.md → §能力管理面板
 -->
+<template>
+  <div class="mcpDetail">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * McpDetail -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.mcpDetail { }
+</style>

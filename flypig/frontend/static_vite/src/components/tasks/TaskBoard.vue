@@ -9,3 +9,18 @@ TaskBoard：任务看板面板
 层&依赖：frontend.presentation → sidebar 组件群
 细节见文档：docs/docs_refactor/mem_convStore_tasks.md → §任务状态
 -->
+<template>
+  <div class="taskBoard">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * TaskBoard -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.taskBoard { }
+</style>

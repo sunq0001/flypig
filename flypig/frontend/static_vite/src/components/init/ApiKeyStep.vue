@@ -9,3 +9,18 @@ ApiKeyStep：API Key 配置步骤
 层&依赖：frontend.presentation → init 组件群
 细节见文档：docs/docs_refactor/chat-ux.md → §InitWizard
 -->
+<template>
+  <div class="apiKeyStep">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * ApiKeyStep -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.apiKeyStep { }
+</style>

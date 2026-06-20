@@ -1,34 +1,22 @@
 <!--
-MainLayout：三栏主布局容器
-
-为什么做：用户需要 VS Code 风格的可拖拽三栏布局（Sidebar + 中间查看器 + 对话面板）。
-实现方法：ActivityBar + ResourceBar + ViewBar + InteractBar + StatusBar，支持鼠标拖拽调整栏宽。
-实现效果：左右栏可拖拽调整宽度，ActivityBar 切换侧边栏内容。
-
-技术栈：Vue 3 SFC
-层&依赖：frontend.presentation → layout 组件群
-细节见文档：docs/docs_refactor/frontend-arch.md → §全局布局
+MainLayout：三栏布局
+panels 数组驱动，SortableJS 重排后 handle 自动适配。
 -->
 <template>
   <div class="main-layout">
     <div class="layout-row">
-      <ActivityBar :activeView="activeView" @switch="onSwitch" />
-
-      <div class="layout-body">
-        <div class="bar-wrapper" :style="{ width: sidebarWidth + 'px' }">
-          <ResourceBar :activeView="activeView" />
-        </div>
-        <div class="resize-handle" @mousedown.prevent="startResize('sidebar', $event)"></div>
-
-        <div class="bar-wrapper view-wrapper">
-          <ViewBar />
-        </div>
-
-        <div class="resize-handle" @mousedown.prevent="startResize('chat', $event)"></div>
-
-        <div class="bar-wrapper" :style="{ width: chatWidth + 'px' }">
-          <InteractBar :model="defaultModel" />
-        </div>
+      <SideBar :activeView="activeView" @switch="onSwitch" />
+      <div ref="bodyRef" class="layout-body">
+        <template v-for="(p, i) in panels" :key="p.id">
+          <div class="panel" :style="panelStyle(p)" :data-panel-id="p.id">
+            <div class="pcontent">
+              <ResourceBar v-if="p.id === 'resource'" :activeView="activeView" />
+              <ViewerBar v-else-if="p.id === 'viewer'" />
+              <InteractBar v-else-if="p.id === 'interact'" :model="defaultModel" />
+            </div>
+          </div>
+          <ResizeHandleLR v-if="i < panels.length - 1" @resize="d => onResize(i, d)" />
+        </template>
       </div>
     </div>
     <StatusBar :workspace="workspace" />
@@ -36,55 +24,82 @@ MainLayout：三栏主布局容器
 </template>
 
 <script setup>
-/**
- * @module MainLayout：三栏主布局容器
- * @description 用户需要 VS Code 风格的可拖拽三栏布局（Sidebar + 中间查看器 + 对话面板）。 ActivityBar + ResourceBar + ViewBar + InteractBar + StatusBar，支持鼠标拖拽调整栏宽。 左右栏可拖拽调整宽度，ActivityBar 切换侧边栏内容。
- */
-import { ref } from 'vue'
-import ActivityBar from './ActivityBar.vue'
-import ResourceBar from '../resource/ResourceBar.vue'
-import ViewBar from '../viewer/ViewBar.vue'
+import { ref, reactive, computed, onMounted, nextTick } from 'vue'
+import Sortable from 'sortablejs'
+import SideBar from './SideBar.vue'
+import ResourceBar from './ResourceBar.vue'
+import ViewerBar from './ViewerBar.vue'
 import InteractBar from './InteractBar.vue'
 import StatusBar from './StatusBar.vue'
+import ResizeHandleLR from './ResizeHandleLR.vue'
 
-defineProps({
-  workspace: { type: String, default: '' },
-  defaultModel: { type: String, default: '' },
-})
-
+defineProps({ workspace: String, defaultModel: String })
 const activeView = ref('file')
-const sidebarWidth = ref(260)
-const chatWidth = ref(360)
+function onSwitch(v) { activeView.value = v }
 
-function onSwitch(view) { activeView.value = view }
+const bodyRef = ref(null)
+const panels = reactive([
+  { id: 'resource', w: 260 },
+  { id: 'viewer', w: 0 },     // 0 = auto
+  { id: 'interact', w: 360 },
+])
 
-let _target = null, _startX = 0, _startSize = 0
-function startResize(target, e) {
-  _target = target; _startX = e.clientX
-  _startSize = target === 'sidebar' ? sidebarWidth.value : chatWidth.value
-  document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'
-  document.addEventListener('mousemove', onMove)
-  document.addEventListener('mouseup', onUp)
+function panelStyle(p) {
+  if (p.id === 'viewer' && p.w <= 0) return { flex: '1', minWidth: 80 }
+  return { width: Math.max(80, p.w) + 'px', flexShrink: 0 }
 }
-function onMove(e) {
-  if (!_target) return; const delta = e.clientX - _startX
-  if (_target === 'sidebar') sidebarWidth.value = Math.max(180, Math.min(500, _startSize + delta))
-  else chatWidth.value = Math.max(280, Math.min(600, _startSize - delta))
+
+// 记录拖拽起始宽度
+let dragStarts = []
+
+function onResize(idx, delta) {
+  if (delta === 0) { dragStarts = []; return }
+  if (dragStarts.length === 0) {
+    // 获取所有面板当前真实宽度
+    const el = bodyRef.value
+    const divs = el?.querySelectorAll('.panel') || []
+    dragStarts = panels.map((p, i) => {
+      if (p.w > 0) return p.w
+      const w = divs[i]?.getBoundingClientRect().width || 200
+      return Math.round(w)
+    })
+  }
+  const left = panels[idx]
+  const right = panels[idx + 1]
+  if (!left || !right) return
+  left.w = Math.max(80, dragStarts[idx] + delta)
+  right.w = Math.max(80, dragStarts[idx + 1] - delta)
+  // viewer auto 变固定
+  if (left.w > 0 && left.w <= 80) left.w = 80
+  if (right.w > 0 && right.w <= 80) right.w = 80
 }
-function onUp() {
-  _target = null; document.body.style.cursor = ''; document.body.style.userSelect = ''
-  document.removeEventListener('mousemove', onMove)
-  document.removeEventListener('mouseup', onUp)
-}
+
+onMounted(() => {
+  const el = bodyRef.value
+  if (!el) return
+  nextTick(() => {
+    Sortable.create(el, {
+      animation: 200,
+      filter: '.resize-lr',
+      preventOnFilter: false,
+      direction: 'horizontal',
+      onEnd: () => {
+        // 从 DOM 读取排序后的 panel-id 顺序
+        const order = [...el.querySelectorAll('.panel')].map(d => d.dataset.panelId)
+        const sorted = order.map(id => panels.find(p => p.id === id)).filter(Boolean)
+        panels.splice(0, panels.length, ...sorted)
+      },
+    })
+  })
+})
 </script>
 
 <style scoped>
-.main-layout{height:100vh;display:flex;flex-direction:column;background:#1e1e1e;overflow:hidden}
-.layout-row{flex:1;display:flex;overflow:hidden}
-.layout-body{flex:1;display:flex;overflow:hidden;min-width:0}
-.bar-wrapper{flex-shrink:0;overflow:hidden}
-.view-wrapper{flex:1;min-width:0}
-.resize-handle{flex-shrink:0;width:4px;cursor:col-resize;transition:background .1s;position:relative;z-index:10}
-.resize-handle::after{content:'';position:absolute;top:0;bottom:0;left:-4px;right:-4px}
-.resize-handle:hover{background:#409eff}
+.main-layout { height: 100vh; display: flex; flex-direction: column; background: #1e1e1e; overflow: hidden; }
+.layout-row { flex: 1; display: flex; overflow: hidden; }
+.layout-body { flex: 1; display: flex; overflow: hidden; min-width: 0; align-items: stretch; }
+.panel { display: flex; }
+.panel.sortable-ghost { opacity: 0.3; }
+.panel.sortable-chosen { box-shadow: 0 0 0 2px #409eff inset; }
+.pcontent { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
 </style>

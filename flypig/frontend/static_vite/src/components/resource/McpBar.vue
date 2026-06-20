@@ -9,3 +9,18 @@ McpBar：资源栏能力管理组件
 层&依赖：frontend.presentation → resource 组件群
 细节见文档：docs/docs_refactor/mcp.md → §前端布局
 -->
+<template>
+  <div class="mcpBar">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * McpBar -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.mcpBar { }
+</style>

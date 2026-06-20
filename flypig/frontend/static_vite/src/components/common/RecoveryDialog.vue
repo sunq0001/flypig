@@ -9,3 +9,18 @@ RecoveryDialog：崩溃恢复弹窗
 层&依赖：frontend.presentation → common 组件群
 细节见文档：docs/docs_refactor/resilience.md → §崩溃恢复
 -->
+<template>
+  <div class="recoveryDialog">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * RecoveryDialog -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.recoveryDialog { }
+</style>

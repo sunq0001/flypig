@@ -9,3 +9,18 @@ McpItem：MCP 能力列表单项
 层&依赖：frontend.presentation → mcp 组件群
 细节见文档：docs/docs_refactor/frontend-arch.md → §能力管理面板
 -->
+<template>
+  <div class="mcpItem">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * McpItem -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.mcpItem { }
+</style>

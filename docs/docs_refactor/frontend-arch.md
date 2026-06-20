@@ -73,17 +73,16 @@
 ```
 frontend/static_vite/src/
 ├── main.js                     ← Vue app 挂载
-├── App.vue                     ← 根组件（Activity Bar + Sidebar + Main + Panel）
+├── App.vue                     ← 根组件（SideBar + Resource + Viewer + Interact）
 ├── style/                      ← 5 个 CSS 文件（变量/主题/base）
 ├── components/
-│   ├── layout/                 ← ★ 布局骨架（ActivityBar, InteractBar, MainLayout, ResizeHandle, StatusBar）
-│   ├── resource/               ← ★ 左侧资源栏（ResourceBar, FileTreeBar, McpBar, StatsBar,
-│   │                              FileTree, FileTreeNode, McpDashboard/List/Item/Detail/Config/Marketplace）
-│   ├── viewer/                 ← ★ 中间查看栏（ViewBar, FileBar, EditorPane,
-│   │                              EditorArea, EditorTabs, MonacoEditor,
-│   │                              ExcelViewer, PdfViewer, DocxViewer, PptxViewer）
-│   ├── chat/                   ← ★ 对话功能（ChatPanel, MessageList, InputBox 等 22 个组件）
-│   ├── terminal/               ← ★ 终端功能（TermBar, TerminalPanel, XtermViewer 等 6 个组件）
+│   ├── layout/                 ← ★ 布局编排（SideBar, ResourceBar, ViewerBar, InteractBar, MainLayout, ResizeHandle, StatusBar）
+│   ├── resource/               ← ★ 侧边栏内容（FileTreeBar, McpBar, StatsBar, FileTree, FileTreeNode, McpDashboard/List/Item/Detail/Config/Marketplace）
+│   ├── viewer/                 ← ★ 查看器内容（FileBar, EditorPane, EditorArea, EditorTabs, MonacoEditor, ExcelViewer, PdfViewer, DocxViewer, PptxViewer）
+│   ├── interact/               ← ★ 交互区域
+│   │   ├── chat/               ←   对话功能（ChatPanel, MessageList, InputBox 等）
+│   │   ├── input/              ←   输入栏（ModeSelect, ModelSelect, SendButton）
+│   │   └── terminal/           ←   终端功能（TermBar, TerminalPanel, XtermViewer 等）
 │   ├── dashboard/              ← 工作区首页（Dashboard）
 │   ├── tasks/                  ← 任务看板（TaskBoard）
 │   ├── init/                   ← 初始化向导（InitWizard, WorkspaceStep, ModelStep, ApiKeyStep）

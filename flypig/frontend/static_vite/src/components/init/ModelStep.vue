@@ -9,3 +9,18 @@ ModelStep：模型选择步骤
 层&依赖：frontend.presentation → init 组件群
 细节见文档：docs/docs_refactor/chat-ux.md → §InitWizard
 -->
+<template>
+  <div class="modelStep">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * ModelStep -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.modelStep { }
+</style>

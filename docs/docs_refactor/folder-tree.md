@@ -198,20 +198,23 @@ flypig/
 │           │   ├── theme-cute.css
 │           │   └── base.css
 │           ├── components/
-│           │   ├── layout/       ← ★ 布局骨架：ActivityBar, InteractBar, MainLayout, ResizeHandle, StatusBar
-│           │   ├── resource/     ← ★ 左侧资源栏：ResourceBar, FileTreeBar, FileTree, FileTreeNode,
+│           │   ├── layout/       ← ★ 布局编排：SideBar, ResourceBar, ViewerBar, InteractBar,
+│           │   │                   MainLayout, ResizeHandle, StatusBar
+│           │   ├── resource/     ← ★ 侧边栏内容：FileTreeBar, FileTree, FileTreeNode,
 │           │   │                   McpBar, McpDashboard/List/Item/Detail/Config/Marketplace, StatsBar
-│           │   ├── viewer/       ← ★ 中间查看栏：ViewBar, FileBar, EditorPane,
+│           │   ├── viewer/       ← ★ 查看器内容：FileBar, EditorPane,
 │           │   │                   EditorArea, EditorTabs, MonacoEditor,
 │           │   │                   ExcelViewer, PdfViewer, DocxViewer, PptxViewer
-│           │   ├── chat/         ← ★ ChatPanel, MessageList, InputBox, MessageItem,
-│           │   │                   ChoiceCard, ChangeReviewCard, SuggestionCard,
-│           │   │                   InlinePreview, LivePreview, FilePreview(多类型),
-│           │   │                   DataTable, ChartView, FormGenerator, DashboardWidget,
-│           │   │                   CodeExecBlock, DiffViewer, CommandCard,
-│           │   │                   MemoryBubble(☆), ThinkingIndicator, ToolCallCard（含沙箱/本地标识）,
-│           │   │                   TaskListCard, ImagePreview
-│           │   ├── terminal/     ← ★ TerminalPanel, TerminalTab, XtermViewer, OutputViewer, TermBar
+│           │   ├── interact/     ← ★ 交互区域（对话+终端）
+│           │   │   ├── chat/     ← ★ ChatPanel, MessageList, InputBox, MessageItem,
+│           │   │   │               ChoiceCard, ChangeReviewCard, SuggestionCard,
+│           │   │   │               InlinePreview, LivePreview, FilePreview,
+│           │   │   │               DataTable, ChartView, FormGenerator, DashboardWidget,
+│           │   │   │               CodeExecBlock, DiffViewer, CommandCard,
+│           │   │   │               MemoryBubble(☆), ThinkingIndicator, ToolCallCard,
+│           │   │   │               TaskListCard, ImagePreview
+│           │   │   ├── input/    ← ★ 输入栏：ModeSelect, ModelSelect, SendButton
+│           │   │   └── terminal/ ← ★ TerminalPanel, TerminalTab, XtermViewer, OutputViewer, TermBar
 │           │   ├── dashboard/    ← 工作区首页：Dashboard
 │           │   ├── tasks/        ← 任务看板：TaskBoard
 │           │   ├── init/         ← ★ InitWizard, WorkspaceStep, ModelStep, ApiKeyStep

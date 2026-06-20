@@ -9,3 +9,18 @@ McpDashboard：MCP 能力管理面板（左右分栏容器）
 层&依赖：frontend.presentation → mcp 组件群
 细节见文档：docs/docs_refactor/frontend-arch.md → §能力管理面板
 -->
+<template>
+  <div class="mcpDashboard">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * McpDashboard -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.mcpDashboard { }
+</style>

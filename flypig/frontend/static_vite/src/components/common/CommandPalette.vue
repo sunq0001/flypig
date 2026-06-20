@@ -9,3 +9,18 @@ CommandPalette：命令面板
 层&依赖：frontend.presentation → common 组件群
 细节见文档：docs/docs_refactor/chat-ux.md → §Command Palette
 -->
+<template>
+  <div class="commandPalette">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * CommandPalette -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.commandPalette { }
+</style>

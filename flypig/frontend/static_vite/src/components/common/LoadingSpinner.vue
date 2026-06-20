@@ -9,3 +9,18 @@ LoadingSpinner：加载动画
 层&依赖：frontend.presentation → common 组件群
 细节见文档：docs/docs_refactor/chat-ux.md → §情感设计
 -->
+<template>
+  <div class="loadingSpinner">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * LoadingSpinner -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.loadingSpinner { }
+</style>

@@ -9,3 +9,18 @@ EditorPane：查看器编辑区域
 层&依赖：frontend.presentation → viewer 组件群
 细节见文档：docs/docs_refactor/frontend-arch.md → §目标目录结构
 -->
+<template>
+  <div class="editorPane">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * EditorPane -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.editorPane { }
+</style>

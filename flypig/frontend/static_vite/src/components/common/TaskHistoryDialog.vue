@@ -9,3 +9,18 @@ TaskHistoryDialog：任务历史弹窗
 层&依赖：frontend.presentation → common 组件群
 细节见文档：docs/docs_refactor/mem_convStore_tasks.md → §任务状态
 -->
+<template>
+  <div class="taskHistoryDialog">
+    <!-- TODO: implement -->
+  </div>
+</template>
+
+<script setup>
+/**
+ * TaskHistoryDialog -- TODO: implement component logic
+ */
+</script>
+
+<style scoped>
+.taskHistoryDialog { }
+</style>
