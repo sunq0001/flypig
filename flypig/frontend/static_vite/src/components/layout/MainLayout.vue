@@ -18,7 +18,7 @@ panels 数组驱动，SortableJS 重排后 handle 自动适配。
               <InteractBar v-else-if="p.id === 'interact'" :model="defaultModel" />
             </div>
           </div>
-          <ResizeHandleLR v-if="i < panels.length - 1" @resize="d => onResize(i, d)" />
+          <ResizeHandleLR v-if="i < panels.length - 1" :panels="panels" :idx="i" />
         </template>
       </div>
     </div>
@@ -68,9 +68,6 @@ function panelStyle(p) {
   if (p.id === 'viewer' && p.w <= 0) return { flex: '1', minWidth: 80 }
   return { width: Math.max(80, p.w) + 'px', flexShrink: 0 }
 }
-
-let dragStarts = []
-function onResize(idx, delta) { /* ... resize logic unchanged ... */ }
 
 onMounted(() => {
   const el = bodyRef.value
