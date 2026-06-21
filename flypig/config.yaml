@@ -1,7 +1,9 @@
 agent:
   recent_workspaces:
+  - C:\Users\mss\WorkBuddy\Flypig-agent
   - C:\Users\mss\WorkBuddy\mydemo
-  workspace: C:\Users\mss\WorkBuddy\mydemo
+  - C:\Users\mss\WorkBuddy\Flypig-agent\flypig\backend
+  workspace: C:\Users\mss\WorkBuddy\Flypig-agent
 api_keys: {}
 llm:
   default_model: deepseek-v4-flash

@@ -32,11 +32,17 @@ def create_app(config: Config | None = None) -> Quart:
 
     # 注册蓝图
     from backend.routes.config import config_bp
+    from backend.routes.files import files_bp
 
     app.register_blueprint(config_bp)
+    app.register_blueprint(files_bp)
 
     @app.route("/api/health")
     async def health():
         return {"status": "ok", "version": "0.1.0"}
+
+    @app.route("/api/ping")
+    async def ping():
+        return {"pong": True}
 
     return app

@@ -11,9 +11,12 @@ ResourceBar：左侧资源栏容器
 -->
 <template>
   <div class="resource-bar">
-    <div class="bar-header">{{ activeLabel }}</div>
+    <div class="bar-header">
+      <span>{{ activeLabel }}</span>
+      <button v-if="activeView === 'file'" class="btn-workspace" title="切换工作区" @click="$emit('switchWorkspace')">📁</button>
+    </div>
     <div class="bar-body">
-      <FileTreeBar v-if="activeView === 'file'" />
+      <FileTreeBar v-if="activeView === 'file'" @switch-workspace="$emit('switchWorkspace')" @open-file="p => $emit('openFile', p)" />
       <McpBar v-if="activeView === 'mcp'" />
       <StatsBar v-if="activeView === 'stats'" />
     </div>
@@ -29,10 +32,13 @@ import FileTreeBar from '../resource/FileTreeBar.vue'
 import McpBar from '../resource/McpBar.vue'
 import StatsBar from '../resource/StatsBar.vue'
 const props = defineProps({ activeView: { type: String, default: 'file' } })
-const activeLabel = computed(() => ({ file:'文件', mcp:'能力', stats:'统计' }[props.activeView] || '文件'))
+defineEmits(['switchWorkspace', 'openFile'])
+const activeLabel = computed(() => ({ file:'文件资源管理器', mcp:'能力', stats:'统计' }[props.activeView] || '文件资源管理器'))
 </script>
 <style scoped>
 .resource-bar{width:100%;height:100%;background:#252526;color:#ccc;display:flex;flex-direction:column;border-right:1px solid #1e1e1e}
-.bar-header{height:36px;display:flex;align-items:center;padding:0 16px;font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #1e1e1e;flex-shrink:0}
+.bar-header{height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 12px 0 16px;font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #1e1e1e;flex-shrink:0}
+.btn-workspace{background:none;border:none;color:#666;cursor:pointer;font-size:14px;padding:2px 4px;border-radius:3px;line-height:1}
+.btn-workspace:hover{color:#ccc;background:#3c3c3c}
 .bar-body{flex:1;overflow-y:auto}
 </style>

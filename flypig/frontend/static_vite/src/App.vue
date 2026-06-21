@@ -14,19 +14,8 @@
       <el-button type="primary" @click="retry">重试</el-button>
     </div>
 
-    <!-- 未配置工作区 → 初始化向导 -->
-    <InitWizard
-      v-else-if="!configStore.workspace"
-      @done="onInitDone"
-    />
-
-    <!-- 已配置工作区 → 主布局 -->
-    <MainLayout v-else :workspace="configStore.workspace">
-      <div class="main-placeholder">
-        <p>FlyPig Agent</p>
-        <p class="sub">选择一个文件或开始对话</p>
-      </div>
-    </MainLayout>
+    <!-- 主布局（无论是否有工作区） -->
+    <MainLayout v-else :workspace="configStore.workspace" @workspaceChanged="onWorkspaceChanged" />
   </div>
 </template>
 
@@ -37,7 +26,6 @@
  */
 import { ref, onMounted } from 'vue'
 import { useConfigStore } from './stores/config'
-import InitWizard from './components/init/InitWizard.vue'
 import MainLayout from './components/layout/MainLayout.vue'
 
 const configStore = useConfigStore()
@@ -56,8 +44,8 @@ async function loadConfig() {
   }
 }
 
-function onInitDone() {
-  // workspace 已设置，store 已更新，Vue 自动重渲染
+async function onWorkspaceChanged() {
+  await configStore.fetchConfig()
 }
 
 function retry() {
@@ -110,22 +98,6 @@ body {
 }
 @keyframes spin {
   to { transform: rotate(360deg); }
-}
-
-/* 主区域占位文字 */
-.main-placeholder {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: #555;
-  font-size: 14px;
-}
-.main-placeholder .sub {
-  font-size: 12px;
-  color: #444;
 }
 
 /* 错误状态 */

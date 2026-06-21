@@ -14,7 +14,7 @@
 | | 终端模拟 | **xterm.js** | 市面方案 | 成熟终端模拟器 |
 | | 图标 | **Lucide** | 市面方案 | 轻量开源图标库 |
 | | 构建工具 | **Vite** | 市面方案 | 极速 HMR，原生 ESM |
-| | UI 组件库 | **Element Plus** | 市面方案 | 卡片、对话框、选择题、按钮全有 |
+| | UI 组件库 | **Element Plus** | 市面方案 | 含 Tree 树形控件，直接用于文件树 |
 | | 图表渲染 | **Mermaid.js** + **ECharts** | 市面方案 | Mermaid 用于流程图/时序图（文本即图表），ECharts 用于数据可视化柱状图/折线图/饼图 |
 | | Markdown 扩展 | **marked + highlight.js** | 市面方案 | 扩展 code block 渲染器 |
 | **后端** | Web 框架 | **Quart** | 市面方案 | ASGI，原生 WebSocket/SSE |
@@ -44,7 +44,7 @@
 | | 后台任务 | **subprocess.Popen + 自研 buffer** | 混合 | 标准库执行 + 自研环形缓冲区 |
 | | 代码规范检查 | **Ruff CLI** | 市面方案 | subprocess 调用 ruff --fix，自动修复 |
 | | 文件上传 | **Element Plus Upload** | 市面方案 | 前端拖拽，后端接收解压 |
-| | 文件拖拽缩略图 | **vue-draggable-next + Element Plus Upload** | 市面方案 | 拖入输入框，自动预览缩略图 |
+| | 文件树 | **@he-tree/vue3** | 市面方案 | 支持懒加载、虚拟滚动（大目录不卡）、拖拽排序、自定义图标插槽。替代自研递归组件 |
 | | 代码检索（MVP） | **grep + Path.rglob** | 标准库 | Python 内置，零依赖 |
 | | 结构化代码搜索 | **ast-grep** | 市面方案 | AST 级别搜索，支持跨文件模式匹配，替代 bare grep |
 | | AST 解析（符号定位） | **tree-sitter** | 市面方案 | 即时解析→symbol 转行号，read_file/patch_file 内部使用 |

@@ -200,11 +200,12 @@ flypig/
 │           ├── components/
 │           │   ├── layout/       ← ★ 布局编排：SideBar, ResourceBar, ViewerBar, InteractBar,
 │           │   │                   MainLayout, ResizeHandle, StatusBar
-│           │   ├── resource/     ← ★ 侧边栏内容：FileTreeBar, FileTree, FileTreeNode,
+│           │   ├── resource/     ← ★ 侧边栏内容：FileTreeBar, FileTree（基于 el-tree）,
 │           │   │                   McpBar, McpDashboard/List/Item/Detail/Config/Marketplace, StatsBar
-│           │   ├── viewer/       ← ★ 查看器内容：FileBar, EditorPane,
-│           │   │                   EditorArea, EditorTabs, MonacoEditor,
-│           │   │                   ExcelViewer, PdfViewer, DocxViewer, PptxViewer
+│           │   ├── viewer/       ← ★ 查看器内容：EditorArea(多标签管理) +
+│           │   │                   FileBar(标签栏) + BreadcrumbsBar(面包屑) +
+│           │   │                   EditorPane(文件类型路由) +
+│           │   │                   MonacoEditor(代码) + DocxViewer/PdfViewer/ExcelViewer(文档)
 │           │   ├── interact/     ← ★ 交互区域（对话+终端）
 │           │   │   ├── chat/     ← ★ ChatPanel, MessageList, InputBox, MessageItem,
 │           │   │   │               ChoiceCard, ChangeReviewCard, SuggestionCard,

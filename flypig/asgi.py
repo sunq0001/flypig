@@ -17,5 +17,5 @@ for p in (_root, os.getcwd()):
 from backend.server import create_app
 from domain.config.config import Config
 
-config = Config()
-app = create_app(config)
+_config = Config()
+app = create_app(_config)
