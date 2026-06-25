@@ -14,9 +14,10 @@ if sys.stdout.encoding.lower() != 'utf-8':
 ROOT = Path(__file__).parent
 
 SERVICES = [
-    ("back", "后端 :8320", f"cd /d {ROOT / 'flypig'} && python -m uvicorn asgi:app --reload --host 127.0.0.1 --port 8320"),
-    ("front", "前端 :5173", f"cd /d {ROOT / 'flypig' / 'frontend' / 'static_vite'} && npx vite --host"),
-    ("docs", "文档 :8765", f"python {ROOT / 'docs' / 'serve_docs.py'} --port 8765 --watch"),
+    ("back",  "后端Quart  :8320", f"cd /d {ROOT / 'flypig'} && python -m uvicorn asgi:app --reload --host 127.0.0.1 --port 8320"),
+    ("chat",  "对话(Node) :8321", f"cd /d {ROOT / 'flypig' / 'backend' / 'chat-server'} && node server.js"),
+    ("front", "前端       :5173", f"cd /d {ROOT / 'flypig' / 'frontend' / 'static_vite'} && npx vite --host"),
+    ("docs",  "文档       :8765", f"python {ROOT / 'docs' / 'serve_docs.py'} --port 8765 --watch"),
 ]
 
 async def run(tag, label, cmd):

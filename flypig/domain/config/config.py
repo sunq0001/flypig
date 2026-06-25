@@ -66,7 +66,7 @@ class Config:
 
     @property
     def models(self) -> list[dict]:
-        """返回所有模型列表，附带 has_key 状态"""
+        """返回所有模型列表（注册表 + 本地动态发现），附带 has_key 状态"""
         api_keys = self._data.get("api_keys", {})
         result = []
         for name, meta in REGISTRY.items():
@@ -75,8 +75,14 @@ class Config:
             result.append({
                 "name": name,
                 "provider": provider,
+                "base_url": meta.get("base_url", ""),
+                "api_model": meta.get("model", ""),
+                "local": False,
                 "has_key": has_key,
             })
+        # 追加 Ollama 本地模型（动态查询 /api/tags）
+        from domain.config.model_registry import get_local_models
+        result.extend(get_local_models())
         return result
 
     def api_configured(self) -> bool:
@@ -116,6 +122,12 @@ class Config:
             recent.remove(path)
         recent.insert(0, path)
         self._data["agent"]["recent_workspaces"] = recent[:10]
+        self._flush()
+
+    def set_default_model(self, model_name: str):
+        if "llm" not in self._data:
+            self._data["llm"] = {}
+        self._data["llm"]["default_model"] = model_name
         self._flush()
 
     def save_api_key(self, provider: str, api_key: str):

@@ -13,8 +13,10 @@
     "docs:build": "npm run docs:pdoc && npm run docs:vue"
   },
   "dependencies": {
+    "@ai-sdk/vue": "4.0.0-beta.183",
     "@element-plus/icons-vue": "^2.3.0",
     "@iconify/vue": "^5.0.1",
+    "@tdesign-vue-next/chat": "^0.5.2",
     "element-plus": "^2.7.0",
     "monaco-editor-vue3": "^1.0.5",
     "pinia": "^2.1.0",

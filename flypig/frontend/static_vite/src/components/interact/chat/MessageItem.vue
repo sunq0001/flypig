@@ -12,7 +12,7 @@ MessageItem：单条消息渲染
   <div class="message-item" :class="[message.role]">
     <div class="avatar">{{ message.role === 'user' ? '🧑' : '🤖' }}</div>
     <div class="bubble">
-      <div class="content">{{ message.content || (loading ? '...' : '') }}</div>
+      <div class="content">{{ displayText || (loading ? '...' : '') }}</div>
       <div class="time">{{ time }}</div>
     </div>
   </div>
@@ -26,8 +26,20 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
 })
 
+// AI SDK v4+ 使用 parts 格式，兼容老版 content 字段
+const displayText = computed(() => {
+  const m = props.message
+  if (m.parts?.length) {
+    return m.parts
+      .filter(p => p.type === 'text')
+      .map(p => p.text)
+      .join('')
+  }
+  return m.content || ''
+})
+
 const time = computed(() => {
-  const d = new Date(props.message.id?.split('-')[0] || Date.now())
+  const d = new Date(Date.now())
   return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
 })
 </script>
@@ -36,21 +48,33 @@ const time = computed(() => {
 .message-item {
   display: flex;
   gap: 8px;
-  padding: 8px 12px;
+  padding: 4px 12px;
   max-width: 100%;
 }
 .message-item.user { flex-direction: row-reverse; }
-.avatar { flex-shrink: 0; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.avatar { flex-shrink: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 15px; opacity: 0.8; }
 .bubble {
   max-width: 75%;
-  padding: 8px 12px;
-  border-radius: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
   font-size: 13px;
   line-height: 1.5;
   word-break: break-word;
 }
-.user .bubble { background: #409eff; color: #fff; border-bottom-right-radius: 2px; }
-.assistant .bubble { background: #333; color: #ccc; border-bottom-left-radius: 2px; }
+/* user: 比背景稍亮，不刺眼 */
+.user .bubble {
+  background: #2b2b2b;
+  color: #d4d4d4;
+  border: 1px solid #3c3c3c;
+  border-bottom-right-radius: 2px;
+}
+/* assistant: 和背景一致但有左边框 */
+.assistant .bubble {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  border: 1px solid #333;
+  border-bottom-left-radius: 2px;
+}
 .content { white-space: pre-wrap; }
-.time { font-size: 10px; color: #888; margin-top: 4px; text-align: right; }
+.time { font-size: 10px; color: #555; margin-top: 2px; text-align: right; }
 </style>
