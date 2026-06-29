@@ -1,7 +1,7 @@
 /**
- * FlyPig Chat Server — AI SDK Core 驱动的 LLM 对话服务
+ * FlyPig Chat Server — 原生 OpenAI SDK 驱动的 LLM 对话服务
  *
- * 职责：仅处理 POST /api/chat，使用 streamText 逐 token 输出
+ * 职责：仅处理 POST /api/chat，使用 OpenAI SDK stream=true 逐 token 输出
  * 其他功能（配置/文件/终端）仍由 Python/Quart 处理
  *
  * 启动：node server.js（dev.py 自动管理）
@@ -68,8 +68,8 @@ function extractText(m) {
 // ── POST /api/chat ──
 app.post('/api/chat', async (req, res) => {
   try {
-    const { messages: rawMessages, model: modelName } = req.body;
-    if (!rawMessages?.length) return res.status(400).json({ error: 'messages 不能为空' });
+    const { messages, model: modelName } = req.body;
+    if (!messages?.length) return res.status(400).json({ error: 'messages 不能为空' });
     if (!modelName) return res.status(400).json({ error: 'model 不能为空' });
 
     let reg = REGISTRY[modelName];
@@ -80,13 +80,14 @@ app.post('/api/chat', async (req, res) => {
     const apiKey = isLocal ? '' : getKey(reg.provider);
     if (!apiKey && !isLocal) return res.status(400).json({ error: `模型 ${modelName} 未配置 API Key` });
 
+    // 原生 OpenAI SDK — 真正的逐 token 流式
     const openai = new OpenAI({ baseURL: reg.baseURL, apiKey: apiKey || 'not-needed' });
-    const messages = rawMessages.map(m => ({ role: m.role || 'user', content: extractText(m) }));
+    const simpleMessages = messages.map(m => ({ role: m.role || 'user', content: extractText(m) }));
 
-    // 原生 OpenAI SDK stream=true — 每个 token 独立推送
     const stream = await openai.chat.completions.create({
-      model: reg.model, messages, stream: true,
-      max_tokens: 500,
+      model: reg.model,
+      messages: simpleMessages,
+      stream: true,
     });
 
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');

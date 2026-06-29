@@ -1,0 +1,2339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>FlyPig Agent</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.4.21/vue.global.prod.min.js"></script>
+<!-- Monaco Editor AMD loader（本地托管） -->
+<script src="/vs/loader.js"></script>
+<script>
+// 临时禁用 AMD define，以防 xterm UMD 被 Monaco AMD 拦截
+window.__monacoDefine = window.define;
+window.define = undefined;
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
+<!-- xterm 终端（此时 define 已禁用，UMD 不会进入 AMD 模式） -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css">
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<!-- Lucide 图标库（本地托管，避免 CDN 加载失败） -->
+<script src="/lucide.min.js" onload="console.log('Lucide loaded', typeof lucide, lucide); window.LUCIDE_LOADED = true;"></script>
+<script>
+// 恢复 Monaco AMD define
+window.define = window.__monacoDefine;
+// 如果lucide已经加载（例如从缓存），也设置标志
+if (typeof lucide !== 'undefined') {
+  console.log('Lucide already available');
+  window.LUCIDE_LOADED = true;
+}
+</script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#1e1e2e;
+  --bg2:#252536;
+  --bg3:#2d2d44;
+  --fg:#cdd6f4;
+  --fg2:#a6adc8;
+  --fg3:#6c7086;
+  --accent:#89b4fa;
+  --accent2:#b4befe;
+  --green:#a6e3a1;
+  --yellow:#f9e2af;
+  --red:#f38ba8;
+  --border:#313244;
+  --sidebar-w:260px;
+  --chat-w:360px;
+  --status-h:28px;
+}
+html,body{height:100%;background:var(--bg);color:var(--fg);font-family:'Microsoft YaHei','微软雅黑','PingFang SC','Segoe UI',system-ui,-apple-system,sans-serif;font-size:14px;overflow:hidden}
+#app{display:flex;flex-direction:column;height:100vh}
+
+/* 三栏主区域 */
+#layout{display:flex;flex:1;overflow:hidden}
+
+/* 左侧面板 */
+#sidebar{width:var(--sidebar-w);min-width:180px;display:flex;flex-direction:column;background:var(--bg2)}
+.sidebar-header{padding:10px 12px;font-size:12px;font-weight:600;color:var(--fg2);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px}
+.sidebar-header .icon{font-size:14px}
+#file-tree{flex:1;overflow-y:auto;padding:4px 0}
+#file-tree::-webkit-scrollbar{width:5px}
+#file-tree::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* 文件树样式 */
+.tree-node{cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tree-node:hover{background:var(--bg3)}
+.tree-node.selected{background:rgba(137,180,250,.15);color:var(--accent)}
+.tree-node .indent{display:inline-block}
+.tree-node .toggle{display:inline-block;width:16px;text-align:center;color:var(--fg3);font-size:11px;user-select:none}
+.tree-node .toggle.expanded{color:var(--accent)}
+.tree-node .name{display:inline-block;padding:3px 4px 3px 2px;font-size:13px;border-radius:3px}
+.tree-node .name.dir{font-weight:500}
+.tree-node .name.file{color:var(--fg2)}
+.tree-node:hover .name{color:var(--fg)}
+.tree-children{overflow:hidden}
+
+/* 中间面板 */
+#center{flex:1;min-width:200px;display:flex;flex-direction:column;overflow:hidden}
+#empty-state{flex:1;display:flex;align-items:center;justify-content:center;color:var(--fg3);font-size:14px;flex-direction:column;gap:8px}
+#empty-state .big-icon{font-size:48px;opacity:.3}
+
+/* 编辑器区域 (上半) */
+#editor-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:80px}
+
+/* 垂直拖拽分割条 */
+.v-divider{height:3px;cursor:row-resize;flex-shrink:0;position:relative;z-index:10;transition:background .08s}
+.v-divider:hover,.v-divider.active{background:var(--accent)}
+.v-divider::after{content:'';position:absolute;left:0;right:0;top:-4px;bottom:-4px}
+
+/* ════════════════════════════════════════════════
+   终端区域 + 主题系统
+   通过 [data-theme="cyber"|"plain"] 切换主题
+   新增主题只需添加新的 [data-theme="xxx"] CSS 块
+   ════════════════════════════════════════════════ */
+
+/* ── 终端 CSS 变量（基础值，被 theme 覆盖） ── */
+:root {
+  --t-bg:#1e1e2e;
+  --t-header-bg:var(--bg2);
+  --t-border:var(--border);
+  --t-text:var(--fg3);
+  --t-text-bright:var(--fg);
+  --t-btn-hover-bg:var(--bg3);
+  --t-btn-hover-color:var(--fg);
+  --t-accent:var(--accent);
+  --t-green:var(--green);
+  --t-rail-h:0px;
+  --t-grid-bg:transparent;
+  --t-grid-size:0px;
+  --t-glass-blur:0px;
+  --t-shadow:0 2px 8px rgba(0,0,0,.2);
+  --t-btn-glow:none;
+  --t-dot-glow:0 0 4px var(--green);
+  --t-dropdown-bg:var(--bg2);
+  --t-dropdown-border:var(--border);
+}
+
+/* ── 朴素风 (plain) ── 简洁干净，与现有 UI 融合 */
+#terminal-area[data-theme="plain"] {
+  --t-bg:#1e1e2e;
+  --t-header-bg:var(--bg2);
+  --t-border:var(--border);
+  --t-text:var(--fg3);
+  --t-text-bright:var(--fg);
+  --t-btn-hover-bg:var(--bg3);
+  --t-btn-hover-color:var(--fg);
+  --t-accent:var(--accent);
+  --t-green:var(--green);
+  --t-rail-h:0px;
+  --t-grid-bg:transparent;
+  --t-grid-size:0px;
+  --t-glass-blur:0px;
+  --t-shadow:0 2px 8px rgba(0,0,0,.2);
+  --t-btn-glow:none;
+  --t-dot-glow:0 0 4px var(--green);
+  --t-dropdown-bg:var(--bg2);
+  --t-dropdown-border:var(--border);
+}
+
+/* ── 赛博风 (cyber) ── 霓虹发光、跑马灯、赛博配色 */
+#terminal-area[data-theme="cyber"] {
+  --t-bg:#111122;
+  --t-header-bg:linear-gradient(90deg,rgba(30,30,50,.95),rgba(20,20,40,.9));
+  --t-border:rgba(137,180,250,.15);
+  --t-text:rgba(205,214,244,.5);
+  --t-text-bright:#cdd6f4;
+  --t-btn-hover-bg:rgba(137,180,250,.08);
+  --t-btn-hover-color:#fff;
+  --t-accent:#89b4fa;
+  --t-green:#a6e3a1;
+  --t-rail-h:2px;
+  --t-grid-bg:
+    linear-gradient(rgba(137,180,250,.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(137,180,250,.03) 1px, transparent 1px),
+    radial-gradient(ellipse at 30% 20%, rgba(137,180,250,.06) 0%, transparent 60%);
+  --t-grid-size:40px 40px;
+  --t-glass-blur:12px;
+  --t-shadow:0 0 20px rgba(137,180,250,.08), inset 0 0 20px rgba(137,180,250,.03);
+  --t-btn-glow:drop-shadow(0 0 4px rgba(137,180,250,.4));
+  --t-dot-glow:0 0 6px rgba(166,227,161,.6), 0 0 12px rgba(166,227,161,.2);
+  --t-dropdown-bg:rgba(15,15,30,.95);
+  --t-dropdown-border:rgba(137,180,250,.15);
+}
+
+/* ── 应用变量 ── */
+#terminal-area{
+  height:200px;min-height:34px;
+  display:flex;flex-direction:column;overflow:hidden;
+  background:var(--t-bg);
+  background-image:var(--t-grid-bg);
+  background-size:var(--t-grid-size);
+  box-shadow:var(--t-shadow);
+  transition:height .2s ease, background .3s, box-shadow .3s;
+  position:relative;
+}
+
+/* 跑马灯装饰条 */
+.cyber-rail{
+  height:var(--t-rail-h);flex-shrink:0;
+  background:linear-gradient(90deg,transparent 0%,#89b4fa 20%,#f5c2e7 40%,#a6e3a1 60%,#89b4fa 80%,transparent 100%);
+  background-size:200% 100%;
+  animation:rail-scan 3s linear infinite;
+  transition:height .3s;
+}
+@keyframes rail-scan{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+#terminal-area .term-header{
+  display:flex;align-items:center;padding:2px 10px;height:28px;
+  background:var(--t-header-bg);
+  border-top:1px solid var(--t-border);
+  border-bottom:1px solid var(--t-border);
+  flex-shrink:0;gap:6px;font-size:11px;
+  color:var(--t-text);
+  transition:all .3s;
+}
+#terminal-area .term-header .term-title{
+  display:flex;align-items:center;gap:4px;font-weight:500;
+}
+#terminal-area .term-header .term-title svg{width:15px;height:15px;filter:var(--t-btn-glow)}
+
+/* 状态点 ── 主题感知 */
+.term-status-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin:0 4px;flex-shrink:0}
+.term-status-dot.connected{background:var(--t-green);box-shadow:var(--t-dot-glow);animation:pulse-glow 2s ease-in-out infinite}
+.term-status-dot.connecting{background:#f9e2af;animation:pulse 1s infinite}
+.term-status-dot.error{background:#f38ba8}
+@keyframes pulse-glow{0%,100%{box-shadow:var(--t-dot-glow)}50%{box-shadow:0 0 10px rgba(166,227,161,.8),0 0 20px rgba(166,227,161,.3)}}
+.term-status-text{color:var(--t-text);flex-shrink:0}
+
+/* 终端按钮 ── 主题感知 */
+#terminal-area .term-header .term-btn{
+  position:relative;display:inline-flex;align-items:center;justify-content:center;
+  background:none;border:none;
+  color:var(--t-text);cursor:pointer;
+  width:24px;height:24px;border-radius:4px;
+  font-size:11px;transition:all .15s;
+  padding:0;
+}
+#terminal-area .term-header .term-btn svg{width:16px;height:16px;transition:all .2s;color:inherit}
+#terminal-area .term-header .term-btn:hover{color:var(--t-btn-hover-color);background:var(--t-btn-hover-bg)}
+#terminal-area .term-header .term-btn:hover svg{filter:var(--t-btn-glow)}
+
+/* 赛博特有霓虹色 hover */
+#terminal-area[data-theme="cyber"] .term-btn:hover[data-btn="plus"] svg{color:#a6e3a1;filter:drop-shadow(0 0 6px rgba(166,227,161,.6))}
+#terminal-area[data-theme="cyber"] .term-btn:hover[data-btn="refresh"] svg{color:#89b4fa;filter:drop-shadow(0 0 6px rgba(137,180,250,.6))}
+#terminal-area[data-theme="cyber"] .term-btn:hover[data-btn="collapse"] svg{color:#f5c2e7;filter:drop-shadow(0 0 6px rgba(245,194,231,.6))}
+#terminal-area[data-theme="cyber"] .term-btn:hover[data-btn="theme"] svg{color:#cba6f7;filter:drop-shadow(0 0 6px rgba(203,166,247,.6))}
+
+/* 分隔线 */
+.term-sep{width:1px;height:14px;background:var(--t-border);margin:0 4px;flex-shrink:0}
+
+/* Tooltip ── 主题感知 */
+.term-btn .term-tt{
+  display:none;position:absolute;
+  top:calc(100% + 6px);left:50%;transform:translateX(-50%);
+  background:var(--t-dropdown-bg);
+  color:var(--t-text-bright);padding:4px 10px;border-radius:4px;
+  font-size:10px;white-space:nowrap;z-index:50;
+  border:1px solid var(--t-dropdown-border);
+  box-shadow:0 0 12px rgba(0,0,0,.3);
+  pointer-events:none;letter-spacing:.3px;
+}
+.term-btn .term-tt::after{content:'';position:absolute;bottom:100%;left:50%;
+  transform:translateX(-50%);border:4px solid transparent;
+  border-bottom-color:var(--t-dropdown-border)}
+.term-btn:hover .term-tt{display:block}
+
+/* ── 下拉菜单 ── */
+.term-dropdown-wrapper{position:relative;display:inline-flex}
+.term-dropdown{
+  position:absolute;top:calc(100% + 4px);left:50%;transform:translateX(-50%);
+  background:var(--t-dropdown-bg);
+  backdrop-filter:blur(var(--t-glass-blur));
+  border:1px solid var(--t-dropdown-border);
+  border-radius:8px;min-width:190px;padding:4px;
+  z-index:200;
+  box-shadow:0 8px 32px rgba(0,0,0,.5);
+}
+.term-dropdown-item{
+  display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;
+  cursor:pointer;font-size:12px;color:var(--t-text);transition:all .08s;
+}
+.term-dropdown-item:hover{background:rgba(137,180,250,.1);color:var(--t-text-bright)}
+.term-dropdown-item svg{width:15px;height:15px;color:#a6adc8;flex-shrink:0}
+.term-dropdown-item .d-label{flex:1}
+.term-dropdown-item .d-check{margin-left:auto;color:var(--t-accent);display:none}
+.term-dropdown-item.active .d-check{display:inline-flex}
+.term-dropdown-item.active{color:var(--t-text-bright);background:rgba(137,180,250,.1)}
+.term-dropdown-divider{height:1px;background:var(--t-border);margin:3px 0}
+
+/* xterm 容器 */
+#terminal-xterm{flex:1;overflow:hidden;padding:2px}
+#terminal-xterm .xterm{height:100%;padding:4px}
+#terminal-xterm .xterm-viewport{scrollbar-width:thin}
+#terminal-xterm .xterm-viewport::-webkit-scrollbar{width:5px}
+#terminal-xterm .xterm-viewport::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* 终端标签页系统 */
+#terminal-demo{display:flex;flex-direction:row;height:100%}
+.term-sidebar-wrapper{display:flex;flex-shrink:0;position:relative}
+.resize-handle{width:4px;background:transparent;cursor:col-resize;z-index:5;transition:all .1s}
+#terminal-area[data-theme="cyber"] .resize-handle:hover{background:var(--t-accent);box-shadow:0 0 8px rgba(137,180,250,.4)}
+#terminal-area[data-theme="plain"] .resize-handle:hover{background:var(--t-accent)}
+.term-tab-bar{width:90px;min-width:36px;max-width:200px;display:flex;flex-direction:column;background:var(--t-header-bg);border-left:1px solid var(--t-border);overflow:hidden;transition:width .15s}
+.term-tab-bar-inner{flex:1;display:flex;flex-direction:column;overflow-y:auto;gap:0;align-content:flex-start}
+.term-tab-bar-inner::-webkit-scrollbar{width:2px}
+.term-tab-bar-inner::-webkit-scrollbar-thumb{background:var(--t-border);border-radius:2px}
+/* 标签项 */
+.term-vtab{display:flex;align-items:center;gap:6px;height:36px;padding:0 10px;cursor:pointer;color:var(--t-text);font-size:11px;position:relative;user-select:none;transition:all .12s;flex-shrink:0;border-bottom:1px solid var(--t-border);white-space:nowrap;overflow:hidden}
+.term-vtab:hover{color:var(--t-text-bright);background:rgba(137,180,250,.04)}
+.term-vtab.active{color:var(--t-text-bright);background:rgba(137,180,250,.06)}
+#terminal-area[data-theme="cyber"] .term-vtab.active{border-right:2px solid var(--t-accent);box-shadow:inset 2px 0 8px rgba(137,180,250,.05)}
+#terminal-area[data-theme="plain"] .term-vtab.active{border-right:2px solid var(--t-accent)}
+.term-vtab .vtab-icon{opacity:.7;flex-shrink:0;display:flex;align-items:center;width:16px;justify-content:center}
+.term-vtab .vtab-icon svg{width:14px;height:14px}
+.term-vtab.active .vtab-icon svg{filter:var(--t-glow)}
+.term-vtab .vtab-text{overflow:hidden;text-overflow:ellipsis}
+/* 垃圾桶关闭按钮（始终可见） */
+.term-vtab .vtab-close{position:absolute;top:50%;right:4px;transform:translateY(-50%);padding:3px;border-radius:4px;opacity:.6;line-height:1;display:flex;align-items:center;color:var(--t-text-dim);transition:all .15s;border:none;background:none;cursor:pointer}
+.term-vtab .vtab-close:hover{opacity:1;color:#f38ba8;background:rgba(243,139,168,.12);transform:translateY(-50%) scale(1.1)}
+.term-vtab .vtab-close svg{width:12px;height:12px}
+/* 无底部新建按钮 */
+.term-vtab-add{display:none}
+/* 图标模式（宽度 < 50px） */
+.term-tab-bar.icon-mode .vtab-text{display:none}
+.term-tab-bar.icon-mode .vtab-close{display:none}
+.term-tab-bar.icon-mode .term-vtab{justify-content:center;padding:0}
+/* 折叠时高度变为 34px（仅 header 行） */
+#terminal-area.collapsed{height:34px!important;min-height:34px!important}
+
+/* 文件标签页 */
+#file-tabs{display:flex;height:35px;background:var(--bg2);border-bottom:1px solid var(--border);overflow-x:auto;flex-shrink:0}
+#file-tabs::-webkit-scrollbar{height:2px}
+#file-tabs::-webkit-scrollbar-thumb{background:var(--border);border-radius:1px}
+.file-tab{display:flex;align-items:center;gap:4px;padding:0 10px;font-size:12px;color:var(--fg3);border-right:1px solid var(--border);cursor:pointer;white-space:nowrap;user-select:none;min-width:0}
+.file-tab:hover{color:var(--fg);background:var(--bg3)}
+.file-tab.active{color:var(--fg);background:var(--bg);border-bottom:2px solid var(--accent)}
+.file-tab .name{overflow:hidden;text-overflow:ellipsis;max-width:150px}
+.file-tab .close{font-size:10px;padding:0 2px;border-radius:3px;opacity:0;transition:opacity .1s}
+.file-tab:hover .close,.file-tab.active .close{opacity:.6}
+.file-tab .close:hover{opacity:1;background:var(--border);color:var(--red)}
+
+/* 编辑器区域（Monaco Editor） */
+#editor-container{flex:1;overflow:hidden}
+#editor-container .monaco-editor .margin{background:var(--bg2)}
+
+/* 右侧面板 */
+#chat{width:var(--chat-w);min-width:280px;display:flex;flex-direction:column;background:var(--bg2)}
+.chat-header{padding:10px 12px;font-size:12px;font-weight:600;color:var(--fg2);text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:6px;justify-content:space-between}
+.chat-header .toolbar{display:flex;gap:4px}
+.chat-header .tool-btn{background:none;border:none;color:var(--fg3);cursor:pointer;padding:2px 6px;border-radius:4px;font-size:12px}
+.chat-header .tool-btn:hover{color:var(--fg);background:var(--bg3)}
+#messages{flex:1;overflow-y:auto;padding:8px}
+#messages::-webkit-scrollbar{width:5px}
+#messages::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+.msg{margin-bottom:8px;animation:fadeIn .15s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+.msg-user{text-align:right}
+.msg-user .bubble{display:inline-block;background:rgba(137,180,250,.2);color:var(--accent);padding:6px 12px;border-radius:12px 12px 4px 12px;max-width:85%;font-size:13px;line-height:1.5}
+.msg-agent .bubble{display:inline-block;background:var(--bg3);color:var(--fg);padding:6px 12px;border-radius:12px 12px 12px 4px;max-width:100%;font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.msg-thinking .bubble{background:transparent;color:var(--fg3);font-style:italic;font-size:12px;padding:4px 8px}
+.msg-tool .bubble{background:rgba(166,227,161,.08);color:var(--green);padding:6px 12px;border-radius:8px;font-size:12px;font-family:monospace;line-height:1.4;white-space:pre-wrap;word-break:break-all}
+.msg-tool-end .bubble{background:rgba(108,112,134,.1);color:var(--fg2);padding:6px 12px;border-radius:8px;font-size:12px;font-family:monospace;line-height:1.4;max-height:200px;overflow-y:auto;white-space:pre-wrap;word-break:break-all}
+.msg-error .bubble{background:rgba(243,139,168,.1);color:var(--red);padding:6px 12px;border-radius:8px;font-size:12px}
+.msg-info .bubble{background:transparent;color:var(--fg3);padding:4px 8px;font-size:11px;text-align:center}
+.msg-chain .bubble{background:rgba(180,190,254,.08);color:var(--accent2);padding:4px 10px;border-radius:6px;font-size:11px;text-align:center}
+.msg-summary .bubble{background:rgba(166,227,161,.06);color:var(--green);padding:6px 12px;border-radius:8px;font-size:11px;font-family:monospace}
+
+/* 命令卡片 */
+.msg-command-card{margin-bottom:8px;animation:fadeIn .15s ease}
+.command-card{background:rgba(30,30,46,.6);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.command-card .cmd-text{padding:8px 12px;font-family:'JetBrains Mono','Fira Code',Consolas,monospace;font-size:12px;color:var(--green);line-height:1.5;white-space:pre-wrap;word-break:break-all;border-bottom:1px solid var(--border)}
+.command-card .cmd-text .prompt{color:var(--fg3);margin-right:6px}
+.command-card .cmd-actions{display:flex;align-items:center;gap:2px;padding:4px 8px;background:rgba(0,0,0,.1)}
+.command-card .cmd-btn{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border:none;background:transparent;color:var(--fg3);border-radius:4px;cursor:pointer;transition:all .12s;position:relative}
+.command-card .cmd-btn:hover{color:var(--fg);background:var(--bg3)}
+.command-card .cmd-btn svg{width:14px;height:14px}
+.command-card .cmd-btn .cmd-tt{display:none;position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--bg2);color:var(--fg);padding:3px 8px;border-radius:4px;font-size:10px;white-space:nowrap;pointer-events:none;border:1px solid var(--border)}
+.command-card .cmd-btn:hover .cmd-tt{display:block}
+
+/* 命令卡片 — 状态指示 */
+.command-card .cmd-status{display:flex;align-items:center;gap:5px;padding:3px 12px;font-size:11px;color:var(--fg3);border-bottom:1px solid var(--border);background:rgba(0,0,0,.08)}
+.command-card .cmd-status .status-dot{width:6px;height:6px;border-radius:50%;display:inline-block;animation:pulse-dot 1.4s ease-in-out infinite}
+.command-card .cmd-status .status-dot.ok{background:var(--green);box-shadow:0 0 6px var(--green)}
+.command-card .cmd-status .status-dot.done{background:var(--fg3);animation:none;box-shadow:none}
+.command-card .cmd-status .status-dot.err{background:var(--red);animation:none;box-shadow:0 0 6px var(--red)}
+@keyframes pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+.command-card .cmd-focus-btn{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border:none;background:rgba(137,180,250,.12);color:var(--accent);border-radius:4px;cursor:pointer;font-size:10px;transition:all .12s}
+.command-card .cmd-focus-btn:hover{background:rgba(137,180,250,.25)}
+.command-card .cmd-done-btn{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border:none;background:rgba(166,227,161,.15);color:var(--green);border-radius:4px;cursor:pointer;font-size:10px;transition:all .12s;margin-left:4px}
+.command-card .cmd-done-btn:hover{background:rgba(166,227,161,.3)}
+
+/* 输入区域 */
+#input-area{padding:8px 10px 10px;border-top:1px solid var(--border)}
+#input-row{display:flex;gap:6px;align-items:flex-end}
+#chat-input{flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--fg);font-size:13px;font-family:inherit;outline:none;resize:none;min-height:36px;max-height:120px;line-height:1.4}
+#chat-input:focus{border-color:var(--accent)}
+#chat-input::placeholder{color:var(--fg3)}
+#send-btn{background:var(--accent);color:var(--bg);border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity .15s;height:36px;display:flex;align-items:center;gap:4px}
+#send-btn:hover{opacity:.85}
+#send-btn:disabled{opacity:.3;cursor:not-allowed}
+
+/* 模型切换条 */
+#model-bar{display:flex;align-items:center;gap:6px;padding:4px 10px 0;font-size:12px;color:var(--fg3)}
+#model-bar select{background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--fg);outline:none;cursor:pointer}
+#model-bar select:focus{border-color:var(--accent)}
+#model-bar select option{background:var(--bg2)}
+#model-bar .model-status{font-size:10px;padding:2px 6px;border-radius:4px}
+#model-bar .model-status.has-key{color:var(--green)}
+#model-bar .model-status.no-key{color:var(--yellow);cursor:pointer}
+#model-bar .model-status.no-key:hover{background:var(--bg3)}
+
+/* API Key 弹窗 */
+#api-key-modal{position:fixed;inset:0;background:rgba(30,30,46,.85);z-index:200;display:flex;align-items:center;justify-content:center}
+#api-key-box{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:24px 28px;min-width:360px;max-width:420px}
+#api-key-box h3{font-size:15px;font-weight:600;margin-bottom:4px}
+#api-key-box p.sub{color:var(--fg3);font-size:12px;margin-bottom:16px}
+#api-key-box input{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--fg);outline:none;margin-bottom:12px}
+#api-key-box input:focus{border-color:var(--accent)}
+#api-key-box .modal-actions{display:flex;gap:8px;justify-content:flex-end}
+#api-key-box button{padding:6px 16px;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer}
+#api-key-box .btn-primary{background:var(--accent);color:var(--bg)}
+#api-key-box .btn-primary:hover{opacity:.85}
+#api-key-box .btn-secondary{background:var(--bg3);color:var(--fg2)}
+#api-key-box .btn-secondary:hover{background:var(--border);color:var(--fg)}
+
+/* 状态栏 */
+#status-bar{height:var(--status-h);background:var(--bg3);border-top:1px solid var(--border);display:flex;align-items:center;padding:0 12px;font-size:12px;color:var(--fg3);gap:16px}
+#status-bar .status-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+#status-bar .status-dot.offline{background:var(--red)}
+#status-bar .status-dot.online{background:var(--green)}
+#status-bar .status-dot.running{background:var(--yellow);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+#status-bar .status-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 初始化向导 overlay */
+#setup-overlay{position:fixed;inset:0;background:rgba(30,30,46,.92);z-index:100;display:flex;align-items:center;justify-content:center}
+#setup-box{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:32px 40px;min-width:420px;max-width:480px}
+#setup-box h2{font-size:20px;font-weight:600;margin-bottom:4px}
+#setup-box p.sub{color:var(--fg3);font-size:13px;margin-bottom:20px}
+.setup-step{display:none}
+.setup-step.active{display:block}
+.setup-step label{display:block;margin-bottom:4px;font-size:12px;color:var(--fg2);font-weight:500}
+.setup-step input,.setup-step select{width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:14px;color:var(--fg);outline:none;margin-bottom:16px}
+.setup-step input:focus,.setup-step select:focus{border-color:var(--accent)}
+.setup-step select{cursor:pointer}
+.setup-step select option{background:var(--bg2)}
+.setup-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:20px}
+.setup-actions button{padding:8px 20px;border-radius:8px;border:none;font-size:13px;font-weight:600;cursor:pointer}
+.setup-actions .btn-primary{background:var(--accent);color:var(--bg)}
+.setup-actions .btn-primary:hover{opacity:.85}
+.setup-actions .btn-secondary{background:var(--bg3);color:var(--fg2)}
+.setup-actions .btn-secondary:hover{background:var(--border);color:var(--fg)}
+.setup-actions .btn-secondary:disabled{opacity:.3;cursor:not-allowed}
+.setup-error{color:var(--red);font-size:12px;margin-top:-8px;margin-bottom:12px}
+
+/* Markdown 内容样式（在气泡内） */
+.bubble h1,.bubble h2,.bubble h3,.bubble h4{font-size:inherit;font-weight:600;margin:8px 0 4px}
+.bubble p{margin:4px 0}
+.bubble ul,.bubble ol{padding-left:20px;margin:4px 0}
+.bubble li{margin:2px 0}
+.bubble code{padding:1px 5px;border-radius:4px;font-size:12px;background:rgba(108,112,134,.2);font-family:'JetBrains Mono','Fira Code',Consolas,monospace}
+.bubble pre{margin:8px 0;border-radius:6px;overflow-x:auto}
+.bubble pre code{display:block;padding:10px 14px;background:var(--bg) !important;border:1px solid var(--border);border-radius:6px;font-size:12px;line-height:1.5}
+.bubble strong{font-weight:600}
+.bubble a{color:var(--accent);text-decoration:none}
+.bubble a:hover{text-decoration:underline}
+.bubble blockquote{border-left:3px solid var(--accent);padding-left:12px;margin:6px 0;color:var(--fg3)}
+.bubble hr{border:none;border-top:1px solid var(--border);margin:8px 0}
+.bubble table{border-collapse:collapse;margin:6px 0;font-size:12px}
+.bubble th,.bubble td{border:1px solid var(--border);padding:4px 8px;text-align:left}
+.bubble th{background:var(--bg3);font-weight:600}
+
+.loading-dots::after{content:'';animation:dots 1.5s infinite}
+@keyframes dots{0%{content:'.'}33%{content:'..'}66%{content:'...'}}
+
+/* 拖拽分割条 — VS Code 风格：2px 细条，hover 时亮起 */
+.divider{width:2px;cursor:col-resize;flex-shrink:0;position:relative;z-index:10;transition:background .08s}
+.divider:hover,.divider.active{background:var(--accent)}
+/* 增大热区方便点击（视觉上还是 2px） */
+.divider::after{content:'';position:absolute;left:-4px;right:-4px;top:0;bottom:0}
+
+/* 终端完成交互卡片 */
+/* 实时终端输出区 */
+.term-output-box{max-height:200px;overflow-y:auto;background:rgba(0,0,0,.2);border-bottom:1px solid var(--border)}
+.term-output-box .term-output-pre{margin:0;padding:6px 12px;font-family:'JetBrains Mono','Fira Code',Consolas,monospace;font-size:11px;line-height:1.5;color:var(--fg);white-space:pre-wrap;word-break:break-all}
+.term-output-box::-webkit-scrollbar{width:4px}
+.term-output-box::-webkit-scrollbar-track{background:transparent}
+.term-output-box::-webkit-scrollbar-thumb{background:rgba(69,71,90,.5);border-radius:2px}
+
+/* 推送终端结果按钮 */
+.cmd-actions{display:flex;align-items:center;gap:2px;padding:4px 8px;background:rgba(0,0,0,.1)}
+.cmd-actions-left{display:flex;gap:2px}
+.cmd-actions-right{display:flex;gap:6px;margin-left:auto}
+.push-btn{display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border:none;background:linear-gradient(135deg,rgba(137,180,250,.2),rgba(203,166,247,.2));color:#b4befe;border-radius:6px;cursor:pointer;font-size:11px;font-weight:600;transition:all .15s}
+.push-btn:hover{background:linear-gradient(135deg,rgba(137,180,250,.35),rgba(203,166,247,.35));color:#cdd6f4;box-shadow:0 0 12px rgba(137,180,250,.15)}
+.push-btn:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+.push-btn .push-note{font-weight:400;font-size:10px;color:var(--fg3)}
+
+/* 通用 */
+.ml-auto{margin-left:auto}
+.flex{display:flex}
+.gap-4{gap:4px}
+.text-sm{font-size:12px}
+.text-muted{color:var(--fg3)}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 初始化向导 -->
+  <div id="setup-overlay" v-if="showSetup">
+    <div id="setup-box">
+      <h2>🚀 FlyPig Agent</h2>
+      <p class="sub">你的 AI 编码助手</p>
+
+      <!-- Step 1: 工作区 -->
+      <div class="setup-step" :class="{active: setupStep===1}">
+        <label>📂 工作区目录</label>
+        <input v-model="setupWorkspace" placeholder="输入工作区路径..." @keyup.enter="setupNext">
+        <div style="margin-top:-12px;margin-bottom:16px">
+          <button @click="browseWorkspace" style="background:none;border:none;color:var(--accent);font-size:12px;cursor:pointer;padding:4px 0">📁 浏览...</button>
+        </div>
+        <div class="setup-actions">
+          <button class="btn-primary" @click="setupNext">下一步 →</button>
+        </div>
+      </div>
+
+      <!-- Step 2: 模型 -->
+      <div class="setup-step" :class="{active: setupStep===2}">
+        <label>🤖 AI 模型</label>
+        <select v-model="setupModel" style="margin-bottom:8px">
+          <option v-for="m in models" :key="m.name" :value="m.name" :disabled="!m.has_key && m.provider !== 'DeepSeek'">
+            {{ m.name }} ({{ m.provider }}) {{ m.has_key ? '✓' : '' }}
+          </option>
+        </select>
+        <div class="setup-actions">
+          <button class="btn-secondary" @click="setupStep=1">← 上一步</button>
+          <button class="btn-primary" @click="setupNext">下一步 →</button>
+        </div>
+      </div>
+
+      <!-- Step 3: API Key -->
+      <div class="setup-step" :class="{active: setupStep===3}">
+        <label>🔑 API Key</label>
+        <div style="font-size:12px;color:var(--fg3);margin-bottom:8px">提供商: {{ selectedProvider }}</div>
+        <input v-model="setupApiKey" type="password" placeholder="输入 API Key（留空使用已有配置）" @keyup.enter="setupFinish">
+        <div class="setup-error" v-if="setupError">{{ setupError }}</div>
+        <div class="setup-actions">
+          <button class="btn-secondary" @click="setupStep=2">← 上一步</button>
+          <button class="btn-primary" @click="setupFinish">开始使用 →</button>
+        </div>
+      </div>
+
+      <!-- 加载中 -->
+      <div v-if="setupLoading" style="text-align:center;padding:20px">
+        <div style="font-size:14px;color:var(--fg2)">初始化中<span class="loading-dots"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 主界面 -->
+  <div id="layout" v-show="!showSetup" ref="layoutRef">
+    <!-- 左侧：文件树 -->
+    <div id="sidebar" :style="{width: leftWidth + 'px'}">
+      <div class="sidebar-header"><span class="icon">📁</span> 文件</div>
+      <div id="file-tree">
+        <template v-if="fileTree && fileTree.children">
+          <tree-node
+            v-for="node in fileTree.children"
+            :key="node.path"
+            :node="node"
+            :depth="0"
+            :selected-path="activeTabIndex >= 0 && activeTabIndex < openTabs.length ? openTabs[activeTabIndex].path : ''"
+            @select="openFile"
+          />
+        </template>
+        <div v-else style="padding:16px;color:var(--fg3);font-size:12px;text-align:center">暂无文件</div>
+      </div>
+    </div>
+
+    <div class="divider" :class="{active: resizing === 'left'}"
+         @mousedown.prevent="startResize($event, 'left')"></div>
+
+    <!-- 中间：代码编辑器 + 标签页 + 终端 -->
+    <div id="center">
+      <div id="editor-area">
+        <div id="file-tabs" v-if="openTabs.length > 0">
+          <div v-for="(tab, i) in openTabs" :key="tab.path"
+               class="file-tab" :class="{active: i === activeTabIndex}"
+               @click="switchTab(i)" @mouseup.middle="closeTab(i)">
+            <span class="name">{{ tab.name }}</span>
+            <span class="close" @click.stop="closeTab(i)">×</span>
+          </div>
+        </div>
+        <div id="editor-container" ref="editorContainer" v-show="openTabs.length > 0"></div>
+        <div id="empty-state" v-show="openTabs.length === 0">
+          <div class="big-icon">📄</div>
+          <div>点击左侧文件查看内容</div>
+          <div style="font-size:12px;color:var(--fg3)">或发送消息让 AI 工作</div>
+        </div>
+      </div>
+
+      <div class="v-divider" :class="{active: vResizing}"
+           @mousedown.prevent="startVResize($event)"></div>
+
+      <div id="terminal-area" :style="{height: termHeight + 'px'}" :data-theme="termTheme">
+        <!-- 跑马灯装饰条（仅在 cyber 主题显示） -->
+        <div class="cyber-rail" v-if="termTheme === 'cyber'"></div>
+        <div id="terminal-demo" :style="{height: '100%', display: 'flex'}">
+          <!-- 左侧终端主体 -->
+          <div class="term-main" style="flex:1;display:flex;flex-direction:column;min-width:0;overflow:hidden">
+            <div class="term-header">
+              <span class="term-title" v-html="svgIcon('terminal',15)"></span>
+              <span class="term-status-dot" :class="termStatus"></span>
+              <span class="term-status-text">{{ termStatusText }}</span>
+              <span style="flex:1"></span>
+
+              <!-- ★ 新建终端按钮（带下拉菜单），移至重启左侧 -->
+              <div class="term-dropdown-wrapper">
+                <button class="term-btn" data-btn="plus" @click="toggleTermDropdown" title="新建终端">
+                  <span v-html="svgIcon('plus')"></span>
+                </button>
+                <!-- 下拉菜单 -->
+                <div class="term-dropdown" v-show="showTermDropdown" @click.stop>
+                  <div class="term-dropdown-item" :class="{active: selectedTermType==='ps'}" @click="selectTermType('ps')">
+                    <span v-html="svgIcon('terminal')"></span>
+                    <span class="d-label">PowerShell</span>
+                    <span v-if="selectedTermType==='ps'" v-html="svgIcon('check')" style="margin-left:auto;color:var(--t-accent)"></span>
+                    <span v-if="availableShells['ps'] === false" style="margin-left:auto;font-size:9px;color:var(--t-red)">不可用</span>
+                  </div>
+                  <div class="term-dropdown-item" :class="{active: selectedTermType==='bash'}" @click="selectTermType('bash')"
+                       :style="availableShells['bash'] === false ? {opacity:.4,cursor:'default'} : {}">
+                    <span v-html="svgIcon('command')"></span>
+                    <span class="d-label">bash</span>
+                    <span v-if="availableShells['bash'] === true && selectedTermType==='bash'" v-html="svgIcon('check')" style="margin-left:auto;color:var(--t-accent)"></span>
+                    <span v-if="availableShells['bash'] === false" style="margin-left:auto;font-size:9px;color:var(--t-red);white-space:nowrap">未安装</span>
+                  </div>
+                  <div class="term-dropdown-item" :class="{active: selectedTermType==='zsh'}" @click="selectTermType('zsh')"
+                       :style="availableShells['zsh'] === false ? {opacity:.4,cursor:'default'} : {}">
+                    <span v-html="svgIcon('zap')"></span>
+                    <span class="d-label">zsh</span>
+                    <span v-if="availableShells['zsh'] === true && selectedTermType==='zsh'" v-html="svgIcon('check')" style="margin-left:auto;color:var(--t-accent)"></span>
+                    <span v-if="availableShells['zsh'] === false" style="margin-left:auto;font-size:9px;color:var(--t-red);white-space:nowrap">未安装</span>
+                  </div>
+                  <div class="term-dropdown-divider"></div>
+                  <div class="term-dropdown-item" :class="{active: selectedTermType==='wsl'}" @click="selectTermType('wsl')"
+                       :style="availableShells['wsl'] === false ? {opacity:.4,cursor:'default'} : {}">
+                    <span v-html="svgIcon('laptop')"></span>
+                    <span class="d-label">WSL</span>
+                    <span v-if="availableShells['wsl'] === true && selectedTermType==='wsl'" v-html="svgIcon('check')" style="margin-left:auto;color:var(--t-accent)"></span>
+                    <span v-if="availableShells['wsl'] === false" style="margin-left:auto;font-size:9px;color:var(--t-red);white-space:nowrap">未安装</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="term-sep"></div>
+
+              <!-- 重启终端 -->
+              <button class="term-btn" data-btn="refresh" @click="resetTerminal" title="重启终端">
+                <span v-html="svgIcon('refresh-cw')"></span>
+              </button>
+              <!-- 折叠终端 -->
+              <button class="term-btn" data-btn="collapse" @click="toggleTerminal" title="折叠终端">
+                <span v-html="svgIcon(termCollapsed ? 'chevron-up' : 'chevron-down')"></span>
+              </button>
+              <!-- ★ 主题切换 -->
+              <button class="term-btn" data-btn="theme" @click="cycleTermTheme" :title="termTheme === 'cyber' ? '切换为朴素风格' : '切换为流光溢彩'">
+                <span v-html="svgIcon(termTheme === 'cyber' ? 'palette' : 'sparkles')"></span>
+              </button>
+            </div>
+            <div id="terminal-xterm" v-show="!termCollapsed" style="flex:1;overflow:hidden;position:relative">
+              <div v-for="tab in termTabs" :key="tab.id"
+                   :ref="(el) => registerTermContainer(tab.id, el)"
+                   style="position:absolute;inset:0;display:none">
+              </div>
+            </div>
+          </div>
+
+          <!-- 右侧标签栏（v-show 控制：仅多终端时显示） -->
+          <div class="term-sidebar-wrapper" v-show="termTabs.length >= 2" style="display:flex;flex-shrink:0;position:relative">
+            <div class="resize-handle" id="term-resize-handle" style="width:4px;background:transparent;cursor:col-resize;z-index:5;transition:all .1s"></div>
+            <div class="term-tab-bar" id="term-tab-bar" style="width:90px;min-width:36px;max-width:200px;display:flex;flex-direction:column;background:var(--t-header-bg);border-left:1px solid var(--t-border);overflow:hidden;transition:width .15s">
+              <div class="term-tab-bar-inner" style="flex:1;display:flex;flex-direction:column;overflow-y:auto;gap:0;align-content:flex-start">
+                <!-- 终端标签页列表 -->
+                <div v-for="tab in termTabs" :key="tab.id" class="term-vtab" :class="{active: tab.id === activeTermTabId}" @click="switchTermTab(tab.id)">
+                  <span class="vtab-icon">
+                    <span v-html="svgIcon(tab.shellType === 'ps' ? 'terminal' : tab.shellType === 'bash' ? 'command' : tab.shellType === 'zsh' ? 'zap' : 'laptop', 14)"></span>
+                  </span>
+                  <span class="vtab-text">{{ tab.title }}</span>
+                  <button class="vtab-close" @click.stop="closeTermTab(tab.id)" title="关闭终端">
+                    <span v-html="svgIcon('trash-2',12)"></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider" :class="{active: resizing === 'right'}"
+         @mousedown.prevent="startResize($event, 'right')"></div>
+
+    <!-- 右侧：对话 -->
+    <div id="chat" :style="{width: rightWidth + 'px'}">
+      <div class="chat-header">
+        <span>💬 对话</span>
+        <div class="toolbar">
+          <button class="tool-btn" @click="resetChat" title="重置对话">↺</button>
+          <button class="tool-btn" @click="showCost" title="查看费用">💰</button>
+        </div>
+      </div>
+      <div id="messages" ref="messagesRef">
+        <div v-for="(m, i) in messages" :key="i" :class="'msg msg-' + m.type">
+          <div class="bubble" v-if="m.type==='agent'||m.type==='summary'" v-html="renderMarkdown(m.content)"></div>
+          <div class="bubble" v-else-if="m.type==='command-card'" style="padding:0;background:transparent">
+            <div class="command-card">
+              <div class="cmd-text"><span class="prompt">$</span>{{ m.command }}</div>
+              <div class="cmd-status" v-if="m.terminalStatus">
+                <span class="status-dot" :class="{ok:m.terminalStatus==='injecting'||m.terminalStatus==='injected', done:m.terminalStatus==='done', err:m.terminalStatus==='error'}"></span>
+                <span v-if="m.terminalStatus==='pending'">等待终端注入...</span>
+                <span v-else-if="m.terminalStatus==='injecting'">正在终端执行...</span>
+                <span v-else-if="m.terminalStatus==='injected'">已在终端执行</span>
+                <span v-else-if="m.terminalStatus==='done'">执行完成</span>
+                <span v-else-if="m.terminalStatus==='error'">执行出错</span>
+                <button class="cmd-focus-btn" @click.stop="focusTerminal" title="跳转到终端面板">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                  聚焦终端
+                </button>
+
+              </div>
+              <!-- ★ 实时终端输出区 ★ -->
+              <div class="term-output-box" v-if="m.outputArea" ref="outputBox">
+                <pre class="term-output-pre">{{ m.outputArea }}</pre>
+              </div>
+              <div class="cmd-actions">
+                <div class="cmd-actions-left">
+                  <button class="cmd-btn" @click.stop="copyCommand(m.command)" title="复制命令">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                    <span class="cmd-tt">复制命令</span>
+                  </button>
+                  <button class="cmd-btn" @click.stop="runInNewTerminal(m.command)" title="在新终端中执行">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"></polyline><line x1="12" y1="19" x2="20" y2="19"></line></svg>
+                    <span class="cmd-tt">在新终端中执行</span>
+                  </button>
+                  <button class="cmd-btn" @click.stop="retryCommand(m.command)" title="重新执行">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                    <span class="cmd-tt">重新执行</span>
+                  </button>
+                </div>
+                <div class="cmd-actions-right">
+                  <button class="push-btn" @click.stop="handlePushResult(m.msgId)" :disabled="!m.outputArea">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    推送终端结果
+                    <span class="push-note">交给 AI 分析</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="bubble" v-else>{{ m.content }}</div>
+        </div>
+      </div>
+      <div id="input-area">
+        <div id="model-bar">
+          <span>🤖</span>
+          <select v-model="currentModel" @change="onModelChange">
+            <option v-for="m in models" :key="m.name" :value="m.name">
+              {{ formatModelName(m) }}
+            </option>
+          </select>
+          <span class="model-status" :class="currentModelHasKey ? 'has-key' : 'no-key'"
+                @click="currentModelHasKey ? null : showApiKeyModal=true">
+            {{ currentModelHasKey ? '✓ 已配置' : '⚙ 设置 Key' }}
+          </span>
+        </div>
+        <div id="input-row">
+          <textarea
+            id="chat-input"
+            v-model="userInput"
+            @keydown="handleKeydown"
+            placeholder="输入消息... (Enter 发送, Shift+Enter 换行)"
+            :disabled="agentRunning"
+            rows="1"
+          ></textarea>
+          <button id="send-btn" @click="sendMessage" :disabled="agentRunning || !userInput.trim()">
+            ▶
+          </button>
+        </div>
+      </div>
+
+      <!-- API Key 弹窗 -->
+      <div id="api-key-modal" v-if="showApiKeyModal">
+        <div id="api-key-box">
+          <h3>🔑 配置 API Key</h3>
+          <p class="sub">提供商: {{ pendingModelProvider }}</p>
+          <input v-model="pendingApiKey" type="password" placeholder="输入 API Key" @keyup.enter="saveApiKey">
+          <div class="modal-actions">
+            <button class="btn-secondary" @click="showApiKeyModal=false">取消</button>
+            <button class="btn-primary" @click="saveApiKey" :disabled="!pendingApiKey.trim()">保存并切换</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 状态栏 -->
+  <div id="status-bar" v-show="!showSetup">
+    <span class="status-dot" :class="statusClass"></span>
+    <span class="status-text">{{ statusText }}</span>
+    <span v-if="costStr" class="text-sm text-muted">{{ costStr }}</span>
+  </div>
+</div>
+
+<script>
+// ── Monaco Editor ──
+// 配置 Web Worker 路径（避免 UI 阻塞）
+window.MonacoEnvironment = {
+  getWorker: function(_, label) {
+    let url;
+    if (label === 'json') url = '/vs/assets/json.worker-DKiEKt88.js';
+    else if (label === 'css' || label === 'scss' || label === 'less') url = '/vs/assets/css.worker-HnVq6Ewq.js';
+    else if (label === 'html' || label === 'handlebars' || label === 'razor') url = '/vs/assets/html.worker-B51mlPHg.js';
+    else if (label === 'typescript' || label === 'javascript') url = '/vs/assets/ts.worker-CMbG-7ft.js';
+    else url = '/vs/assets/editor.worker-Be8ye1pW.js';
+    return new Worker(url);
+  }
+};
+// loader.js 已在 <head> 中加载，这里只需配置路径并加载主模块
+require.config({ paths: { vs: '/vs' }});
+const _monacoReady = new Promise(resolve => {
+  require(['vs/editor/editor.main'], () => resolve());
+});
+
+// ── EditorAdapter — 统一的编辑器接口 ──
+// 后续切换到 OpenSumi 只需替换此 Adapter 的实现
+const EditorAdapter = {
+  _editor: null,
+  async init(container, content, language) {
+    this.destroy();
+    if (!container) return;
+    await _monacoReady;
+    this._editor = monaco.editor.create(container, {
+      value: content || '',
+      language: language || 'plaintext',
+      theme: 'vs-dark',
+      fontSize: 13,
+      fontFamily: "'JetBrains Mono','Cascadia Code','Fira Code',Consolas,monospace",
+      lineNumbers: 'on',
+      minimap: { enabled: false },
+      readOnly: true,
+      scrollBeyondLastLine: false,
+      automaticLayout: true,   // 自动适配容器大小变化
+    });
+  },
+  setContent(content) {
+    if (this._editor) this._editor.setValue(content || '');
+  },
+  setLanguage(language) {
+    if (this._editor) {
+      monaco.editor.setModelLanguage(this._editor.getModel(), language || 'plaintext');
+    }
+  },
+  resize() {
+    if (this._editor) this._editor.layout();
+  },
+  destroy() {
+    if (this._editor) { this._editor.dispose(); this._editor = null; }
+  },
+};
+
+const { createApp, ref, computed, watch, nextTick, onMounted } = Vue;
+
+// ── 文件树组件（递归） ──
+app = createApp({
+  setup() {
+    // ── 状态 ──
+    const showSetup = ref(true);
+    const setupStep = ref(1);
+    const setupWorkspace = ref('');
+    const setupModel = ref('');
+    const setupApiKey = ref('');
+    const setupError = ref('');
+    const setupLoading = ref(false);
+    const models = ref([]);
+    const selectedProvider = ref('');
+
+    const fileTree = ref(null);
+    const openTabs = ref([]);       // [{path, name, content}]
+    const activeTabIndex = ref(-1);
+    const messages = ref([]);
+    const userInput = ref('');
+    const agentRunning = ref(false);
+    const statusText = ref('未连接');
+    const statusClass = ref('offline');
+    const costStr = ref('');
+
+    // ── 模型切换 ──
+    const currentModel = ref('');
+    const showApiKeyModal = ref(false);
+    const pendingApiKey = ref('');
+    const pendingModelProvider = ref('');
+
+    const currentModelHasKey = computed(() => {
+      if (!currentModel.value || !models.value.length) return false;
+      const m = models.value.find(x => x.name === currentModel.value);
+      return m ? m.has_key : false;
+    });
+
+    const termStatusText = computed(() => {
+      const map = {disconnected:'', connecting:'连接中...', connected:'已连接', error:'连接失败'};
+      return map[termStatus.value] || '';
+    });
+
+    function formatModelName(m) {
+      const labels = {
+        'deepseek-v4-flash': 'DeepSeek V4 Flash (快速/便宜)',
+        'deepseek-v4-pro': 'DeepSeek V4 Pro (完整能力)',
+      };
+      return labels[m.name] || `${m.name} (${m.provider})`;
+    }
+    const messagesRef = ref(null);
+    const layoutRef = ref(null);
+    const editorContainer = ref(null);
+    const terminalArea = ref(null);
+    let _editor = null;
+    let _agentLock = false;
+
+    // ── 终端状态（原生 WebSocket） ──
+    const terminalXterm = ref(null);
+    const termHeight = ref(200);
+    const termCollapsed = ref(false);
+    const termStatus = ref('disconnected');
+    const termTheme = ref('cyber');                 // 'cyber' | 'plain'
+    const iconVersion = ref(0);
+    function getLucideIcon(name) {
+      // 尝试多种方式查找图标
+      if (typeof lucide === 'undefined') return null;
+      // 1. lucide.icons[name]
+      if (lucide.icons && lucide.icons[name]) return lucide.icons[name];
+      // 2. lucide[name] (直接属性)
+      if (lucide[name]) return lucide[name];
+      // 3. 转换为 PascalCase 再试 (kebab-case to PascalCase, 支持数字如 trash-2→Trash2)
+      const pascalName = name.replace(/-./g, m => m[1].toUpperCase()).replace(/^[a-z]/, c => c.toUpperCase());
+      if (lucide[pascalName]) return lucide[pascalName];
+      // 4. 在 lucide.icons 中查找 PascalCase
+      if (lucide.icons && lucide.icons[pascalName]) return lucide.icons[pascalName];
+      // 5. 全小写 (已经是小写)
+      // 6. 全大写 (可能用于某些图标)
+      const upperName = name.toUpperCase();
+      if (lucide[upperName]) return lucide[upperName];
+      if (lucide.icons && lucide.icons[upperName]) return lucide.icons[upperName];
+      return null;
+    }
+    // 终端标签页状态
+    const termTabs = ref([]);                      // 终端标签页数组
+    const activeTermTabId = ref(null);             // 当前活动标签页ID
+    const showTermDropdown = ref(false);            // 新建终端下拉菜单
+    const selectedTermType = ref('ps');             // 'ps'|'bash'|'zsh'|'wsl'
+    const availableShells = ref({});                // { ps:true, bash:false, ... }
+    const vResizing = ref(false);
+    // 初始化默认标签页
+    setTimeout(() => {
+      if (termTabs.value.length === 0) {
+        const defaultTabId = 'term-default';
+        termTabs.value.push({
+          id: defaultTabId,
+          title: 'PowerShell',
+          shellType: 'ps',
+          status: 'connecting',
+          createdAt: new Date().toISOString()
+        });
+        activeTermTabId.value = defaultTabId;
+        // 延迟初始化终端，确保DOM已挂载
+        setTimeout(() => initTerminal(), 100);
+      }
+    }, 100);
+    // 查询可用终端类型
+    fetch('/api/shells').then(r=>r.json()).then(list => {
+      const obj = {};
+      list.forEach(s => obj[s.key] = s.available);
+      availableShells.value = obj;
+    }).catch(() => {});
+
+    let _fileOpsDebounce = 0;   // 文件树刷新防抖计时器
+    let _pendingOpenFile = '';  // write_file 完成后待打开的新文件路径
+    // 每个终端标签独立存储
+const _termContainers = {};        // { tabId: HTMLElement }
+const _termInstances = {};         // { tabId: { xterm, xtermFit, ptyWs, ptyTermId } }
+    // PTY WebSocket 走同端口（由 waitress + simple-websocket 处理）
+    let _vResizeStartY = 0;
+    let _vResizeStartH = 200;
+
+    // ── 面板拖拽 ──
+    const leftWidth = ref(260);
+    const rightWidth = ref(360);
+    const resizing = ref(null);
+    let _resizeStartX = 0;
+    let _resizeStartLeft = 260;
+    let _resizeStartRight = 360;
+
+    function startResize(e, side) {
+      resizing.value = side;
+      _resizeStartX = e.clientX;
+      _resizeStartLeft = leftWidth.value;
+      _resizeStartRight = rightWidth.value;
+      document.addEventListener('mousemove', onResize);
+      document.addEventListener('mouseup', stopResize);
+    }
+
+    function onResize(e) {
+      if (!resizing.value) return;
+      const dx = e.clientX - _resizeStartX;
+      if (resizing.value === 'left') {
+        const w = Math.max(180, Math.min(500, _resizeStartLeft + dx));
+        leftWidth.value = w;
+      } else {
+        const w = Math.max(280, Math.min(600, _resizeStartRight - dx));
+        rightWidth.value = w;
+      }
+    }
+
+    function stopResize() {
+      resizing.value = null;
+      document.removeEventListener('mousemove', onResize);
+      document.removeEventListener('mouseup', stopResize);
+    }
+
+    // ── 垂直拖拽（编辑器/终端分割） ──
+    function startVResize(e) {
+      vResizing.value = true;
+      _vResizeStartY = e.clientY;
+      _vResizeStartH = termHeight.value;
+      document.addEventListener('mousemove', onVResize);
+      document.addEventListener('mouseup', stopVResize);
+    }
+    function onVResize(e) {
+      if (!vResizing.value) return;
+      const dy = _vResizeStartY - e.clientY;
+      const h = Math.max(60, Math.min(600, _vResizeStartH + dy));
+      termHeight.value = h;
+    }
+    function stopVResize() {
+      vResizing.value = null;
+      document.removeEventListener('mousemove', onVResize);
+      document.removeEventListener('mouseup', stopVResize);
+      // 用当前活动终端的 FitAddon
+      const tabId = activeTermTabId.value;
+      const inst = tabId ? _termInstances[tabId] : null;
+      if (inst && inst.xtermFit) inst.xtermFit.fit();
+    }
+
+    // ── 语言映射（遵循 Monaco Editor 的 language ID） ──
+    function getMode(ext) {
+      const map = {py:'python',js:'javascript',ts:'typescript',jsx:'javascript',tsx:'typescript',
+                   go:'go',rs:'rust',md:'markdown',json:'json',yaml:'yaml',yml:'yaml',
+                   html:'html',css:'css',vue:'html',sh:'shell',bat:'powershell',
+                   ps1:'powershell',toml:'yaml',xml:'xml',sql:'sql'};
+      return map[ext] || 'plaintext';
+    }
+
+    // 初始化/切换编辑器 — 通过 EditorAdapter 间接调用 Monaco
+    function _initEditor(content, language) {
+      _editor?.destroy();
+      _editor = Object.create(EditorAdapter);
+      _editor.init(editorContainer.value, content, language);
+    }
+
+    // ── 初始化 ──
+    onMounted(async () => {
+      await loadConfig();
+      // 点击外部关闭下拉菜单
+      document.addEventListener('click', () => { showTermDropdown.value = false; });
+      // 调试：检查 Lucide 加载
+      console.log('onMounted: lucide available?', typeof lucide, lucide);
+      if (lucide) {
+        console.log('Lucide keys:', Object.keys(lucide));
+        if (lucide.icons) {
+          console.log('lucide.icons type:', typeof lucide.icons);
+          console.log('Lucide icons loaded, sample:', Object.keys(lucide.icons).slice(0, 5));
+          // 检查具体图标是否存在
+          const testIcons = ['terminal', 'plus', 'check', 'command', 'zap', 'laptop', 'refresh-cw', 'chevron-down', 'palette'];
+          testIcons.forEach(name => {
+            console.log(`Icon ${name}:`, lucide.icons[name] ? 'found' : 'not found');
+          });
+        } else {
+          console.warn('lucide.icons not present, checking direct properties');
+          // 可能图标是直接挂在 lucide 对象上的
+          const testIcons = ['Terminal', 'Plus', 'Check', 'Command', 'Zap', 'Laptop', 'RefreshCw', 'ChevronDown', 'Palette'];
+          testIcons.forEach(name => {
+            console.log(`Icon ${name}:`, lucide[name] ? 'found' : 'not found');
+          });
+        }
+        // 测试 getLucideIcon 函数
+        console.log('Testing getLucideIcon:');
+        const testIconNames = ['terminal', 'plus', 'check', 'command', 'zap', 'laptop', 'refresh-cw', 'chevron-down', 'palette'];
+        testIconNames.forEach(name => {
+          const icon = getLucideIcon(name);
+          console.log(`  ${name}:`, icon ? (typeof icon.toSvg) : 'no icon or no toSvg');
+        });
+        // Lucide 已加载，增加图标版本以刷新缓存
+        iconVersion.value++;
+        console.log('Icon cache version incremented to', iconVersion.value);
+      } else {
+        console.error('Lucide not loaded');
+        // 如果未加载，可以稍后重试，但暂时忽略
+      }
+    });
+
+    async function loadConfig() {
+      try {
+        const res = await fetch('/api/config');
+        const data = await res.json();
+        if (data.status === 'not_initialized') return;
+        setupWorkspace.value = data.workspace || '';
+        models.value = data.models || [];
+        setupModel.value = data.default_model || '';
+        if (data.workspace) {
+          showSetup.value = false;
+          await initAgent(data.workspace, data.default_model, '');
+        }
+      } catch (e) {
+        console.error('load config error:', e);
+      }
+    }
+
+    // ── WebSocket 连接 (/ws/chat) ──
+    let _abortChat = null;  // 用于取消正在进行的 SSE 请求
+
+    function handleEvent(data) {
+      switch (data.type) {
+        case 'thinking':
+          messages.value.push({type:'thinking', content:'🧠 '+data.content});
+          break;
+        case 'tool_call': {
+          const name = data.name;
+          const args = data.args || {};
+          if (name === 'bash') {
+            const cmd = args.command || '';
+            messages.value.push({
+              type: 'command-card',
+              id: 'cmd-' + Date.now() + '-' + Math.random().toString(36).slice(2,6),
+              command: cmd,
+              content: cmd.slice(0,500),
+              terminalStatus: 'pending',
+            });
+          } else {
+            let desc = '';
+            if (name === 'read_file') desc = '📖 '+ (args.path || '');
+            else if (name === 'write_file') { desc = '✏️ 写入 '+ (args.path || ''); _pendingOpenFile = args.path || ''; }
+            else if (name === 'edit_file') desc = '🔧 编辑 '+ (args.path || '');
+            else if (name === 'find_files') desc = '🔍 '+ (args.pattern || '');
+            else if (name === 'grep') desc = '🔎 '+ (args.pattern || '');
+            else desc = `🔧 ${name}`;
+            messages.value.push({type:'tool', content: desc});
+          }
+          break;
+        }
+        case 'terminal_inject': {
+          const injCmd = data.command || '';
+          const injMsgId = data.msgId || '';
+          if (injCmd && injMsgId) {
+            // 找到对应的命令卡片（用原始命令匹配），更新状态，初始化输出区
+            for (let i = messages.value.length - 1; i >= 0; i--) {
+              const m = messages.value[i];
+              if (m.type === 'command-card' && m.command === injCmd && m.terminalStatus === 'pending') {
+                m.terminalStatus = 'injecting';
+                m.msgId = injMsgId;
+                m.outputArea = '';  // SSE 将追加到此字段
+                break;
+              }
+            }
+            // 注入命令到终端（输出由服务端 pty_reader tap + SSE 推送）
+            _injectCommandToActiveTerminal(injCmd, injMsgId);
+          }
+          break;
+        }
+        case 'tool_result': {
+          const result = (data.result || '').slice(0,300);
+          if (result.trim()) {
+            messages.value.push({type:'tool-end', content: result});
+          }
+          // 工具执行后刷新文件树（防抖 500ms）+ 同步打开的标签页
+          const toolName = data.name || '';
+          const toolArgs = data.args || {};
+          const filePath = toolArgs.path || '';
+          if (filePath && openTabs.value.some(t => t.path === filePath)) {
+            // 如果此文件有打开的标签，异步重载内容
+            _refreshFileTab(filePath);
+          }
+          // bash 工具也可能创建/删除/修改文件（rm, mv, touch 等）
+          if (['write_file', 'edit_file', 'bash'].includes(toolName)) {
+            _debounceRefreshTree();
+          }
+          break;
+        }
+        case 'tool_chain_end':
+          statusText.value = `工具链: ${data.tool_count} 个工具 | ${data.tokens?.toLocaleString()} tokens`;
+          break;
+        case 'llm_end':
+          if (data.model) {
+            let cacheInfo = '';
+            if (data.cache_hit_tokens && data.cache_hit_tokens > 0) {
+              cacheInfo = ` | 🗄️ ${data.cache_pct}% cached`;
+            }
+            messages.value.push({
+              type:'info',
+              content:`🤖 ${data.model} | ${(data.tokens || 0).toLocaleString()} tokens${cacheInfo} | $${_formatCostVal(data.cost || 0)}`
+            });
+          }
+          break;
+        case 'response':
+          messages.value.push({type:'agent', content: data.content || '[无回复]'});
+          statusText.value = '就绪';
+          agentRunning.value = false;
+          break;
+        case 'summary':
+          messages.value.push({type:'summary', content: data.content});
+          break;
+        case 'error':
+          messages.value.push({type:'error', content: '❌ ' + data.content});
+          agentRunning.value = false;
+          statusText.value = '出错了';
+          break;
+        case 'done':
+          agentRunning.value = false;
+          statusText.value = '就绪';
+          // Agent 全部完成后保底刷新一次文件树
+          _debounceRefreshTree();
+          break;
+      }
+      scrollMessages();
+    }
+
+    function scrollMessages() {
+      nextTick(() => {
+        const el = messagesRef.value;
+        if (el) el.scrollTop = el.scrollHeight;
+      });
+    }
+
+    // ── 文件树组件注册 ──
+    app.component('tree-node', {
+      props: {
+        node: Object,
+        depth: Number,
+        selectedPath: String,
+      },
+      emits: ['select'],
+      setup(props, { emit }) {
+        const expanded = ref(!props.node.is_dir || props.depth < 1);
+        const isSelected = computed(() => props.node.path === props.selectedPath);
+
+        function toggle() {
+          if (props.node.is_dir) {
+            expanded.value = !expanded.value;
+          } else {
+            emit('select', props.node.path);
+          }
+        }
+
+        return { expanded, isSelected, toggle };
+      },
+      template: `
+        <div>
+          <div class="tree-node" :class="{selected: isSelected}" @click="toggle" :style="{paddingLeft: (depth*16+4)+'px'}">
+            <span class="toggle" v-if="node.is_dir" :class="{expanded: expanded}">
+              {{ expanded ? '▼' : '▶' }}
+            </span>
+            <span class="toggle" v-else style="visibility:hidden">▶</span>
+            <span class="name" :class="{dir: node.is_dir, file: !node.is_dir}">
+              {{ node.is_dir ? '📁 ' : '📄 ' }}{{ node.name }}
+            </span>
+          </div>
+          <div v-if="node.is_dir && expanded" class="tree-children">
+            <template v-if="node.children && node.children.length">
+              <tree-node
+                v-for="child in node.children"
+                :key="child.path"
+                :node="child"
+                :depth="depth + 1"
+                :selected-path="selectedPath"
+                @select="(p) => $emit('select', p)"
+              />
+            </template>
+            <div v-else style="padding:2px 0 2px 20px;color:var(--fg3);font-size:11px">（空）</div>
+          </div>
+        </div>
+      `
+    });
+
+    // ── 方法 ──
+    async function browseWorkspace() {
+      try {
+        const input = document.createElement('input');
+        input.type = 'file';
+        // 使用 nw-dialog 或简单的 path 输入
+        // 在 webview 中可用 <input webkitdirectory>，但浏览器不行
+        // 直接用文件浏览器预览窗口，使用 input
+        const dirInput = document.createElement('input');
+        dirInput.type = 'text';
+        // 浏览器不支持文件夹选择器 API，回退到手动输入
+        setupWorkspace.value = prompt('输入工作区绝对路径:', setupWorkspace.value) || setupWorkspace.value;
+      } catch(e) {}
+    }
+
+    async function setupNext() {
+      setupError.value = '';
+      if (setupStep.value === 1) {
+        if (!setupWorkspace.value.trim()) {
+          setupError.value = '请输入工作区路径';
+          return;
+        }
+        // 验证工作区
+        try {
+          const res = await fetch('/api/config/workspace', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({path: setupWorkspace.value}),
+          });
+          const data = await res.json();
+          if (data.error) { setupError.value = data.error; return; }
+          setupWorkspace.value = data.workspace;
+        } catch(e) {
+          setupError.value = '连接服务器失败';
+          return;
+        }
+        // 加载模型列表
+        await loadModels();
+        setupStep.value = 2;
+      } else if (setupStep.value === 2) {
+        if (!setupModel.value) {
+          setupError.value = '请选择一个模型';
+          return;
+        }
+        const model = models.value.find(m => m.name === setupModel.value);
+        if (model) selectedProvider.value = model.provider;
+        if (model && model.has_key) {
+          // Key 已配置，直接完成
+          await setupFinish();
+        } else {
+          setupStep.value = 3;
+        }
+      }
+    }
+
+    async function loadModels() {
+      try {
+        const res = await fetch('/api/config');
+        const data = await res.json();
+        models.value = data.models || [];
+        if (!setupModel.value && models.value.length > 0) {
+          setupModel.value = models.value[0].name;
+        }
+      } catch(e) {
+        console.error('load models error:', e);
+      }
+    }
+
+    async function setupFinish() {
+      setupError.value = '';
+      setupLoading.value = true;
+      try {
+        // 保存 API Key（如果有）
+        if (setupApiKey.value && selectedProvider.value) {
+          await fetch('/api/config/apikey', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({provider: selectedProvider.value, api_key: setupApiKey.value}),
+          });
+        }
+        // 初始化 Agent
+        const ok = await initAgent(setupWorkspace.value, setupModel.value, setupApiKey.value);
+        if (ok) {
+          showSetup.value = false;
+        } else {
+          setupError.value = '初始化失败，请检查配置';
+        }
+      } catch(e) {
+        setupError.value = '初始化失败: ' + e.message;
+      } finally {
+        setupLoading.value = false;
+      }
+    }
+
+    async function initAgent(workspace, model, apiKey) {
+      _agentLock = true;
+      try {
+        const res = await fetch('/api/init', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({workspace, model, api_key: apiKey}),
+        });
+        const data = await res.json();
+        if (data.error) return false;
+        // 更新模型选择器
+        if (model) currentModel.value = model;
+        // 加载文件树
+        await loadFileTree();
+        // 使用 SSE 发送消息（无需提前连接）
+        // 启动终端
+        setTimeout(() => initTerminal(), 500);
+        statusText.value = '就绪';
+        messages.value.push({type:'info', content:'🚀 FlyPig Agent 已就绪'});
+        return true;
+      } catch(e) {
+        return false;
+      } finally {
+        _agentLock = false;
+      }
+    }
+
+    async function loadFileTree() {
+      try {
+        const res = await fetch('/api/tree');
+        fileTree.value = await res.json();
+      } catch(e) {
+        console.error('load tree error:', e);
+      }
+    }
+
+    // 防抖刷新文件树：工具链中多次 tool_result 只刷新一次
+    function _debounceRefreshTree() {
+      clearTimeout(_fileOpsDebounce);
+      _fileOpsDebounce = setTimeout(async () => {
+        await loadFileTree();
+        // 刷新后关闭已不存在文件的标签
+        const paths = new Set();
+        (function collect(node) {
+          if (!node) return;
+          if (!node.is_dir) paths.add(node.path);
+          if (node.children) node.children.forEach(collect);
+        })(fileTree.value);
+        openTabs.value = openTabs.value.filter(t => paths.has(t.path));
+        // 调整 activeTabIndex 防止越界
+        if (activeTabIndex.value >= openTabs.value.length) {
+          activeTabIndex.value = openTabs.value.length - 1;
+        }
+        // 自动打开新写入的文件
+        if (_pendingOpenFile) {
+          openFile(_pendingOpenFile);
+          _pendingOpenFile = '';
+        }
+      }, 500);
+    }
+
+    // 异步重载已打开的标签内容
+    async function _refreshFileTab(path) {
+      try {
+        const res = await fetch('/api/file?path=' + encodeURIComponent(path));
+        const data = await res.json();
+        if (data.content != null) {
+          const idx = openTabs.value.findIndex(t => t.path === path);
+          if (idx >= 0) {
+            openTabs.value[idx].content = data.content;
+            if (idx === activeTabIndex.value) {
+              switchTab(idx);  // 刷新编辑器内容
+            }
+          }
+        }
+      } catch (e) {
+        console.error('refresh file tab error:', e);
+      }
+    }
+
+    async function openFile(path) {
+      // 检查是否已打开
+      const existing = openTabs.value.findIndex(t => t.path === path);
+      if (existing >= 0) {
+        switchTab(existing);
+        return;
+      }
+      try {
+        const res = await fetch('/api/file?path=' + encodeURIComponent(path));
+        const data = await res.json();
+        const name = path.split('/').pop() || path;
+        openTabs.value.push({
+          path: data.path || path,
+          name: name,
+          content: data.content || '// Error: ' + (data.error || ''),
+        });
+        switchTab(openTabs.value.length - 1);
+      } catch(e) {
+        openTabs.value.push({path, name: path.split('/').pop(), content: '// Error: ' + e.message});
+        switchTab(openTabs.value.length - 1);
+      }
+    }
+
+    function switchTab(index) {
+      if (index < 0 || index >= openTabs.value.length) return;
+      activeTabIndex.value = index;
+      const tab = openTabs.value[index];
+      const ext = tab.name.split('.').pop();
+      _initEditor(tab.content, getMode(ext));
+    }
+
+    // ── 图标系统 ──
+    const _svgCache = {}
+    // 将 hyperscript 数组渲染为 SVG 字符串
+    function renderHyperscript(h, size) {
+      if (!Array.isArray(h) || h[0] !== 'svg') {
+        console.log('renderHyperscript: invalid hyperscript', h);
+        return null;
+      }
+      const [tag, attrs, children] = h;
+      // 合并尺寸属性，确保 stroke-width 被设置
+      const mergedAttrs = { ...attrs, width: size, height: size };
+      if (!mergedAttrs['stroke-width']) {
+        mergedAttrs['stroke-width'] = 2;
+      }
+      // 构建属性字符串
+      const attrStr = Object.entries(mergedAttrs)
+        .map(([k, v]) => `${k}="${v}"`)
+        .join(' ');
+      // 递归渲染子元素
+      function renderChildren(children) {
+        if (!children) return '';
+        if (Array.isArray(children)) {
+          return children.map(child => {
+            if (typeof child === 'string') return child;
+            if (Array.isArray(child)) {
+              const [childTag, childAttrs, childChildren] = child;
+              const childAttrStr = Object.entries(childAttrs || {})
+                .map(([k, v]) => `${k}="${v}"`)
+                .join(' ');
+              return `<${childTag} ${childAttrStr}>${renderChildren(childChildren)}</${childTag}>`;
+            }
+            // 可能 child 是对象或其他类型
+            console.log('renderChildren: unexpected child type', typeof child, child);
+            return '';
+          }).join('');
+        }
+        // children 可能是单个元素（非数组）
+        if (typeof children === 'string') return children;
+        if (Array.isArray(children) && children.length === 1 && Array.isArray(children[0])) {
+          // 嵌套数组：[[tag, attrs, children]]
+          return renderChildren(children[0]);
+        }
+        console.log('renderChildren: unexpected children type', typeof children, children);
+        return '';
+      }
+      const result = `<${tag} ${attrStr}>${renderChildren(children)}</${tag}>`;
+      console.log('renderHyperscript result:', result.substring(0, 120));
+      return result;
+    }
+    function svgIcon(name, size) {
+      if (size === undefined) size = 16;
+      const key = name + '_' + size + '_' + iconVersion.value;
+      if (!_svgCache[key]) {
+        try {
+          console.log('svgIcon:', name, 'lucide available?', typeof lucide);
+          const icon = getLucideIcon(name);
+          if (icon && typeof icon.toSvg === 'function') {
+            // 标准 toSvg 方法
+            const svg = icon.toSvg({ width: size, height: size, 'stroke-width': 2 });
+            console.log('svgIcon: generated SVG for', name, svg.substring(0, 80));
+            _svgCache[key] = svg;
+          } else if (Array.isArray(icon) && icon[0] === 'svg') {
+            // hyperscript 数组格式
+            const svg = renderHyperscript(icon, size);
+            if (svg) {
+              console.log('svgIcon: rendered hyperscript for', name, svg.substring(0, 80));
+              _svgCache[key] = svg;
+            } else {
+              console.warn('svgIcon: failed to render hyperscript:', name, 'icon:', icon);
+              _svgCache[key] = `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="#f38ba8" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2" stroke-dasharray="4 2"/><line x1="6" y1="6" x2="18" y2="18" stroke="#f38ba8"/><line x1="18" y1="6" x2="6" y2="18" stroke="#f38ba8"/></svg>`;
+            }
+          } else {
+            console.warn('svgIcon: lucide not available or icon not found:', name, 'icon:', icon);
+            // 返回一个明显的占位符 SVG，带红色边框以便调试
+            _svgCache[key] = `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="#f38ba8" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="2" stroke-dasharray="4 2"/><line x1="6" y1="6" x2="18" y2="18" stroke="#f38ba8"/><line x1="18" y1="6" x2="6" y2="18" stroke="#f38ba8"/></svg>`;
+          }
+        } catch(e) {
+          console.error('svgIcon error:', e);
+          _svgCache[key] = '<!-- ' + name + ' -->';
+        }
+      }
+      return _svgCache[key];
+    }
+
+    function cycleTermTheme() {
+      termTheme.value = termTheme.value === 'cyber' ? 'plain' : 'cyber';
+    }
+
+    // 注册终端容器 DOM 元素（由 Vue ref 回调调用）
+    function registerTermContainer(tabId, el) {
+      if (el) {
+        _termContainers[tabId] = el;
+      } else {
+        delete _termContainers[tabId];
+      }
+    }
+
+    // 创建新终端标签页
+    function newTerminalTab(shellType = selectedTermType.value) {
+      console.log('newTerminalTab:', shellType);
+      const tabId = 'term-' + Date.now();
+      const tab = {
+        id: tabId,
+        title: shellType === 'ps' ? 'PowerShell' :
+               shellType === 'bash' ? 'Bash' :
+               shellType === 'zsh' ? 'Zsh' :
+               shellType === 'wsl' ? 'WSL' : 'Terminal',
+        shellType,
+        status: 'connecting',
+        createdAt: new Date().toISOString()
+      };
+      // 添加到标签页列表
+      termTabs.value.push(tab);
+      // 设置为活动标签页
+      activeTermTabId.value = tabId;
+      // 延迟初始化终端，等待容器DOM就绪
+      setTimeout(() => initTerminal(tabId), 50);
+      return tabId;
+    }
+
+    // 切换到指定终端标签页
+    function switchTermTab(tabId) {
+      console.log('[DEBUG switchTermTab] target:', tabId, 'current:', activeTermTabId.value);
+      if (activeTermTabId.value === tabId) return;
+      activeTermTabId.value = tabId;
+
+      // 切换容器显示：隐藏所有，只显示目标
+      Object.keys(_termContainers).forEach(id => {
+        const el = _termContainers[id];
+        if (el) el.style.display = (id === tabId) ? 'block' : 'none';
+      });
+
+      // 更新状态显示
+      const tab = termTabs.value.find(t => t.id === tabId);
+      if (tab) {
+        console.log('[DEBUG switchTermTab] tab status:', tab.status);
+        termStatus.value = tab.status;
+      }
+
+      // 如果目标标签还没有 xterm 实例，初始化它
+      const inst = _termInstances[tabId];
+      const wsOk = inst && inst.ptyWs && inst.ptyWs.readyState === WebSocket.OPEN;
+      console.log('[DEBUG switchTermTab] has instance:', !!inst, 'ptyWs state:', inst?.ptyWs?.readyState, 'wsOk:', wsOk);
+      if (!inst) {
+        setTimeout(() => initTerminal(tabId), 50);
+      } else if (!wsOk) {
+        // 实例存在但 WebSocket 已断开 → 重新连接（保留 xterm 实例）
+        console.log('[DEBUG switchTermTab] WebSocket closed, reconnecting...');
+        const tab = termTabs.value.find(t => t.id === tabId);
+        const shellType = tab ? tab.shellType : 'ps';
+        if (tab) tab.status = 'connecting';
+        termStatus.value = 'connecting';
+        const newPtyTermId = 't-' + Date.now();
+        const newWs = _connectPtyWs(tabId, newPtyTermId, shellType, inst.xterm, inst.xtermFit);
+        inst.ptyWs = newWs;
+        inst.ptyTermId = newPtyTermId;
+        if (inst.xtermFit) setTimeout(() => inst.xtermFit.fit(), 50);
+        if (inst.xterm) inst.xterm.focus();
+      } else {
+        if (inst.xtermFit) {
+          setTimeout(() => inst.xtermFit.fit(), 50);
+        }
+        if (inst.xterm) inst.xterm.focus();
+      }
+    }
+
+    // 关闭终端标签页
+    function closeTermTab(tabId) {
+      console.log('closeTermTab:', tabId);
+      const index = termTabs.value.findIndex(t => t.id === tabId);
+      if (index === -1) return;
+
+      // 清理终端实例：先发送 destroy 消息，再关闭连接
+      const inst = _termInstances[tabId];
+      if (inst) {
+        if (inst.ptyWs && inst.ptyWs.readyState === WebSocket.OPEN) {
+          // 发送销毁指令让后端清理 PTY 进程
+          inst.ptyWs.send(JSON.stringify({type: 'destroy'}));
+          inst.ptyWs.close();
+        }
+        if (inst.xterm) { inst.xterm.dispose(); inst.xterm = null; }
+        if (inst.xtermFit) inst.xtermFit = null;
+        delete _termInstances[tabId];
+      }
+      // 清理容器DOM
+      const container = _termContainers[tabId];
+      if (container) {
+        container.innerHTML = '';
+        delete _termContainers[tabId];
+      }
+
+      // 如果关闭的是活动标签页，需要切换到其他标签页
+      if (activeTermTabId.value === tabId) {
+        if (termTabs.value.length > 1) {
+          const newIndex = index === 0 ? 1 : index - 1;
+          switchTermTab(termTabs.value[newIndex].id);
+        } else {
+          activeTermTabId.value = null;
+          termStatus.value = 'disconnected';
+        }
+      }
+
+      // 从数组中移除
+      termTabs.value.splice(index, 1);
+    }
+
+    function toggleTermDropdown(e) {
+      if (e) e.stopPropagation();
+      console.log('toggleTermDropdown, current:', showTermDropdown.value);
+      showTermDropdown.value = !showTermDropdown.value;
+      console.log('toggleTermDropdown, new:', showTermDropdown.value);
+    }
+
+    function selectTermType(type) {
+      console.log('selectTermType:', type, 'available:', availableShells.value[type]);
+      showTermDropdown.value = false;
+      if (availableShells.value[type] === false) {
+        const hints = {bash:'安装 Git Bash (https://git-scm.com)', zsh:'安装 zsh', wsl:'启用 WSL'};
+        const hint = hints[type] || '安装对应终端';
+        const tabId = activeTermTabId.value;
+        const inst = tabId ? _termInstances[tabId] : null;
+        if (inst && inst.xterm && !termCollapsed.value) {
+          inst.xterm.writeln('\r\n\x1b[33m[提示] ' + type + ' 未安装，' + hint + '\u001b[0m');
+          inst.xterm.writeln('\x1b[33m  已自动使用默认 PowerShell\u001b[0m');
+        }
+        if (type !== 'ps') {
+          selectedTermType.value = 'ps';
+          newTerminalTab('ps');
+        }
+        return;
+      }
+      selectedTermType.value = type;
+      newTerminalTab(type);
+    }
+
+    // 侧边栏尺寸变化时通知 xterm 重新适配
+    function notifyTermResize() {
+      const tabId = activeTermTabId.value;
+      const inst = tabId ? _termInstances[tabId] : null;
+      if (inst && inst.xtermFit) setTimeout(() => inst.xtermFit.fit(), 50);
+    }
+
+    // ── 终端（WebSocket ↔ PTY） ──
+    function initTerminal(tabId) {
+      if (termCollapsed.value) return;
+
+      // 如果没传 tabId，使用当前活动标签
+      if (!tabId) tabId = activeTermTabId.value;
+      if (!tabId) return;
+
+      // 如果该标签已有实例，跳过
+      if (_termInstances[tabId]) {
+        console.log('[DEBUG initTerminal] SKIP - tab already has instance:', tabId);
+        return;
+      }
+
+      const container = _termContainers[tabId];
+      if (!container) {
+        console.log('[DEBUG initTerminal] container not found for:', tabId);
+        return;
+      }
+
+      const tab = termTabs.value.find(t => t.id === tabId);
+      const shellType = tab ? tab.shellType : selectedTermType.value;
+      console.log('[DEBUG initTerminal] for tab:', tabId, 'shell:', shellType);
+
+      const ptyTermId = 't-' + Date.now();
+      if (tab) tab.status = 'connecting';
+      termStatus.value = 'connecting';
+
+      const xtermFit = new FitAddon.FitAddon();
+      const xterm = new Terminal({
+        cursorBlink: true,
+        cursorStyle: 'block',
+        fontSize: 13,
+        fontFamily: "'JetBrains Mono','Cascadia Code','Fira Code',Consolas,monospace",
+        theme: {
+          background: '#1e1e2e', foreground: '#cdd6f4', cursor: '#89b4fa',
+          selectionBackground: '#585b70',
+          black:'#45475a', red:'#f38ba8', green:'#a6e3a1',
+          yellow:'#f9e2af', blue:'#89b4fa', magenta:'#b4befe',
+          cyan:'#94e2d5', white:'#cdd6f4',
+          brightBlack:'#585b70', brightRed:'#f38ba8', brightGreen:'#a6e3a1',
+          brightYellow:'#f9e2af', brightBlue:'#89b4fa', brightMagenta:'#b4befe',
+          brightCyan:'#94e2d5', brightWhite:'#cdd6f4',
+        },
+      });
+      xterm.loadAddon(xtermFit);
+      xterm.open(container);
+      container.style.display = 'block';
+      xtermFit.fit();
+      xterm.focus();
+
+      // 创建 WebSocket 连接（带独立变量）
+      const ws = _connectPtyWs(tabId, ptyTermId, shellType, xterm, xtermFit);
+
+      // 用户输入 → WS
+      xterm.onData((data) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(data);
+        } else {
+          // 尝试从实例获取最新的 ws
+          const inst = _termInstances[tabId];
+          if (inst && inst.ptyWs && inst.ptyWs.readyState === WebSocket.OPEN) {
+            inst.ptyWs.send(data);
+          }
+        }
+      });
+
+      // 终端 resize → WS
+      xterm.onResize(({cols, rows}) => {
+        const inst = _termInstances[tabId];
+        if (inst && inst.ptyWs && inst.ptyWs.readyState === WebSocket.OPEN) {
+          inst.ptyWs.send(JSON.stringify({type:'resize', cols, rows}));
+        }
+      });
+
+      // 存储实例
+      _termInstances[tabId] = { xterm, xtermFit, ptyWs: ws, ptyTermId, ptyReconnectCount: 0 };
+    }
+
+    function _connectPtyWs(tabId, ptyTermId, shellType, xterm, xtermFit) {
+      if (!xterm) return null;
+      const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      let url = protocol + '//' + location.host + '/ws/pty/' + ptyTermId;
+      if (shellType) {
+        url += '?shell=' + encodeURIComponent(shellType);
+      }
+      console.log('Connecting to PTY WS:', url);
+      const ws = new WebSocket(url);
+      ws.binaryType = 'arraybuffer';
+
+      ws.onopen = () => {
+        console.log('[DEBUG ws.onopen] tab:', tabId, 'ptyTermId:', ptyTermId);
+        // 每个实例独立的重连计数
+        const inst = _termInstances[tabId];
+        if (inst) inst.ptyReconnectCount = 0;
+        termStatus.value = 'connected';
+        const tab = termTabs.value.find(t => t.id === tabId);
+        if (tab) {
+          tab.status = 'connected';
+          console.log('[DEBUG ws.onopen] tab.status set to connected');
+        }
+        xterm.writeln('\x1b[32m[终端已连接]\x1b[0m');
+        if (setupWorkspace.value) {
+          xterm.writeln('  工作区: \x1b[36m' + setupWorkspace.value + '\x1b[0m');
+        }
+        xterm.write('');
+        if (xtermFit) setTimeout(() => xtermFit.fit(), 50);
+      };
+
+      ws.onmessage = (e) => {
+        if (!xterm) return;
+        if (typeof e.data === 'string') {
+          try {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'error') {
+              xterm.writeln('\r\n\x1b[31m[错误] ' + (msg.msg || '终端启动失败') + '\x1b[0m');
+              termStatus.value = 'error';
+              return;
+            }
+          } catch (_) {
+            // 非 JSON → 普通文本终端数据
+            xterm.write(e.data);
+          }
+        } else if (e.data instanceof ArrayBuffer) {
+          const uint8 = new Uint8Array(e.data);
+          xterm.write(uint8);
+        } else {
+          xterm.write(e.data);
+        }
+      };
+
+      ws.onclose = () => {
+        const inst = _termInstances[tabId];
+        if (inst && inst.ptyWs === ws) inst.ptyWs = null;
+        const reconnectCount = inst ? (inst.ptyReconnectCount || 0) : 0;
+        console.log('[DEBUG ws.onclose] tab:', tabId, 'reconnectCount:', reconnectCount, 'wsOk:', inst ? !!inst.ptyWs : false);
+        if (xterm && reconnectCount < 3 && termStatus.value !== 'error') {
+          if (inst) inst.ptyReconnectCount = reconnectCount + 1;
+          const t = termTabs.value.find(t2 => t2.id === tabId);
+          if (t) t.status = 'connecting';
+          termStatus.value = 'connecting';
+          console.log('[DEBUG ws.onclose] will reconnect in 2s, count:', reconnectCount + 1);
+          setTimeout(() => {
+            const inst2 = _termInstances[tabId];
+            if (!inst2 || !inst2.ptyWs) {
+              console.log('[DEBUG ws.onclose] reconnecting...');
+              const newWs = _connectPtyWs(tabId, ptyTermId, shellType, xterm, xtermFit);
+              if (inst2) inst2.ptyWs = newWs;
+            }
+          }, 2000);
+        } else if (reconnectCount >= 3 && termStatus.value !== 'error') {
+          console.log('[DEBUG ws.onclose] max retries reached');
+          termStatus.value = 'error';
+          const t = termTabs.value.find(t2 => t2.id === tabId);
+          if (t) t.status = 'error';
+          xterm.writeln('\r\n\x1b[31m[终端] 重连失败，请点击 ↺ 重试\x1b[0m');
+        }
+      };
+
+      ws.onerror = () => { ws.close(); };
+      return ws;
+    }
+
+    function resetTerminal() {
+      const tabId = activeTermTabId.value;
+      if (!tabId) { initTerminal(); return; }
+
+      // 清理当前活动标签的终端实例
+      const inst = _termInstances[tabId];
+      if (inst) {
+        if (inst.ptyWs) { inst.ptyWs.close(); inst.ptyWs = null; }
+        if (inst.xterm) { inst.xterm.dispose(); inst.xterm = null; }
+        if (inst.xtermFit) inst.xtermFit = null;
+        delete _termInstances[tabId];
+      }
+      const container = _termContainers[tabId];
+      if (container) container.innerHTML = '';
+      termStatus.value = 'disconnected';
+      const tab = termTabs.value.find(t => t.id === tabId);
+      if (tab) tab.status = 'disconnected';
+      setTimeout(() => initTerminal(tabId), 100);
+    }
+
+    let _savedTermHeight = 200;
+
+    function toggleTerminal() {
+      termCollapsed.value = !termCollapsed.value;
+      if (termCollapsed.value) {
+        _savedTermHeight = termHeight.value;
+        termHeight.value = 34;
+        document.getElementById('terminal-area').classList.add('collapsed');
+      } else {
+        termHeight.value = Math.max(60, _savedTermHeight);
+        document.getElementById('terminal-area').classList.remove('collapsed');
+        setTimeout(() => {
+          const tabId = activeTermTabId.value;
+          const inst = tabId ? _termInstances[tabId] : null;
+          if (!inst || !inst.xterm) {
+            initTerminal(tabId);
+          } else {
+            if (inst.xtermFit) inst.xtermFit.fit();
+            if (inst.xterm) inst.xterm.focus();
+          }
+        }, 50);
+      }
+    }
+
+    function closeTab(index) {
+      if (index < 0 || index >= openTabs.value.length) return;
+      openTabs.value.splice(index, 1);
+      if (openTabs.value.length === 0) {
+        activeTabIndex.value = -1;
+        if (_editor) { _editor.destroy(); _editor = null; }
+      } else if (index <= activeTabIndex.value) {
+        switchTab(Math.max(0, activeTabIndex.value - 1));
+      }
+    }
+
+    async function sendMessage() {
+      const text = userInput.value.trim();
+      if (!text || agentRunning.value) return;
+      userInput.value = '';
+      messages.value.push({type:'user', content: text});
+      scrollMessages();
+      agentRunning.value = true;
+      statusText.value = 'AI 思考中...';
+      statusClass.value = 'running';
+
+      try {
+        // 通过 SSE 发送消息并流式接收事件
+        const res = await fetch('/api/chat', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({message: text}),
+        });
+        if (!res.ok) {
+          messages.value.push({type:'error', content:'❌ ' + (await res.text())});
+          agentRunning.value = false;
+          statusText.value = '出错了';
+          return;
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        while (true) {
+          const {done, value} = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, {stream: true});
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                handleEvent(data);
+              } catch (e) {
+                console.error('[SSE] parse error:', e);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        messages.value.push({type:'error', content:'❌ ' + e.message});
+        agentRunning.value = false;
+        statusText.value = '出错了';
+      }
+    }
+
+    function renderMarkdown(text) {
+      if (!text) return '';
+      try {
+        return marked.parse(text, {breaks: true});
+      } catch(e) {
+        return text;
+      }
+    }
+
+    function handleKeydown(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    }
+
+    // 小金额格式化：>=0.01 → 4位小数，>=0.0001 → 6位，再小 → 科学计数法
+    function _formatCostVal(cost) {
+      if (cost >= 0.01) return cost.toFixed(4);
+      if (cost >= 0.0001) return cost.toFixed(6);
+      if (cost > 0) return cost.toExponential(2).replace('e', '×10^');
+      return '0.00';
+    }
+
+    function formatCost(cost, tokens) {
+      if (cost == null) return '';
+      return `💵 $${_formatCostVal(cost)} | ${(tokens || 0).toLocaleString()} tokens`;
+    }
+
+    // ── 将命令注入活动终端（供用户观看实时输出）──
+    function _injectCommandToActiveTerminal(cmd, msgId) {
+      if (termCollapsed.value) {
+        toggleTerminal();
+      }
+      const tabId = activeTermTabId.value;
+      if (!tabId) {
+        const newId = newTerminalTab(selectedTermType.value);
+        _waitAndInject(newId, cmd, msgId);
+        return;
+      }
+      const inst = _termInstances[tabId];
+      if (inst && inst.ptyWs && inst.ptyWs.readyState === WebSocket.OPEN) {
+        _doInject(tabId, cmd, msgId);
+      } else {
+        _waitAndInject(tabId, cmd, msgId);
+      }
+    }
+
+    function _waitAndInject(tabId, cmd, msgId) {
+      let attempts = 0;
+      const timer = setInterval(() => {
+        attempts++;
+        const inst = _termInstances[tabId];
+        if (inst && inst.ptyWs && inst.ptyWs.readyState === WebSocket.OPEN) {
+          clearInterval(timer);
+          _doInject(tabId, cmd, msgId);
+        } else if (attempts > 30) {
+          clearInterval(timer);
+          const m = messages.value.find(m2 => m2.id === msgId);
+          if (m) m.terminalStatus = 'error';
+        }
+      }, 200);
+    }
+
+    function _doInject(tabId, cmd, msgId) {
+      const inst = _termInstances[tabId];
+      if (!inst) return;
+      if (inst.xterm) {
+        inst.xterm.writeln('');
+        inst.xterm.writeln('\x1b[36m━━━ AI 执行命令 ━━━\x1b[0m');
+        inst.xterm.writeln('\x1b[33m$ ' + cmd + '\x1b[0m');
+      }
+      // 逐字符发送命令（模拟用户输入）+ \r 结尾（Enter）
+      if (inst.ptyWs && inst.ptyWs.readyState === WebSocket.OPEN) {
+        for (const ch of cmd) inst.ptyWs.send(ch);
+        inst.ptyWs.send('\r');
+        const m = messages.value.find(m2 => m2.id === msgId);
+        if (m && m.terminalStatus === 'injecting') m.terminalStatus = 'injected';
+        // 告知后端此命令注入到哪个 PTY 终端（用于服务端输出 tap）
+        fetch('/api/terminal/inject-bind/' + msgId, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({pty_term_id: inst.ptyTermId}),
+        }).catch(e => console.error('[TERM] inject-bind failed:', e));
+      }
+    }
+
+    // ── 独立 SSE 连接：接收终端实时输出 /api/terminal-events ──
+    function _connectTerminalEvents() {
+      const es = new EventSource('/api/terminal-events');
+      es.addEventListener('terminal_output', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          const msgId = data.msgId;
+          const chunk = data.chunk;
+          if (!msgId || !chunk) return;
+          // 找到对应的命令卡片，追加输出
+          for (let i = messages.value.length - 1; i >= 0; i--) {
+            const m = messages.value[i];
+            if (m.type === 'command-card' && m.msgId === msgId) {
+              m.outputArea = (m.outputArea || '') + chunk;
+              break;
+            }
+          }
+        } catch (err) {
+          console.error('[TERM-SSE] parse error:', err);
+        }
+      });
+      es.onerror = () => {
+        // EventSource 会自动重连
+        console.warn('[TERM-SSE] 连接异常，等待重连...');
+      };
+      console.log('[TERM-SSE] 已连接到 /api/terminal-events');
+    }
+    // 页面加载完成后连接
+    _connectTerminalEvents();
+
+    // ── 用户点击「推送终端结果」──
+    async function handlePushResult(msgId) {
+      try {
+        const res = await fetch('/api/terminal/output/' + msgId);
+        const data = await res.json();
+        if (data.error) {
+          messages.value.push({type:'error', content:'❌ 获取终端输出失败: ' + data.error});
+          return;
+        }
+        // 构建消息发给 AI 分析（截断过长输出）
+        let output = data.output;
+        const truncated = data.truncated;
+        if (output.length > 20000) {
+          output = output.slice(0, 20000) + '\n... [输出过长，已截断]';
+        }
+        const prompt = '请分析以下终端输出的结果：\n\n```\n' + output + '\n```';
+        if (truncated) {
+          const hint = '\n\n> ⚠️ 终端输出因过长已被截断（超过 10MB）';
+          userInput.value = prompt + hint;
+        } else {
+          userInput.value = prompt;
+        }
+        await sendMessage();
+      } catch(e) {
+        messages.value.push({type:'error', content:'❌ ' + e.message});
+      }
+    }
+
+    // ── 聚焦终端面板 ──
+    function focusTerminal() {
+      if (termCollapsed.value) toggleTerminal();
+      const tabId = activeTermTabId.value;
+      if (tabId) {
+        const inst = _termInstances[tabId];
+        if (!inst || !inst.xterm) initTerminal(tabId);
+        else inst.xterm.focus();
+      }
+      setTimeout(() => {
+        const el = document.getElementById('terminal-area');
+        if (el) el.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+      }, 100);
+    }
+
+    // 复制命令到剪贴板
+    async function copyCommand(cmd) {
+      try {
+        await navigator.clipboard.writeText(cmd);
+        console.log('[CMD] 已复制到剪贴板:', cmd.slice(0,50));
+      } catch(e) {
+        // fallback
+        const ta = document.createElement('textarea');
+        ta.value = cmd;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+    }
+
+    // 在新终端中执行命令
+    function runInNewTerminal(cmd) {
+      const tabId = newTerminalTab(selectedTermType.value);
+      let attempts = 0;
+      const checkReady = setInterval(() => {
+        attempts++;
+        const inst = _termInstances[tabId];
+        if (inst && inst.ptyWs && inst.ptyWs.readyState === WebSocket.OPEN) {
+          clearInterval(checkReady);
+          // 等 PTY/PowerShell 启动完成后再发送命令（~2秒）
+          const delay = Math.max(2000 - attempts * 200, 500);
+          setTimeout(() => {
+            const inst2 = _termInstances[tabId];
+            if (inst2 && inst2.ptyWs && inst2.ptyWs.readyState === WebSocket.OPEN) {
+              console.log('[CMD] 在新终端中执行:', cmd.slice(0,80));
+              // 先通过 xterm 显示命令（让用户看到），再通过 WS 发送到后端
+              if (inst2.xterm) inst2.xterm.write(cmd + '\r\n');
+              setTimeout(() => {
+                const inst3 = _termInstances[tabId];
+                if (inst3 && inst3.ptyWs && inst3.ptyWs.readyState === WebSocket.OPEN) {
+                  inst3.ptyWs.send(cmd + '\n');
+                }
+              }, 300);
+            }
+          }, delay);
+        } else if (attempts > 30) {
+          clearInterval(checkReady); // 6秒超时
+        }
+      }, 200);
+    }
+
+    // 重试命令：重新发送给 AI 执行
+    async function retryCommand(cmd) {
+      if (agentRunning.value) return;
+      // 直接把命令作为用户消息发送
+      userInput.value = cmd;
+      await sendMessage();
+    }
+
+    async function resetChat() {
+      if (agentRunning.value) return;
+      await fetch('/api/agent/command', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({command: 'reset'}),
+      });
+      messages.value = [];
+      messages.value.push({type:'info', content:'对话已重置'});
+      costStr.value = '';
+    }
+
+    async function showCost() {
+      if (agentRunning.value) return;
+      const res = await fetch('/api/agent/command', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({command: 'cost'}),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        messages.value.push({type:'info', content: data.response});
+      }
+    }
+
+    watch(userInput, (val) => {
+      const ta = document.getElementById('chat-input');
+      if (ta) {
+        ta.style.height = 'auto';
+        ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+      }
+    });
+
+    // ── 模型切换 ──
+    async function onModelChange() {
+      const model = models.value.find(m => m.name === currentModel.value);
+      if (!model) return;
+      if (model.has_key) {
+        await switchToModel(model.name, '');
+      } else {
+        pendingModelProvider.value = model.provider;
+        pendingApiKey.value = '';
+        showApiKeyModal.value = true;
+      }
+    }
+
+    async function saveApiKey() {
+      const key = pendingApiKey.value.trim();
+      if (!key) return;
+      // 保存 Key
+      await fetch('/api/config/apikey', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({provider: pendingModelProvider.value, api_key: key}),
+      });
+      showApiKeyModal.value = false;
+      await switchToModel(currentModel.value, key);
+    }
+
+    async function switchToModel(modelName, apiKey) {
+      const res = await fetch('/api/init', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          workspace: setupWorkspace.value,
+          model: modelName,
+          api_key: apiKey,
+        }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        await loadFileTree();
+        setTimeout(() => initTerminal(), 500);
+        statusText.value = '就绪';
+        messages.value.push({type:'info', content:`✅ 后端已切换：${modelName}`});
+      } else {
+        messages.value.push({type:'error', content:'❌ 切换失败: ' + (data.error || '未知错误')});
+      }
+    }
+
+    return {
+      showSetup, setupStep, setupWorkspace, setupModel, setupApiKey,
+      setupError, setupLoading, models, selectedProvider,
+      fileTree, openTabs, activeTabIndex,
+      messages, userInput, agentRunning, statusText, statusClass, costStr,
+      messagesRef, layoutRef, editorContainer,
+      leftWidth, rightWidth, resizing, vResizing, startResize, startVResize,
+      termHeight, termCollapsed, termStatus, termStatusText, termTheme,
+      showTermDropdown, selectedTermType,
+      termTabs, activeTermTabId, availableShells,
+      browseWorkspace, setupNext, setupFinish, openFile, switchTab, closeTab,
+      sendMessage, handleKeydown, resetChat, showCost, renderMarkdown,
+      initTerminal, resetTerminal, toggleTerminal,
+      svgIcon, cycleTermTheme, toggleTermDropdown, selectTermType,
+      switchTermTab, closeTermTab, newTerminalTab, notifyTermResize,
+      registerTermContainer, copyCommand, runInNewTerminal, retryCommand, focusTerminal, handlePushResult,
+      currentModel, currentModelHasKey, showApiKeyModal, pendingApiKey, pendingModelProvider,
+      onModelChange, saveApiKey, formatModelName,
+    };
+  }
+});
+
+app.mount('#app');
+
+// 终端标签栏拖拽调整宽度
+setTimeout(() => {
+  const handle = document.querySelector('.resize-handle');
+  const sidebar = document.getElementById('term-tab-bar');
+  if (!handle || !sidebar) return;
+  let isResizing = false, startX, startWidth;
+  handle.addEventListener('mousedown', (e) => {
+    isResizing = true;
+    startX = e.clientX;
+    startWidth = sidebar.offsetWidth;
+    handle.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', (e) => {
+    if (!isResizing) return;
+    const nw = Math.max(36, Math.min(200, startWidth + startX - e.clientX));
+    sidebar.style.width = nw + 'px';
+    sidebar.classList.toggle('icon-mode', nw < 50);
+  });
+  document.addEventListener('mouseup', () => {
+    if (isResizing) {
+      isResizing = false;
+      handle.classList.remove('active');
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    }
+  });
+}, 500);
+</script>
+</body>
+</html>

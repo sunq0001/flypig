@@ -16,7 +16,7 @@ ResourceBar：左侧资源栏容器
       <button v-if="activeView === 'file'" class="btn-workspace" title="切换工作区" @click="$emit('switchWorkspace')">📁</button>
     </div>
     <div class="bar-body">
-      <FileTreeBar v-if="activeView === 'file'" @switch-workspace="$emit('switchWorkspace')" @open-file="p => $emit('openFile', p)" />
+      <FileTreeBar v-if="activeView === 'file'" />
       <McpBar v-if="activeView === 'mcp'" />
       <StatsBar v-if="activeView === 'stats'" />
     </div>
@@ -32,7 +32,7 @@ import FileTreeBar from '../resource/FileTreeBar.vue'
 import McpBar from '../resource/McpBar.vue'
 import StatsBar from '../resource/StatsBar.vue'
 const props = defineProps({ activeView: { type: String, default: 'file' } })
-defineEmits(['switchWorkspace', 'openFile'])
+defineEmits(['switchWorkspace'])
 const activeLabel = computed(() => ({ file:'文件资源管理器', mcp:'能力', stats:'统计' }[props.activeView] || '文件资源管理器'))
 </script>
 <style scoped>

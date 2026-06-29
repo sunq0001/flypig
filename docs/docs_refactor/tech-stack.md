@@ -14,7 +14,7 @@
 | | 终端模拟 | **xterm.js** | 市面方案 | 成熟终端模拟器 |
 | | 图标 | **Lucide** | 市面方案 | 轻量开源图标库 |
 | | 构建工具 | **Vite** | 市面方案 | 极速 HMR，原生 ESM |
-| | UI 组件库 | **Element Plus** | 市面方案 | 含 Tree 树形控件，直接用于文件树 |
+| | UI 组件库 | **Element Plus** | 市面方案 | 卡片、对话框、选择题、按钮全有 |
 | | 图表渲染 | **Mermaid.js** + **ECharts** | 市面方案 | Mermaid 用于流程图/时序图（文本即图表），ECharts 用于数据可视化柱状图/折线图/饼图 |
 | | Markdown 扩展 | **marked + highlight.js** | 市面方案 | 扩展 code block 渲染器 |
 | **后端** | Web 框架 | **Quart** | 市面方案 | ASGI，原生 WebSocket/SSE |

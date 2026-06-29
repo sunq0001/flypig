@@ -42,10 +42,20 @@ flypig/frontend/static_vite/_test_docgen.cjs
 # Project meta
 .codebuddy/
 
-# Stray
+# Runtime auto-generated data
+flypig/data/pricing_cache.json
+
 Vue
 test_output.html
 ruff_output.txt
+
+# Debug screenshots (root level only)
+/*.png
+
+# Test scripts
+_find_usechat.py
+_test_pricing.py
+api-test.json
 
 # Playwright MCP artifacts
 .playwright-cli/

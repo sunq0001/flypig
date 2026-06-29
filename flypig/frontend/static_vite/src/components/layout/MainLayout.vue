@@ -18,7 +18,7 @@ panels 数组驱动，SortableJS 重排后 handle 自动适配。
               <InteractBar v-else-if="p.id === 'interact'" :model="defaultModel" />
             </div>
           </div>
-          <ResizeHandleLR v-if="i < panels.length - 1" :panels="panels" :idx="i" />
+          <ResizeHandleLR v-if="i < panels.length - 1" @resize="d => onResize(i, d)" />
         </template>
       </div>
     </div>
@@ -67,6 +67,27 @@ const panels = reactive([
 function panelStyle(p) {
   if (p.id === 'viewer' && p.w <= 0) return { flex: '1', minWidth: 80 }
   return { width: Math.max(80, p.w) + 'px', flexShrink: 0 }
+}
+
+let dragStarts = []
+function onResize(idx, delta) {
+  if (delta === 0) { dragStarts = []; return }
+  if (dragStarts.length === 0) {
+    const el = bodyRef.value
+    const divs = el?.querySelectorAll('.panel') || []
+    dragStarts = panels.map((p, i) => {
+      if (p.w > 0) return p.w
+      const w = divs[i]?.getBoundingClientRect().width || 200
+      return Math.round(w)
+    })
+  }
+  const left = panels[idx]
+  const right = panels[idx + 1]
+  if (!left || !right) return
+  left.w = Math.max(80, dragStarts[idx] + delta)
+  right.w = Math.max(80, dragStarts[idx + 1] - delta)
+  if (left.w > 0 && left.w <= 80) left.w = 80
+  if (right.w > 0 && right.w <= 80) right.w = 80
 }
 
 onMounted(() => {

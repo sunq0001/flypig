@@ -80,7 +80,6 @@ watch(() => configStore.default_model, (val) => {
 const { messages, status, sendMessage } = useChat({
   api: '/api/chat',
   transport: new TextStreamChatTransport(),
-  experimental_throttle: 30,
   onError: (e) => console.error('Chat error:', e),
 })
 

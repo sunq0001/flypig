@@ -1,7 +1,0 @@
-/* base：全局样式重置 + 布局基础
-   为什么做：不同浏览器默认样式不同，需要统一 reset。三栏布局需要基础 flex/grid 设置。
-   实现方法：CSS reset（box-sizing/margin/padding）+ 全局字体/背景 + 滚动条风格。
-   实现效果：所有浏览器下界面一致，布局正确。
-   技术栈：CSS reset, 布局基础
-   层&依赖：frontend.style
-   细节见文档：docs/docs_refactor/chat-ux.md → §情感设计 */

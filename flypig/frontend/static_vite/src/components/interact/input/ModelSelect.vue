@@ -55,26 +55,6 @@ emits: update:modelValue
       </el-tooltip>
     </el-option>
   </el-select>
-
-  <!-- 本地模型引导 -->
-  <div v-if="showLocalGuide" class="local-guide">
-    <div class="lg-title">💻 本地模型</div>
-    <div v-if="localStatus.installed?.length" class="lg-hint">
-      已安装 {{ localStatus.installed.length }} 个模型，体验 AI 对话
-    </div>
-    <template v-else-if="localStatus.running">
-      <div class="lg-hint">Ollama 已运行，但未安装任何模型</div>
-      <div v-for="s in localStatus.suggestions" :key="s.name" class="lg-item">
-        <span class="lg-name">{{ s.name }}</span>
-        <span class="lg-size">{{ s.size }}</span>
-        <span class="lg-desc">{{ s.description }}</span>
-        <el-button size="small" @click="pullModel(s.name)" :loading="pullingName === s.name">下载</el-button>
-      </div>
-    </template>
-    <div v-else class="lg-hint">
-      Ollama 未运行，<a href="https://ollama.com/download" target="_blank">下载 Ollama</a>
-    </div>
-  </div>
 </template>
 
 <script setup>
@@ -89,48 +69,15 @@ defineEmits(['update:modelValue'])
 
 const priceMap = ref({})
 const priceUpdated = ref('')
-const localStatus = ref({ running: false, installed: [], suggestions: [] })
-const pullingName = ref('')
-
-const showLocalGuide = computed(() => {
-  return localStatus.value.running || localStatus.value.installed?.length > 0
-})
 
 onMounted(async () => {
   try {
-    const [priceRes, localRes] = await Promise.all([
-      fetch('/api/pricing'),
-      fetch('/api/config/local-models'),
-    ])
-    const priceData = await priceRes.json()
-    priceMap.value = priceData.prices || {}
-    priceUpdated.value = priceData.updated || ''
-    localStatus.value = await localRes.json()
-  } catch { /* 获取失败不影响核心功能 */ }
+    const res = await fetch('/api/pricing')
+    const data = await res.json()
+    priceMap.value = data.prices || {}
+    priceUpdated.value = data.updated || ''
+  } catch { /* 定价获取失败不影响功能 */ }
 })
-
-async function pullModel(name) {
-  pullingName.value = name
-  try {
-    await fetch('/api/config/local-models/pull', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: name }),
-    })
-    // 轮询等待模型下载完成
-    const poll = setInterval(async () => {
-      const res = await fetch('/api/config/local-models')
-      const data = await res.json()
-      if (data.installed?.includes(name)) {
-        localStatus.value = data
-        pullingName.value = ''
-        clearInterval(poll)
-      }
-    }, 5000)
-  } catch {
-    pullingName.value = ''
-  }
-}
 
 const iconMap = {
   DeepSeek: 'simple-icons:deepseek',
@@ -213,21 +160,6 @@ const selectedColor = computed(() => selectedInfo.value.color)
   display: inline-flex;
   margin-right: 2px;
 }
-.local-guide {
-  padding: 8px 12px;
-  border-top: 1px solid #333;
-  margin-top: 4px;
-}
-.lg-title { font-size: 12px; color: #888; margin-bottom: 4px; }
-.lg-hint { font-size: 11px; color: #666; margin-bottom: 6px; }
-.lg-hint a { color: #409eff; text-decoration: none; }
-.lg-item {
-  display: flex; align-items: center; gap: 6px;
-  padding: 4px 0; font-size: 11px;
-}
-.lg-name { color: #ccc; white-space: nowrap; }
-.lg-size { color: #888; }
-.lg-desc { flex: 1; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>
 
 <style>

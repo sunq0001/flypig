@@ -1,0 +1,4 @@
+packages:
+  - 'flypig/interface/web/static_vite'
+  - 'flypig/interface/chat-server'
+  - 'flypig/interface/desktop'

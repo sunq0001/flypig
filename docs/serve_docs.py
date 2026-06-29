@@ -76,19 +76,18 @@ SIDEBAR_ITEMS = [
         ("迁移路线图", "migration-roadmap"),
     ]),
     ("代码生成", [
-        ("Vue 前端文档", "api-docs-vue/index.md"),
+        ("Vue 组件文档", "api-docs-vue/components.md"),
         ("pdoc (Python 后端)", "/api-docs/"),
     ]),
 ]
 
 def render_markdown(text):
-    """极简 markdown 转 HTML（含表格支持）"""
+    """极简 markdown 转 HTML"""
     lines = text.split('\n')
     html = []
     i = 0
     while i < len(lines):
         line = lines[i]
-        # 代码块
         if line.startswith('```'):
             lang = line[3:].strip()
             code_lines = []
@@ -99,21 +98,6 @@ def render_markdown(text):
             html.append(f'<pre><code>{"<br>".join(code_lines)}</code></pre>')
             i += 1
             continue
-        # 表格：检测以 | 开头且下一行是 |--- 分隔符
-        if line.strip().startswith('|') and i + 1 < len(lines) and re.match(r'^\|[\s\-:|]+\|$', lines[i + 1].strip()):
-            table_rows = []
-            # header
-            cells = [c.strip() for c in line.strip().split('|') if c.strip()]
-            table_rows.append(f'<tr><th>{"</th><th>".join(escape_html(c) for c in cells)}</th></tr>')
-            i += 2  # skip separator line
-            # data rows
-            while i < len(lines) and lines[i].strip().startswith('|'):
-                cells = [c.strip() for c in lines[i].strip().split('|') if c.strip()]
-                table_rows.append(f'<tr><td>{"</td><td>".join(escape_html(c) for c in cells)}</td></tr>')
-                i += 1
-            html.append(f'<table>{"".join(table_rows)}</table>')
-            continue
-        # 其他行
         if line.startswith('###### '): html.append(f'<h6>{line[7:]}</h6>')
         elif line.startswith('##### '): html.append(f'<h5>{line[6:]}</h5>')
         elif line.startswith('#### '): html.append(f'<h4>{line[5:]}</h4>')
@@ -126,14 +110,9 @@ def render_markdown(text):
         else:
             content = re.sub(r'`([^`]+)`', r'<code>\1</code>', line)
             content = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', content)
-            content = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2">\1</a>', content)
-            content = re.sub(r'^- (.+)', r'<li>\1</li>', content)
             html.append(f'<p>{content}</p>')
         i += 1
     return '\n'.join(html)
-
-def escape_html(text):
-    return text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 def make_sidebar(current=None):
     items = []
