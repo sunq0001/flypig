@@ -9,7 +9,7 @@ InputBox：输入框父容器
     <div class="input-container">
       <textarea
         v-model="text"
-        rows="3"
+        rows="1"
         placeholder="输入消息...（拖拽文件、粘贴图片）"
         :disabled="disabled"
         class="native-textarea"
@@ -79,7 +79,8 @@ function handleSend() {
   font-size: 13px;
   line-height: 1.5;
   padding: 10px 12px 4px;
-  min-height: 60px;
+  min-height: 40px;
+  max-height: 120px;
   resize: vertical;
   outline: none;
 }

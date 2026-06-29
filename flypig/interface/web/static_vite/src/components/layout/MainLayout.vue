@@ -1,13 +1,16 @@
 <!--
-MainLayout：三栏布局容器
+MainLayout：三栏布局 — TDesign Layout 组件
 
-职责：只编排布局，不做具体业务逻辑。
-panels 数组驱动，SortableJS 重排后 handle 自动适配。
+三栏：左(SideBar) + 中(Viewer + Resource) + 右(Chat/Term)
+内层 panels 支持拖拽调宽（ResizeHandleLR）和拖拽排序（SortableJS）。
 -->
 <template>
-  <div class="main-layout">
-    <div class="layout-row">
-      <SideBar :activeView="activeView" @switch="onSwitch" />
+  <t-layout style="height:100vh">
+    <!-- 主行：SideBar + panels + 底栏 -->
+    <t-layout style="flex:1;min-height:0;overflow:hidden">
+      <t-aside width="48px" style="display:flex;flex-direction:column;background:#2c2c2c;overflow:hidden">
+        <SideBar :activeView="activeView" @switch="onSwitch" />
+      </t-aside>
       <div ref="bodyRef" class="layout-body">
         <template v-for="(p, i) in panels" :key="p.id">
           <div class="panel" :style="panelStyle(p)" :data-panel-id="p.id">
@@ -21,13 +24,16 @@ panels 数组驱动，SortableJS 重排后 handle 自动适配。
           <ResizeHandleLR v-if="i < panels.length - 1" :panels="panels" :idx="i" />
         </template>
       </div>
-    </div>
-    <StatusBar :workspace="workspace" />
+    </t-layout>
 
-    <t-dialog v-model="showWorkspacePicker" title="切换工作区" width="500px" :close-on-overlay-click="false">
-      <WorkspaceStep @selected="onWorkspaceChanged" />
-    </t-dialog>
-  </div>
+    <t-footer height="24px" style="padding:0!important;background:#007acc">
+      <StatusBar :workspace="workspace" />
+    </t-footer>
+  </t-layout>
+
+  <t-dialog v-model="showWorkspacePicker" title="切换工作区" width="500px" :close-on-overlay-click="false">
+    <WorkspaceStep @selected="onWorkspaceChanged" />
+  </t-dialog>
 </template>
 
 <script setup>
@@ -44,17 +50,16 @@ import WorkspaceStep from '../init/WorkspaceStep.vue'
 defineProps({ workspace: String, defaultModel: String })
 const emit = defineEmits(['workspaceChanged'])
 const activeView = ref('file')
+const showWorkspacePicker = ref(false)
+
 function onSwitch(v) { activeView.value = v }
 
-const showWorkspacePicker = ref(false)
+let viewerInstance = null
+function onOpenFile(path) { viewerInstance?.openFile(path) }
+
 function onWorkspaceChanged() {
   showWorkspacePicker.value = false
   emit('workspaceChanged')
-}
-
-let viewerInstance = null
-function onOpenFile(path) {
-  viewerInstance?.openFile(path)
 }
 
 const bodyRef = ref(null)
@@ -87,11 +92,18 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.main-layout { height: 100vh; display: flex; flex-direction: column; background: #1e1e1e; overflow: hidden; }
-.layout-row { flex: 1; display: flex; overflow: hidden; }
-.layout-body { flex: 1; display: flex; overflow: hidden; min-width: 0; align-items: stretch; }
-.panel { display: flex; }
+.t-layout { background: #1e1e1e; }
+.layout-body { flex: 1; min-height: 0; min-width: 0; display: flex; overflow: hidden; align-items: stretch; }
+.panel { display: flex; min-width: 0; }
 .panel.sortable-ghost { opacity: 0.3; }
 .panel.sortable-chosen { box-shadow: 0 0 0 2px #409eff inset; }
-.pcontent { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.pcontent { flex: 1; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+</style>
+
+<style>
+/* TDesign t-layout__content 必须溢出隐藏，否则内部 .layout-body 撑破容器 */
+.t-layout__content {
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
 </style>

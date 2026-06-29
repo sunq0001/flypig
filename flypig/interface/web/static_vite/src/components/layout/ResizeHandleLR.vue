@@ -43,6 +43,9 @@ function onMove(e) {
     if (!left || !right) { rafId = null; return }
     left.w = Math.max(80, dragStarts[props.idx] + delta)
     right.w = Math.max(80, dragStarts[props.idx + 1] - delta)
+    // viewer 始终保持 flex:1（w=0），只调两侧面板宽度
+    if (left.id === 'viewer') left.w = 0
+    if (right.id === 'viewer') right.w = 0
     rafId = null
   })
 }

@@ -40,7 +40,7 @@ const tabs = [
 ]
 </script>
 <style scoped>
-.interact-bar{height:100%;display:flex;flex-direction:column;background:#1e1e1e;border-left:1px solid #333;overflow:hidden}
+.interact-bar{flex:1;min-height:0;display:flex;flex-direction:column;background:#1e1e1e;border-left:1px solid #333;overflow:hidden}
 .tabs-bar{display:flex;align-items:center;height:36px;background:#252526;border-bottom:1px solid #1e1e1e;flex-shrink:0}
 .tab-list{display:flex;align-items:stretch;height:100%}
 .tab{display:flex;align-items:center;gap:4px;padding:0 12px;font-size:12px;color:#888;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
