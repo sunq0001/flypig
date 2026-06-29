@@ -9,7 +9,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onBeforeUnmount } from 'vue'
 
 const props = defineProps({
   message: { type: Object, required: true },
@@ -26,23 +26,36 @@ function getFullText(m) {
 const isUser = computed(() => props.message.role === 'user')
 const displayText = ref('')
 
-// 立即显示已有文本
+// 立即显示已有文本（历史消息或用户消息）
 const initial = getFullText(props.message)
 if (initial || isUser.value) displayText.value = initial
 
-// 轮询检测新文本
-let lastKnown = initial
-const dataTimer = setInterval(() => {
-  if (isUser.value) return
-  const cur = getFullText(props.message)
-  if (cur.length > lastKnown.length) {
-    displayText.value = cur
-    lastKnown = cur
+// 流式进行中：100ms 轮询检测新文本
+let dataTimer = null
+if (props.loading && !isUser.value) {
+  let lastKnown = initial
+  dataTimer = setInterval(() => {
+    const cur = getFullText(props.message)
+    if (cur.length > lastKnown.length) {
+      displayText.value = cur
+      lastKnown = cur
+    }
+  }, 100)
+}
+
+// 流式结束 → 停止轮询
+watch(() => props.loading, (v) => {
+  if (!v && dataTimer) {
+    clearInterval(dataTimer)
+    dataTimer = null
+    // 确保最终内容显示
+    const final = getFullText(props.message)
+    if (final) displayText.value = final
   }
-}, 100)
+})
 
 onBeforeUnmount(() => {
-  clearInterval(dataTimer)
+  if (dataTimer) clearInterval(dataTimer)
 })
 
 const time = computed(() => {

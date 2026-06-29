@@ -87,7 +87,7 @@ const isStreaming = computed(() =>
 )
 
 // ── 固定间隔轮询 ──
-// useChat 内部改数不改引用，Vue 检测不到
+// useChat 内部改数不改引用（shallowRef + in-place mutation），Vue 检测不到
 // 每 200ms 浅拷贝一次数组，下游才能收到更新
 let forcePoll = null
 watch(isStreaming, (v) => {
@@ -97,8 +97,11 @@ watch(isStreaming, (v) => {
     }
     poll()
     forcePoll = setInterval(poll, 200)
-  } else {
-    if (forcePoll) { clearInterval(forcePoll); forcePoll = null }
+  } else if (forcePoll) {
+    // 流结束前再做最后一次拷贝，避免遗漏最后 200ms 内的内容
+    messages.value = messages.value.map(m => ({...m}))
+    clearInterval(forcePoll)
+    forcePoll = null
   }
 })
 
