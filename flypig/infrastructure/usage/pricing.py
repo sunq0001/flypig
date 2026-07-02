@@ -40,7 +40,7 @@ import httpx
 from flypig.domain.model_ref import REGISTRY
 
 # ── 缓存 ──
-_CACHE_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+_CACHE_DIR = Path(__file__).resolve().parent.parent / "_data"
 _CACHE_FILE = _CACHE_DIR / "pricing_cache.json"
 
 # ── 定价数据文件路径 ──
