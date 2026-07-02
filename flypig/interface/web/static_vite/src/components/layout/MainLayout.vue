@@ -16,7 +16,7 @@ MainLayout：三栏布局 — TDesign Layout 组件
           <div class="panel" :style="panelStyle(p)" :data-panel-id="p.id">
             <div class="pcontent">
               <ResourceBar v-if="p.id === 'resource'" :activeView="activeView"
-                @switchWorkspace="showWorkspacePicker = true" @openFile="onOpenFile" />
+                @switch-workspace="onSwitchWorkspace" @open-file="onOpenFile" />
               <ViewerBar v-else-if="p.id === 'viewer'" :ref="el => viewerInstance = el" />
               <InteractBar v-else-if="p.id === 'interact'" :model="defaultModel" />
             </div>
@@ -31,9 +31,18 @@ MainLayout：三栏布局 — TDesign Layout 组件
     </t-footer>
   </t-layout>
 
-  <t-dialog v-model="showWorkspacePicker" title="切换工作区" width="500px" :close-on-overlay-click="false">
-    <WorkspaceStep @selected="onWorkspaceChanged" />
-  </t-dialog>
+  <!-- 切换工作区弹窗（div 弹窗，修复 TDesign Dialog Teleport bug） -->
+  <div v-if="showWorkspacePicker" class="dlg-overlay" @click.self="showWorkspacePicker = false">
+    <div class="dlg-box">
+      <div class="dlg-header">
+        <span>切换工作区</span>
+        <button class="dlg-close" @click="showWorkspacePicker = false">✕</button>
+      </div>
+      <div class="dlg-body">
+        <WorkspaceStep @selected="onWorkspaceChanged" />
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -53,6 +62,9 @@ const activeView = ref('file')
 const showWorkspacePicker = ref(false)
 
 function onSwitch(v) { activeView.value = v }
+function onSwitchWorkspace() {
+  showWorkspacePicker.value = true
+}
 
 let viewerInstance = null
 function onOpenFile(path) { viewerInstance?.openFile(path) }
@@ -106,4 +118,51 @@ onMounted(() => {
   min-height: 0 !important;
   overflow: hidden !important;
 }
+
+/* 自定义弹窗样式 */
+.dlg-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3000;
+}
+.dlg-box {
+  background: #252526;
+  border: 1px solid #333;
+  border-radius: 8px;
+  width: 500px;
+  max-width: 90vw;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.dlg-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  border-bottom: 1px solid #333;
+  color: #ccc;
+  font-size: 14px;
+  font-weight: 500;
+}
+.dlg-close {
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+.dlg-close:hover {
+  color: #ccc;
+  background: #333;
+}
+.dlg-body {
+  padding: 20px;
+}
+
+
 </style>

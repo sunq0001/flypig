@@ -22,7 +22,7 @@ TreeNode：文件树的递归节点组件
         :key="child.path"
         :node="child"
         :depth="depth + 1"
-        @open-file="p => $emit('openFile', p)"
+        @open-file="p => $emit('open-file', p)"
       />
     </div>
   </div>
@@ -36,7 +36,7 @@ const props = defineProps({
   node: { type: Object, required: true },
   depth: { type: Number, default: 0 },
 })
-const emit = defineEmits(['openFile'])
+const emit = defineEmits(['open-file'])
 
 const isDir = computed(() => props.node.type === 'directory')
 const expanded = ref(false)
@@ -83,7 +83,7 @@ async function onClick() {
       }
     }
   } else {
-    emit('openFile', props.node.path)
+    emit('open-file', props.node.path)
   }
 }
 </script>

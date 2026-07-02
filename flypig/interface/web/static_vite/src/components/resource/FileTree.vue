@@ -7,7 +7,7 @@ FileTree：文件树（自定义实现，替代TDesign t-tree的渲染问题）
 
 <template>
   <div class="file-tree">
-    <div class="tree-header" @click="$emit('switchWorkspace')">
+    <div class="tree-header" @click="$emit('switch-workspace')">
       <span class="tree-root-label">{{ rootName }}</span>
     </div>
     <div class="tree-body">
@@ -16,7 +16,7 @@ FileTree：文件树（自定义实现，替代TDesign t-tree的渲染问题）
         :key="item.path"
         :node="item"
         :depth="0"
-        @open-file="p => $emit('openFile', p)"
+        @open-file="p => $emit('open-file', p)"
         @refresh="$emit('refresh')"
       />
     </div>
@@ -28,7 +28,7 @@ import { ref, computed, watch, onMounted } from 'vue'
 import TreeNode from './TreeNode.vue'
 
 const props = defineProps({ rootPath: { type: String, default: '' } })
-const emit = defineEmits(['openFile', 'switchWorkspace'])
+const emit = defineEmits(['open-file', 'switch-workspace'])
 
 const treeData = ref([])
 

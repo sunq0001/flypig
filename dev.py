@@ -8,6 +8,10 @@ FlyPig 开发模式 — 一键启动四个热加载服务
 import asyncio, sys, os, signal
 from pathlib import Path
 
+# 修复 Windows GBK 编码问题
+if sys.stdout.encoding.lower() != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+
 ROOT = Path(__file__).parent
 PYTHON = sys.executable  # 用当前 Python
 
@@ -16,7 +20,7 @@ SERVICES = [
      ROOT),  # 从项目根目录跑
     ("chat",  "聊天 :8321", f"node server.js",
      ROOT / "flypig" / "interface" / "chat-server"),
-    ("front", "前端 :5173", "npx vite --host",
+    ("front", "前端 :5173", "node node_modules/vite/bin/vite.js --host --force",
      ROOT / "flypig" / "interface" / "web" / "static_vite"),
     ("docs",  "文档 :8765", f"{PYTHON} docs/serve_docs.py --port 8765 --watch",
      ROOT),

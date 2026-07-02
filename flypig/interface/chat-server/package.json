@@ -4,11 +4,21 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@ai-sdk/openai": "^4.0.2",
-    "ai": "^7.0.4",
-    "express": "^5.0.0",
+    "@ai-sdk/openai": "^4.0.4",
+    "ai": "^7.0.8",
+    "express": "^5.2.1",
     "iconv-lite": "^0.7.2",
-    "js-yaml": "^5.1.0",
-    "openai": "^6.45.0"
-  }
+    "js-yaml": "^5.2.0",
+    "openai": "^6.45.0",
+    "zod": "^4.4.3"
+  },
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
 }

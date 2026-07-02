@@ -16,7 +16,7 @@ FileTreeBar：资源栏文件树组件
       <div class="welcome-icon">📂</div>
       <p class="welcome-title">选择工作区</p>
       <p class="welcome-desc">选择一个目录作为 AI 助手的工作空间</p>
-      <button class="btn-open" @click="$emit('switchWorkspace')">打开工作区</button>
+      <button class="btn-open" @click="$emit('switch-workspace')">打开工作区</button>
       <div v-if="recentList.length > 0" class="recent-list">
         <div class="recent-label">最近使用</div>
         <div v-for="(ws, idx) in recentList" :key="idx" class="recent-item" @click="openRecent(ws)">
@@ -26,7 +26,7 @@ FileTreeBar：资源栏文件树组件
     </div>
 
     <!-- 有工作区 → 文件树 -->
-    <FileTree v-else :root-path="workspace" @switch-workspace="$emit('switchWorkspace')" @open-file="p => $emit('openFile', p)" />
+    <FileTree v-else :root-path="workspace" @switch-workspace="$emit('switch-workspace')" @open-file="p => $emit('open-file', p)" />
   </div>
 </template>
 <script setup>
@@ -38,7 +38,7 @@ import { computed } from 'vue'
 import { useConfigStore } from '../../stores/config'
 import FileTree from './FileTree.vue'
 
-defineEmits(['switchWorkspace', 'openFile'])
+defineEmits(['switch-workspace', 'open-file'])
 const configStore = useConfigStore()
 const workspace = computed(() => configStore.workspace)
 const recentList = computed(() => configStore.recent_workspaces)

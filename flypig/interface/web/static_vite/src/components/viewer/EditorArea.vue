@@ -22,7 +22,7 @@ import FileBar from './FileBar.vue'
 import EditorPane from './EditorPane.vue'
 
 const props = defineProps({ initPath: { type: String, default: '' } })
-defineEmits(['openFile'])  // 向外透传打开文件事件（后续 AI 调用等场景用）
+defineEmits(['open-file'])  // 向外透传打开文件事件（后续 AI 调用等场景用）
 
 const openFiles = ref(props.initPath ? [{ path: props.initPath, name: nameFromPath(props.initPath) }] : [])
 const activeFile = ref(props.initPath || '')

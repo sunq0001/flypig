@@ -14,9 +14,7 @@
       <t-button theme="primary" @click="retry">重试</t-button>
     </div>
 
-    <!-- 无工作区 → InitWizard -->
-    <InitWizard v-else-if="!configStore.workspace" @done="onInitDone" />
-    <!-- 有工作区 → 主布局 -->
+    <!-- 直接显示主布局（文件夹树界面） -->
     <MainLayout v-else :workspace="configStore.workspace" @workspaceChanged="onWorkspaceChanged" />
   </div>
 </template>
@@ -29,7 +27,6 @@
 import { ref, onMounted } from 'vue'
 import { useConfigStore } from './stores/config'
 import MainLayout from './components/layout/MainLayout.vue'
-import InitWizard from './components/init/InitWizard.vue'
 
 const configStore = useConfigStore()
 const loading = ref(true)
@@ -48,10 +45,6 @@ async function loadConfig() {
 }
 
 async function onWorkspaceChanged() {
-  await configStore.fetchConfig()
-}
-
-async function onInitDone() {
   await configStore.fetchConfig()
 }
 

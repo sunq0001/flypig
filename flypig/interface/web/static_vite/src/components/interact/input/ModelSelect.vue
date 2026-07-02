@@ -32,18 +32,20 @@ emits: update:modelValue
       >
         <template #content>
           <table class="price-table">
-            <tr>
-              <td class="pt-label">百万tokens输入（缓存未命中）</td>
-              <td class="pt-value">${{ priceMap[m.value]?.input.toFixed(3) }}</td>
-            </tr>
-            <tr v-if="priceMap[m.value]?.input_cache_hit != null">
-              <td class="pt-label">百万tokens输入（缓存命中）</td>
-              <td class="pt-value">${{ priceMap[m.value]?.input_cache_hit.toFixed(4) }}</td>
-            </tr>
-            <tr>
-              <td class="pt-label">百万tokens输出</td>
-              <td class="pt-value">${{ priceMap[m.value]?.output.toFixed(3) }}</td>
-            </tr>
+            <tbody>
+              <tr>
+                <td class="pt-label">百万tokens输入（缓存未命中）</td>
+                <td class="pt-value">${{ priceMap[m.value]?.input.toFixed(3) }}</td>
+              </tr>
+              <tr v-if="priceMap[m.value]?.input_cache_hit != null">
+                <td class="pt-label">百万tokens输入（缓存命中）</td>
+                <td class="pt-value">${{ priceMap[m.value]?.input_cache_hit.toFixed(4) }}</td>
+              </tr>
+              <tr>
+                <td class="pt-label">百万tokens输出</td>
+                <td class="pt-value">${{ priceMap[m.value]?.output.toFixed(3) }}</td>
+              </tr>
+            </tbody>
           </table>
           <div class="pt-date">{{ priceUpdated }}</div>
         </template>

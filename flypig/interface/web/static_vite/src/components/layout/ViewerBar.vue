@@ -10,14 +10,14 @@ ViewBar：中间查看栏容器
 -->
 <template>
   <div class="view-bar">
-    <EditorArea ref="editorRef" @open-file="$emit('openFile', $event)" />
+    <EditorArea ref="editorRef" @open-file="$emit('open-file', $event)" />
   </div>
 </template>
 <script setup>
 import { ref } from 'vue'
 import EditorArea from '../viewer/EditorArea.vue'
 
-defineEmits(['openFile'])
+defineEmits(['open-file'])
 const editorRef = ref(null)
 
 function openFile(path) {

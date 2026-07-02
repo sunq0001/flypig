@@ -61,62 +61,55 @@ WorkspaceStep — 工作区选择
     </div>
 
     <!-- 目录浏览弹窗 -->
-    <t-dialog
-      v-model="browserVisible"
-      title="选择工作区目录"
-      width="500px"
-      :close-on-overlay-click="false"
-      @close="closeBrowser"
-    >
-      <div class="browser-dialog">
-        <div class="browser-toolbar">
-          <t-button size="small" @click="goUp" :disabled="!parentPath">
-            返回上级
-          </t-button>
-          <t-button size="small" @click="showNewFolderInput">
-            新建文件夹
-          </t-button>
-        </div>
+    <div v-if="browserVisible" class="brw-overlay" @click.self="closeBrowser">
+      <div class="brw-box">
+        <div class="brw-box-header">选择工作区目录</div>
+        <div class="brw-body">
+          <div class="browser-toolbar">
+            <t-button size="small" @click="goUp" :disabled="!parentPath">
+              返回上级
+            </t-button>
+            <t-button size="small" @click="showNewFolderInput">
+              新建文件夹
+            </t-button>
+          </div>
 
-        <div v-if="newFolderVisible" class="new-folder-row">
-          <t-input
-            v-model="newFolderName"
-            placeholder="输入文件夹名称"
-            size="small"
-            @keyup.enter="createFolder"
-          />
-          <t-button theme="primary" size="small" @click="createFolder">创建</t-button>
-          <t-button size="small" @click="cancelNewFolder">取消</t-button>
-        </div>
+          <div v-if="newFolderVisible" class="new-folder-row">
+            <t-input
+              v-model="newFolderName"
+              placeholder="输入文件夹名称"
+              size="small"
+              @keyup.enter="createFolder"
+            />
+            <t-button theme="primary" size="small" @click="createFolder">创建</t-button>
+            <t-button size="small" @click="cancelNewFolder">取消</t-button>
+          </div>
 
-        <div class="browser-path">{{ browsePath || '...' }}</div>
-        <div class="browser-list" :loading="browsing">
-          <div
-            v-for="entry in entries"
-            :key="entry.name"
-            class="browser-item"
-            :class="{ 'is-dir': entry.type === 'directory' }"
-            @click="entry.type === 'directory' && enterDir(entry.name)"
-          >
-            <t-icon class="item-icon">
+          <div class="browser-path">{{ browsePath || '...' }}</div>
+          <div class="browser-list" :loading="browsing">
+            <div
+              v-for="entry in entries"
+              :key="entry.name"
+              class="browser-item"
+              :class="{ 'is-dir': entry.type === 'directory' }"
+              @click="entry.type === 'directory' && enterDir(entry.name)"
+            >
               <span v-if="entry.type === 'directory'">📁</span>
               <span v-else>📄</span>
-            </t-icon>
-            <span class="item-name">{{ entry.name }}</span>
-            <span v-if="entry.type === 'directory'" class="item-hint">点击进入</span>
-          </div>
-          <div v-if="entries.length === 0 && !browsing" class="browser-empty">
-            空目录
+              <span class="item-name">{{ entry.name }}</span>
+              <span v-if="entry.type === 'directory'" class="item-hint">点击进入</span>
+            </div>
+            <div v-if="entries.length === 0 && !browsing" class="browser-empty">
+              空目录
+            </div>
           </div>
         </div>
+        <div class="brw-footer">
+          <t-button theme="primary" @click="pickCurrentDir">选择当前目录</t-button>
+          <t-button @click="closeBrowser">取消</t-button>
+        </div>
       </div>
-
-      <template #footer>
-        <t-button theme="primary" @click="pickCurrentDir">
-          选择当前目录
-        </t-button>
-      </template>
-    </t-dialog>
+    </div>
 
     <!-- 错误 -->
     <div v-if="error" class="error-msg">
@@ -363,10 +356,42 @@ function pickCurrentDir() {
   margin-top: 4px;
 }
 
-/* 浏览弹窗 */
-.browser-dialog {
-  min-height: 320px;
+/* 目录浏览器弹窗 */
+.brw-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3100;
 }
+.brw-box {
+  background: #252526;
+  border: 1px solid #333;
+  border-radius: 8px;
+  width: 520px;
+  max-width: 90vw;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.brw-box-header {
+  padding: 12px 20px;
+  border-bottom: 1px solid #333;
+  color: #ccc;
+  font-size: 14px;
+  font-weight: 500;
+}
+.brw-body {
+  padding: 16px 20px;
+}
+.brw-footer {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 12px 20px;
+  border-top: 1px solid #333;
+}
+
 
 .browser-toolbar {
   display: flex;
