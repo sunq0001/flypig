@@ -5,7 +5,7 @@
 实现方法：ChatService 接收用户输入 → 调模型 stream → 将逐 token 事件分发到 SSE 队列。
 R1 阶段为简化版：直接调模型 stream。后续轮次接入 LangGraph。
 
-层&amp;依赖：application 层，依赖 domain/interfaces + interface/sse
+层&amp;依赖：orchestration 层，依赖 domain/interfaces + interface/sse
 """
 
 from __future__ import annotations
