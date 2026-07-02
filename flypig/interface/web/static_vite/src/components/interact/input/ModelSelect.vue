@@ -52,7 +52,7 @@ emits: update:modelValue
         <span class="option-item">
           <Icon class="option-icon" :icon="m.icon" :style="{ color: m.iconColor }" />
           <span class="option-name">{{ m.name }}</span>
-          <span class="option-provider">{{ m.provider }}</span>
+          <span v-if="m.provider" class="option-provider">{{ m.provider }}</span>
         </span>
       </t-tooltip>
     </t-option>
@@ -136,13 +136,13 @@ async function pullModel(name) {
 
 const iconMap = {
   DeepSeek: 'simple-icons:deepseek',
-  OpenAI: 'simple-icons:openai',
+  OpenAI: 'logos:openai',
   Anthropic: 'simple-icons:anthropic',
-  Qwen: 'simple-icons:alibabadotcom',
+  Qwen: 'simple-icons:qwen',
   Tencent: 'simple-icons:tencentqq',
-  ByteDance: 'simple-icons:tiktok',
-  Moonshot: 'simple-icons:quantconnect',
-  ZhipuAI: 'simple-icons:zotero',
+  ByteDance: 'simple-icons:bytedance',
+  Kimi: 'simple-icons:moonshotai',
+  GLM: 'mdi:alpha-g-circle',
   Local: 'mdi:laptop',
 }
 
@@ -153,21 +153,41 @@ const colorMap = {
   Qwen: '#FF6A00',
   Tencent: '#1479D1',
   ByteDance: '#000000',
-  Moonshot: '#6C5CE7',
-  ZhipuAI: '#0E7AFF',
+  Kimi: '#6C5CE7',
+  GLM: '#0E7AFF',
   Local: '#888',
+}
+
+// 厂商名 → UI 显示名映射（Moonshot→Kimi, ZhipuAI→GLM）
+const providerDisplayMap = {
+  DeepSeek: 'DeepSeek',
+  OpenAI: 'OpenAI',
+  Anthropic: 'Anthropic',
+  Qwen: '通义千问',
+  Tencent: '腾讯',
+  ByteDance: '字节跳动',
+  Moonshot: 'Kimi',
+  ZhipuAI: 'GLM',
+  Local: '本地',
 }
 
 const resolvedOptions = computed(() => {
   return props.options.map(o => {
     if (typeof o === 'string') return { value: o, label: o, icon: 'mdi:robot', iconColor: '#888', name: o, provider: '' }
+
+    const rawProvider = o.provider
+    const displayProvider = providerDisplayMap[rawProvider] || rawProvider
+    // 如果模型名已包含提供商名，不重复显示提供商标签
+    const nameLower = o.name.toLowerCase()
+    const providerLower = rawProvider.toLowerCase()
+    const isRedundant = nameLower.includes(providerLower)
     return {
       value: o.name,
-      label: `${o.name} (${o.provider})`,
-      icon: iconMap[o.provider] || 'mdi:robot-outline',
-      iconColor: colorMap[o.provider] || '#888',
+      label: isRedundant ? o.name : `${o.name} (${displayProvider})`,
+      icon: iconMap[displayProvider] || iconMap[rawProvider] || 'mdi:robot-outline',
+      iconColor: colorMap[displayProvider] || colorMap[rawProvider] || '#888',
       name: o.name,
-      provider: o.provider,
+      provider: isRedundant ? '' : displayProvider,
     }
   })
 })
@@ -185,19 +205,40 @@ const selectedColor = computed(() => selectedInfo.value.color)
   width: auto;
   min-width: 200px;
 }
-.modt-select :deep(.t-select__wrapper) {
+/* 选择框本体：透明底 + 暗色细线边框 + 亮色文字 */
+.modt-select :deep(.t-input) {
   background: transparent !important;
   box-shadow: none !important;
-  padding: 0 4px;
-  min-height: 20px;
+  border-color: #444 !important;
+  border-radius: 6px;
 }
+.modt-select :deep(.t-input:hover) {
+  border-color: #555 !important;
+}
+.modt-select :deep(.t-input.t-is-focused),
+.modt-select :deep(.t-is-focused > .t-input) {
+  border-color: #666 !important;
+  box-shadow: none !important;
+}
+/* 内部所有元素统一暗色主题 */
+.modt-select :deep(.t-select__wrapper),
+.modt-select :deep(.t-select-input),
+.modt-select :deep(.t-input__wrap),
+.modt-select :deep(.t-input__inner) {
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #eee !important;
+  caret-color: #eee;
+}
+/* placeholder 灰色 */
 .modt-select :deep(.t-select__placeholder) {
-  color: #888;
+  color: #777;
   font-size: 11px;
 }
+/* 已选项文字 */
 .modt-select :deep(.t-select__selected-item) {
   font-size: 11px;
-  color: #888;
+  color: #ddd;
   flex: 1;
   min-width: 0;
 }
@@ -205,9 +246,13 @@ const selectedColor = computed(() => selectedInfo.value.color)
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.modt-select :deep(.t-select__caret) {
-  color: #555;
-  font-size: 10px;
+/* 下拉箭头 — 淡灰不抢眼 */
+.modt-select :deep(.t-select__caret),
+.modt-select :deep(.t-input__suffix-icon svg),
+.modt-select :deep(.t-input__suffix-icon path),
+.modt-select :deep(.t-input__suffix-icon) {
+  color: #999 !important;
+  fill: currentColor !important;
 }
 .selected-icon {
   font-size: 14px;
@@ -237,6 +282,32 @@ const selectedColor = computed(() => selectedInfo.value.color)
   background: #252526 !important;
   border: 1px solid #333 !important;
   min-width: 260px !important;
+  /* 覆盖 TDesign 浅色主题变量为暗色 */
+  --td-bg-color-container: #252526;
+  --td-bg-color-container-hover: #3c3c3c;
+  --td-bg-color-container-active: #2a2a2a;
+  --td-bg-color-specialcomponent: #252526;
+  --td-brand-color: #409eff;
+  --td-brand-color-light: rgba(64, 158, 255, 0.12);
+  --td-brand-color-light-hover: rgba(64, 158, 255, 0.2);
+  --td-text-color-primary: #e5e5e5;
+  --td-text-color-secondary: #999;
+  --td-component-stroke: #444;
+  --td-border-level-1-color: #444;
+  --td-font-gray-1: #eee;
+  --td-font-gray-2: #bbb;
+  --td-success-color: #52c41a;
+  --td-warning-color: #faad14;
+  --td-error-color: #ff4d4f;
+}
+/* 强制 TDesign 内部弹层保持暗色背景 */
+.modt-select-popper .t-popup__content,
+.modt-select-popper .t-select-dropdown-inner,
+.modt-select-popper .t-select-option-list,
+.modt-select-popper .t-select-dropdown,
+.modt-select-popper .t-select__list,
+.modt-select-popper ul {
+  background: #252526 !important;
 }
 .modt-select-popper .t-select-dropdown__item {
   padding: 2px 8px;
@@ -248,12 +319,24 @@ const selectedColor = computed(() => selectedInfo.value.color)
 .modt-select-popper .t-select-dropdown__item.hover {
   background: #3c3c3c !important;
 }
-.modt-select-popper .t-select-dropdown__item.is-selected {
+.modt-select-popper .t-select-dropdown__item,
+.modt-select-popper .t-select-option {
+  color: #e5e5e5 !important;
+}
+.modt-select-popper .t-select-dropdown__item.is-selected,
+.modt-select-popper .t-option.t-is-selected,
+.modt-select-popper .t-select-option.t-is-selected {
   color: #409eff !important;
+  background: #2a2a2a !important;
 }
 .modt-select-popper .t-popup__arrow::before {
   background: #252526 !important;
   border-color: #333 !important;
+}
+/* 强制弹层根元素本身暗色（TDesign 可能用 CSS 变量影响渲染） */
+.modt-select-popper,
+.modt-select-popper .t-popup__content {
+  background: #252526 !important;
 }
 .option-item {
   display: flex;
