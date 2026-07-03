@@ -20,6 +20,7 @@ export const useConfigStore = defineStore('config', {
     models: (state) => state.config?.models ?? [],
     mode: (state) => state.config?.mode ?? null,
     api_configured: (state) => state.config?.api_configured ?? false,
+    providers: (state) => state.config?.providers ?? {},
     recent_workspaces: (state) => state.config?.recent_workspaces ?? [],
   },
 

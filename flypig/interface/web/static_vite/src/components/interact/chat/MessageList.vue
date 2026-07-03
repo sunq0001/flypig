@@ -45,17 +45,17 @@ watch(() => {
   const ts = new Date(now).toISOString().slice(11, 23)
   if (val && val.length !== lastLen) {
     const added = val.length - lastLen
-    console.log(`[fe] ${ts} +${added} total=${val.length} "${val.slice(-30)}"`)
+    // console.log(`[fe] ${ts} +${added} total=${val.length} "${val.slice(-30)}"`)
     lastLen = val.length
   } else if (!val && lastLen !== 0) {
-    console.log(`[fe] ${ts} RESET (content cleared)`)
+    // console.log(`[fe] ${ts} RESET (content cleared)`)
     lastLen = 0
   }
   // 始终打印最新消息的 metadata
   const last = props.messages[props.messages.length - 1]
   if (last?.role === 'assistant') {
     const ml = props.messages.length
-    console.log(`[fe] ${ts} msgs=${ml} role=${last.role} id=${last.id?.slice(0,8)||'-'} parts=${last.parts?.length||0}`)
+    // console.log(`[fe] ${ts} msgs=${ml} role=${last.role} id=${last.id?.slice(0,8)||'-'} parts=${last.parts?.length||0}`)
   }
 })
 

@@ -1,10 +1,10 @@
 """定价路由 (/api/pricing)
 
-层&amp;依赖：interface.rest.routes 层，依赖 infrastructure.usage.pricing
+层&依赖：interface.rest.routes 层，依赖 infrastructure.usage.pricing
 """
 
 import asyncio
-from quart import Blueprint, current_app, jsonify
+from quart import Blueprint, current_app, jsonify, request
 
 from flypig.infrastructure.usage.pricing import fetch_pricing
 
@@ -14,16 +14,21 @@ _refreshing = False
 
 @pricing_bp.route("/api/pricing")
 async def pricing():
-    """返回价格数据，缓存优先，后台异步刷新"""
+    """返回价格数据，缓存优先，后台异步刷新
+
+    查询参数:
+        currency: "USD"（默认）| "CNY" — 按实时汇率转换
+    """
     global _refreshing
-    
-    result = fetch_pricing()
-    
+
+    currency = request.args.get("currency", "USD")
+    result = fetch_pricing(currency=currency)
+
     # 如果没有今日缓存，后台异步刷新（不阻塞请求）
     if result.get("source") != "cached" and not _refreshing:
         _refreshing = True
         asyncio.ensure_future(_refresh_background())
-    
+
     return jsonify(result)
 
 

@@ -3,13 +3,15 @@
 为什么做：前端从单一端点获取所有配置，避免硬编码默认值。
 前端 POST 修改配置（工作区、API Key）持久化到 config.yaml。
 
-层&amp;依赖：interface.rest.routes 层
+层&依赖：interface.rest.routes 层，依赖 domain + acl
 """
 
 import asyncio
 from pathlib import Path
 
 from quart import Blueprint, current_app, jsonify, request
+
+from flypig.acl.ollama import OllamaACL
 
 config_bp = Blueprint("config", __name__, url_prefix="/api/config")
 
@@ -18,35 +20,55 @@ def _get_settings():
     return current_app.config["flypig_settings"]
 
 
+def _build_providers():
+    """从 REGISTRY 重建厂商元数据字典（前端需要 icon/color/display_name）"""
+    from flypig.domain.model_ref import REGISTRY, get_local_config
+    providers = {}
+    for name, meta in REGISTRY.items():
+        provider = meta.get("provider", "")
+        if not provider or provider in providers:
+            continue
+        providers[provider] = {
+            "icon": meta.get("icon", ""),
+            "color": meta.get("color", ""),
+            "display_name": meta.get("display_name", ""),
+        }
+    # 本地厂商来自 JSON local 段
+    local = get_local_config()
+    providers[local.get("provider", "Local")] = {
+        "icon": local.get("icon", "mdi:laptop"),
+        "color": local.get("color", "#888"),
+        "display_name": local.get("display_name", "本地"),
+    }
+    return providers
+
+
 @config_bp.route("", methods=["GET"])
 async def get_config():
     cfg = _get_settings()
-    # 构建模型列表（注册表 + 本地）
-    from flypig.domain.model_ref import known_models, resolve, get_local_models
-    provider_key_map = {
-        "DeepSeek": "deepseek_api_key", "OpenAI": "openai_api_key",
-        "Anthropic": "anthropic_api_key", "Qwen": "qwen_api_key",
-        "Tencent": "hunyuan_api_key", "ByteDance": "doubao_api_key",
-        "Moonshot": "moonshot_api_key", "ZhipuAI": "zhipu_api_key",
-    }
+    from flypig.domain.model_ref import known_models, resolve, get_local_models, PROVIDER_KEY_MAP
+
     models = []
     for name in known_models():
         meta = resolve(name)
+        if meta is None:
+            continue
         provider = meta["provider"]
-        key_attr = provider_key_map.get(provider, "")
-        has_key = bool(getattr(cfg, key_attr, None))
+        attr = PROVIDER_KEY_MAP.get(provider, "")
+        has_key = bool(getattr(cfg, attr, None))
         models.append({
             "name": name, "provider": provider,
             "base_url": meta.get("base_url", ""),
-            "api_model": meta.get("model", ""),
+            "api_model": meta.get("api_model", ""),
             "local": False, "has_key": has_key,
         })
-    models.extend(get_local_models())
+    models.extend(get_local_models(cfg))
     return jsonify({
         "default_model": cfg.default_model,
         "workspace": cfg.workspace,
         "log_level": cfg.log_level,
         "models": models,
+        "providers": _build_providers(),
     })
 
 
@@ -84,9 +106,10 @@ async def save_apikey():
         return jsonify({"error": "provider and api_key required"}), 400
 
     cfg = _get_settings()
-    key_attr = f"{provider.lower()}_api_key"
-    if hasattr(cfg, key_attr):
-        setattr(cfg, key_attr, api_key)
+    from flypig.domain.model_ref import PROVIDER_KEY_MAP
+    attr = PROVIDER_KEY_MAP.get(provider, "")
+    if hasattr(cfg, attr):
+        setattr(cfg, attr, api_key)
     return jsonify({"ok": True})
 
 
@@ -131,30 +154,20 @@ async def mkdir():
 
 
 # ── 本地模型引导 ──
-RECOMMENDED_LOCAL = [
-    {"name": "qwen2.5:1.5b", "size": "~1.5GB", "description": "阿里通义千问 1.5B 轻量版"},
-    {"name": "llama3.2:1b",  "size": "~700MB", "description": "Meta Llama 3.2 1B"},
-    {"name": "phi3:mini",    "size": "~2.1GB", "description": "Microsoft Phi-3 Mini"},
-]
-
 
 @config_bp.route("/local-models", methods=["GET"])
 async def get_local_models():
-    installed = []
-    ollama_running = False
-    try:
-        import httpx
-        resp = httpx.get("http://localhost:11434/api/tags", timeout=2)
-        if resp.status_code == 200:
-            ollama_running = True
-            data = resp.json()
-            installed = [m.get("name", "") for m in data.get("models", []) if m.get("name")]
-    except Exception:
-        pass
+    cfg = _get_settings()
+    acl = OllamaACL(cfg)
 
-    suggestions = [m for m in RECOMMENDED_LOCAL if m["name"] not in installed]
+    ollama_running = acl.check_running()
+    installed = acl.list_installed_names() if ollama_running else []
 
-    return jsonify({"running": ollama_running, "installed": installed, "suggestions": suggestions})
+    return jsonify({
+        "running": ollama_running,
+        "installed": installed,
+        "ollama_base_url": cfg.ollama_base_url,
+    })
 
 
 @config_bp.route("/local-models/pull", methods=["POST"])
@@ -164,12 +177,11 @@ async def pull_local_model():
     if not model:
         return jsonify({"error": "model required"}), 400
 
+    cfg = _get_settings()
+    acl = OllamaACL(cfg)
+
     async def _pull():
-        proc = await asyncio.create_subprocess_exec(
-            "ollama", "pull", model,
-            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT,
-        )
-        await proc.wait()
+        await acl.pull_model(model)
 
     asyncio.ensure_future(_pull())
     return jsonify({"status": "pulling", "model": model})

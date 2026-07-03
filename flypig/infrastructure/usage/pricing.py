@@ -1,57 +1,74 @@
 """Pricing — 模型价格获取（从 Portkey 定价 API 获取 + 本地缓存）
 
-为什么做：不接受硬编码价格数据，所有模型价格必须从各厂商官方定价页面实时获取。
-用户 hover 模型时看到的每个价格都是当天从官网爬取的，不是瞎猜的。
-
-实现方法：
-1. 价格数据源：
-   a. 在线：Portkey 开源定价数据库 https://configs.portkey.ai/pricing/{provider}.json
-   b. 离线：data/pricing_defaults.json 存所有模型的默认价格（手动维护）
-   c. 缓存：data/pricing_cache.json（自动生成，不进 git）
-2. Portkey 提供商名 = model_registry.provider.lower()，特例见 pricing_defaults.portkey_overrides
-3. 启动时后台循环预热 + 每天检查缓存是否过期
-4. 服务端 /api/pricing 总是读缓存返回，毫秒级响应
-
-数据格式：
-{"input": float,          # 输入价格/百万tokens
- "output": float,         # 输出价格/百万tokens
- "input_cache_hit": float | null}  # 缓存命中输入价格（部分模型有）
-
-实现效果：
-- 无论服务运行多久，价格每天自动刷新，用户无感
-- tooltip 显示更新时间 "2026/6/22 更新"，证明数据有来源
-- Portkey 挂了也不影响展示（回退到默认价格）
-
-技术栈：httpx, json, datetime, pathlib
-
-层&依赖：infrastructure.usage → 依赖 domain.config.model_registry
-细节见文档：docs/docs_refactor/mem_convStore_usage.md → §价格获取时机
+配置数据全部来自 model_registry.json 的 pricing 段：
+portkey_base、exchange_rate_api、timeout、fallback_usd_cny 等。
 """
 
 from __future__ import annotations
 
 import json
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 import httpx
 
-from flypig.domain.model_ref import REGISTRY
+from flypig.domain.model_ref import REGISTRY, get_pricing_config, get_portkey_provider
 
-# ── 缓存 ──
-_CACHE_DIR = Path(__file__).resolve().parent.parent / "_data"
+# --- 缓存 ---
+_CACHE_DIR = Path(__file__).resolve().parent.parent.parent / "data"
 _CACHE_FILE = _CACHE_DIR / "pricing_cache.json"
+_MODEL_REGISTRY_FILE = _CACHE_DIR / "model_registry.json"
 
-# ── 定价数据文件路径 ──
-_PRICING_DATA_FILE = _CACHE_DIR / "pricing_defaults.json"
+_EXCHANGE_RATE_CACHE = {"rate": None, "ts": 0}
 
 
-def _load_pricing_data() -> dict:
-    """从 JSON 文件加载定价相关配置（默认价格 + Portkey 覆盖规则）"""
+def _pricing_cfg(key: str, default=None):
+    return get_pricing_config().get(key, default)
+
+
+def _fetch_exchange_rate() -> float:
+    now = datetime.now().timestamp()
+    cache_ttl = _pricing_cfg("exchange_rate_cache_ttl", 3600)
+    if now - _EXCHANGE_RATE_CACHE["ts"] < cache_ttl and _EXCHANGE_RATE_CACHE["rate"] is not None:
+        return _EXCHANGE_RATE_CACHE["rate"]
+
+    api_url = _pricing_cfg("exchange_rate_api")
+    if not api_url:
+        return _pricing_cfg("fallback_usd_cny", 7.2)
+
     try:
-        if _PRICING_DATA_FILE.exists():
-            with open(_PRICING_DATA_FILE, encoding="utf-8") as f:
+        timeout = _pricing_cfg("exchange_rate_timeout", 5)
+        resp = httpx.get(api_url, timeout=timeout)
+        if resp.status_code == 200:
+            rate = resp.json().get("rates", {}).get("CNY")
+            if rate:
+                rate = round(float(rate), 4)
+                _EXCHANGE_RATE_CACHE["rate"] = rate
+                _EXCHANGE_RATE_CACHE["ts"] = now
+                return rate
+    except Exception:
+        pass
+
+    return _pricing_cfg("fallback_usd_cny", 7.2)
+
+
+def _convert_to_cny(prices: dict) -> dict:
+    rate = _fetch_exchange_rate()
+    converted = {}
+    for name, p in prices.items():
+        cp = {}
+        for key in ("input", "output", "input_cache_hit"):
+            val = p.get(key)
+            cp[key] = round(val * rate, 4) if val is not None else None
+        converted[name] = cp
+    return converted
+
+
+def _load_model_registry() -> dict:
+    try:
+        if _MODEL_REGISTRY_FILE.exists():
+            with open(_MODEL_REGISTRY_FILE, encoding="utf-8") as f:
                 return json.load(f)
     except Exception:
         pass
@@ -59,35 +76,43 @@ def _load_pricing_data() -> dict:
 
 
 def _load_defaults() -> dict:
-    """从 JSON 文件加载所有模型的默认价格"""
-    return _load_pricing_data().get("defaults", {})
+    registry = _load_model_registry()
+    defaults = {}
+    for name, m in registry.get("models", {}).items():
+        pricing = m.get("default_pricing")
+        if pricing is not None:
+            defaults[name] = pricing
+    return defaults
 
 
 def _resolve_portkey_name(provider: str) -> str:
     """根据 provider 解析 Portkey API 文件名
 
-    规则：默认 provider.lower()，有覆盖规则走覆盖（如 Qwen → dashscope）
+    规则：默认 provider.lower()，有 portkey_provider 字段的走覆盖
+    实际覆盖在 get_portkey_provider(model_name) 中处理，此处仅做 fallback
     """
-    overrides = _load_pricing_data().get("portkey_overrides", {})
-    return overrides.get(provider, provider.lower())
+    return provider.lower()
 
 
 def _portkey_price_to_usd_per_1m(cents_per_token: float | None) -> float | None:
-    """Portkey 价格单位是 美分/token → 转成 美元/百万tokens"""
     if cents_per_token is None:
         return None
     return round(cents_per_token * 10000, 4)
 
 
 def _fetch_portkey_provider(provider: str) -> dict:
-    """从 Portkey API 获取某厂商的所有模型定价"""
-    portkey_name = _resolve_portkey_name(provider)
-    if not portkey_name:
-        return {}
+    from flypig.domain.model_ref import get_pricing_config
 
-    url = f"https://configs.portkey.ai/pricing/{portkey_name}.json"
+    pricing = get_pricing_config()
+    base = pricing.get("portkey_base")
+    if not base:
+        return {}
+    timeout = pricing.get("timeout", 10)
+
+    portkey_name = _resolve_portkey_name(provider)
+    url = f"{base}/{portkey_name}.json"
     try:
-        resp = httpx.get(url, timeout=10)
+        resp = httpx.get(url, timeout=timeout)
         if resp.status_code != 200:
             return {}
         return resp.json()
@@ -96,13 +121,11 @@ def _fetch_portkey_provider(provider: str) -> dict:
 
 
 def _extract_model_price(portkey_data: dict, model_name: str) -> Optional[dict]:
-    """从 Portkey 某厂商数据中提取单个模型的定价"""
     meta = REGISTRY.get(model_name, {})
-    api_model = meta.get("model")
+    api_model = meta.get("api_model")
     if not api_model:
         return None
 
-    # Portkey 中的模型名可能是完整名称，尝试精确匹配和部分匹配
     model_config = portkey_data.get(api_model)
     if not model_config:
         for key in portkey_data:
@@ -156,10 +179,8 @@ def _save_cache(data: dict):
 
 
 def _scrape_pricing() -> dict:
-    """从 Portkey 获取所有模型价格，不覆盖的用备用数据"""
     prices = {}
 
-    # 1. 从 Portkey API 获取
     provider_models: dict[str, list[str]] = {}
     for name, meta in REGISTRY.items():
         provider = meta.get("provider", "")
@@ -174,52 +195,52 @@ def _scrape_pricing() -> dict:
             if price:
                 prices[model_name] = price
 
-    # 2. 用默认价格表覆盖（手动验证的数据优先于 Portkey）
     for name, price in _load_defaults().items():
         prices[name] = price
 
     return prices
 
 
-def fetch_pricing() -> dict:
-    """获取所有模型价格
-
-    返回格式: {"prices": {model_name: {"input": float, "output": float, "input_cache_hit": float | null}, ...},
-               "updated": "2026-06-22",
-               "source": "cached" | "online"}
-    """
+def fetch_pricing(currency: str = "USD") -> dict:
     today = str(date.today())
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    # 1. 检查缓存
     cache = _load_cache()
     if cache and cache.get("updated") == today:
-        return {
-            "prices": cache.get("prices", {}),
+        prices = dict(cache.get("prices", {}))
+        cached_update_time = cache.get("update_time", today)
+    else:
+        prices = _scrape_pricing()
+
+        if cache:
+            for name, price in cache.get("prices", {}).items():
+                if name not in prices:
+                    prices[name] = price
+
+        _save_cache({
+            "prices": prices,
             "updated": today,
-            "source": "cached",
-        }
+            "update_time": now_iso,
+        })
+        cached_update_time = now_iso
 
-    # 2. 无今日缓存 → 从 Portkey API 获取
-    prices = _scrape_pricing()
-
-    # 3. 合并旧缓存（未获取到的模型用旧数据）
-    if cache:
-        for name, price in cache.get("prices", {}).items():
-            if name not in prices:
-                prices[name] = price
-
-    # 4. 写入缓存
-    _save_cache({"prices": prices, "updated": today})
+    if currency.upper() == "CNY":
+        prices = _convert_to_cny(prices)
+        rate = _fetch_exchange_rate()
+    else:
+        rate = None
 
     return {
         "prices": prices,
         "updated": today,
-        "source": "online" if prices else "cached",
+        "update_time": cached_update_time,
+        "currency": currency.upper(),
+        "exchange_rate": rate,
+        "source": "cached" if cache and cache.get("updated") == today else "online",
     }
 
 
 def get_pricing(model_name: str) -> Optional[dict]:
-    """查询单个模型价格（从缓存，不触发网络请求）"""
     cache = _load_cache()
     if cache:
         return cache.get("prices", {}).get(model_name)
@@ -227,18 +248,19 @@ def get_pricing(model_name: str) -> Optional[dict]:
 
 
 def start_pricing_loop():
-    """在后台预热定价缓存，app_factory 启动时调用"""
     import asyncio
     from loguru import logger
+    from flypig.domain.model_ref import get_pricing_config
 
     async def _loop():
+        refresh_interval = get_pricing_config().get("refresh_interval", 86400)
         try:
             fetch_pricing()
             logger.info("[pricing] 预热完成，每天自动刷新")
         except Exception as e:
             logger.warning("[pricing] 预热失败: {}，使用默认价格", e)
         while True:
-            await asyncio.sleep(86400)
+            await asyncio.sleep(refresh_interval)
             try:
                 fetch_pricing()
             except Exception:

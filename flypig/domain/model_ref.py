@@ -1,51 +1,48 @@
-"""模型注册表 — 模型名 → 提供商/接口 的动态映射
+"""模型注册表 — 从 model_registry.json 加载所有配置
 
-为什么做：模型名（如 deepseek-v4-flash）需要映射到实际的 API 地址和提供商，
+为什么做：模型名（如 deepseek-v4-flash）需要映射到实际的 API 地址、提供商元数据等，
 前端选模型时供后端路由到正确的接口。
 
-实现方法：REGISTRY 字典 + resolve()/known_models()/providers() 辅助函数。
+实现方法：所有配置数据来自 data/model_registry.json，代码只负责加载和转发。
+包括模型定义、厂商元数据、Pricing API 配置、本地模型配置等全部在 JSON 中。
+本地模型通过 acl.ollama.OllamaACL 动态获取，domain 层不直接调 httpx。
 
-层&amp;依赖：domain 层，零依赖
+层&依赖：domain 层
 """
 
+from __future__ import annotations
+
+import json
 from pathlib import Path
 
-# 国产模型优先，均兼容 OpenAI API 格式
-REGISTRY = {
-    # ── 国际 ──
-    "deepseek-v4-flash": {"provider": "DeepSeek", "base_url": "https://api.deepseek.com", "model": "deepseek-chat"},
-    "deepseek-v4-pro": {"provider": "DeepSeek", "base_url": "https://api.deepseek.com", "model": "deepseek-reasoner"},
-    "gpt-4o-mini": {"provider": "OpenAI", "base_url": "https://api.openai.com/v1", "model": "gpt-4o-mini"},
-    "gpt-4o": {"provider": "OpenAI", "base_url": "https://api.openai.com/v1", "model": "gpt-4o"},
-    "claude-3-5-sonnet": {"provider": "Anthropic", "base_url": "https://api.anthropic.com", "model": "claude-3-5-sonnet-20241022"},
-    # ── 阿里 ──
-    "qwen-turbo": {"provider": "Qwen", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-turbo"},
-    "qwen-plus": {"provider": "Qwen", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-plus"},
-    "qwen-max": {"provider": "Qwen", "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1", "model": "qwen-max"},
-    # ── 腾讯 ──
-    "hunyuan-pro": {"provider": "Tencent", "base_url": "https://api.hunyuan.cloud.tencent.com/v1", "model": "hunyuan-pro"},
-    "hunyuan-standard": {"provider": "Tencent", "base_url": "https://api.hunyuan.cloud.tencent.com/v1", "model": "hunyuan-standard"},
-    # ── 字节 ──
-    "doubao-pro-32k": {"provider": "ByteDance", "base_url": "https://ark.cn-beijing.volces.com/api/v3", "model": "doubao-pro-32k"},
-    "doubao-lite-32k": {"provider": "ByteDance", "base_url": "https://ark.cn-beijing.volces.com/api/v3", "model": "doubao-lite-32k"},
-    # ── Kimi ──
-    "kimi-k2.5": {"provider": "Moonshot", "base_url": "https://api.moonshot.cn/v1", "model": "kimi-k2.5"},
-    "moonshot-v1-8k": {"provider": "Moonshot", "base_url": "https://api.moonshot.cn/v1", "model": "moonshot-v1-8k"},
-    # ── GLM ──
-    "glm-4-plus": {"provider": "ZhipuAI", "base_url": "https://open.bigmodel.cn/api/paas/v4", "model": "glm-4-plus"},
-    "glm-4-air": {"provider": "ZhipuAI", "base_url": "https://open.bigmodel.cn/api/paas/v4", "model": "glm-4-air"},
-    "glm-4-flash": {"provider": "ZhipuAI", "base_url": "https://open.bigmodel.cn/api/paas/v4", "model": "glm-4-flash"},
-}
+_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+_MODEL_REGISTRY_PATH = _DATA_DIR / "model_registry.json"
 
 
-OLLAMA_PATH = None
-for _p in [
-    r"C:\Users\mss\AppData\Local\Programs\Ollama\ollama.exe",
-    "/usr/local/bin/ollama", "/usr/bin/ollama",
-]:
-    if Path(_p).exists():
-        OLLAMA_PATH = Path(_p)
-        break
+def load_registry() -> dict:
+    """返回 model_registry.json 的完整内容"""
+    with open(_MODEL_REGISTRY_PATH, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def _load():
+    """从 JSON 加载注册表，构建 REGISTRY 和 PROVIDER_KEY_MAP"""
+    raw = load_registry()
+
+    models_raw = raw.get("models", {})
+    _REGISTRY = dict(models_raw)
+
+    _PROVIDER_KEY_MAP = {}
+    for name, meta in models_raw.items():
+        provider = meta.get("provider", "")
+        key_attr = meta.get("key_attr", "")
+        if provider and key_attr:
+            _PROVIDER_KEY_MAP[provider] = key_attr
+
+    return _REGISTRY, _PROVIDER_KEY_MAP
+
+
+REGISTRY, PROVIDER_KEY_MAP = _load()
 
 
 def resolve(name: str) -> dict | None:
@@ -56,40 +53,34 @@ def known_models() -> list[str]:
     return list(REGISTRY.keys())
 
 
-def providers() -> set[str]:
-    return {m["provider"] for m in REGISTRY.values()}
+def get_provider_meta(name: str) -> dict | None:
+    """获取某个模型的厂商元数据（icon/color/display_name）"""
+    meta = REGISTRY.get(name)
+    if not meta:
+        return None
+    return {
+        "icon": meta.get("icon", ""),
+        "color": meta.get("color", ""),
+        "display_name": meta.get("display_name", ""),
+    }
 
 
-_LOCAL_CACHE = {"models": [], "ts": 0}
+def get_pricing_config() -> dict:
+    """获取 pricing 配置段"""
+    raw = load_registry()
+    return raw.get("pricing", {})
 
 
-def get_local_models() -> list[dict]:
-    """从 Ollama API 动态获取已安装的本地模型列表（缓存 30 秒）"""
-    import time
-    now = time.time()
-    if now - _LOCAL_CACHE["ts"] < 30:
-        return _LOCAL_CACHE["models"]
+def get_local_config() -> dict:
+    """获取 local 配置段（本地模型元数据）"""
+    raw = load_registry()
+    return raw.get("local", {})
 
-    try:
-        import httpx
-        resp = httpx.get("http://localhost:11434/api/tags", timeout=2)
-        if resp.status_code != 200:
-            return []
 
-        data = resp.json()
-        result = []
-        for m in data.get("models", []):
-            name = m.get("name", "")
-            if not name:
-                continue
-            result.append({
-                "name": name, "provider": "Local",
-                "base_url": "http://localhost:11434/v1",
-                "api_model": name, "local": True, "has_key": True,
-            })
-
-        _LOCAL_CACHE["models"] = result
-        _LOCAL_CACHE["ts"] = now
-        return result
-    except Exception:
-        return []
+def get_portkey_provider(model_name: str) -> str:
+    """获取模型的 Portkey 提供商名（有覆盖走覆盖，否则 provider.lower()）"""
+    meta = REGISTRY.get(model_name, {})
+    override = meta.get("portkey_provider")
+    if override:
+        return override
+    return meta.get("provider", "").lower()
