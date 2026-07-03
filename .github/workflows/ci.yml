@@ -35,5 +35,10 @@ jobs:
       - name: 层依赖检查（import-linter）
         run: lint-imports
 
-      - name: 单元测试
-        run: python -m pytest tests/ -v --tb=short --timeout=30 || echo "  暂无测试，跳过"
+      - name: 单元测试（如果有）
+        run: |
+          if [ -d tests ]; then
+            python -m pytest tests/ -v --tb=short
+          else
+            echo "  暂无测试，跳过"
+          fi
