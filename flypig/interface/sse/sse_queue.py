@@ -1,16 +1,10 @@
-"""SSE 队列抽象
+"""SSE 事件队列实现
 
-为什么做：LangGraph 的事件需要异步推送到前端 SSE 连接，需要一个线程安全的队列抽象。
+实现方法：asyncio.Queue 封装，按 session_id 隔离。
+实现 IEventStream 接口，供 ChatService 依赖注入。
 
-实现方法：asyncio.Queue 封装，event_queue 存放事件，events_for_session 按 session_id 隔离。
-ChatService 推事件，SSE 端点轮询消费。
-
-实现效果：事件推送不阻塞 LangGraph 执行，前端实时接收流式事件。
-
-技术栈：asyncio.Queue, 按 session_id 隔离
-
-层&依赖：backend 层，依赖 asyncio
-细节见文档：docs/docs_refactor/data-flow.md → §SSE 事件流
+技术栈：asyncio.Queue, IEventStream
+层&依赖：interface 层，实现 domain.interfaces.ievent_stream
 """
 
 from __future__ import annotations
@@ -18,8 +12,10 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime
 
+from flypig.domain.interfaces.ievent_stream import IEventStream
 
-class SSEQueue:
+
+class SSEQueue(IEventStream):
     """SSE 事件队列，按 session_id 隔离"""
 
     def __init__(self):
@@ -31,13 +27,6 @@ class SSEQueue:
         return self._queues[session_id]
 
     async def push(self, session_id: str, event: str, data: dict) -> None:
-        """推送事件到指定会话的队列
-
-        Args:
-            session_id: 目标会话
-            event: 事件类型 (token / tool_call / error / done)
-            data: 事件数据
-        """
         queue = self._get_queue(session_id)
         await queue.put({
             "event": event,
@@ -46,7 +35,6 @@ class SSEQueue:
         })
 
     async def pop(self, session_id: str, timeout: float = 30) -> dict | None:
-        """从指定会话队列消费事件（阻塞）"""
         queue = self._get_queue(session_id)
         try:
             return await asyncio.wait_for(queue.get(), timeout=timeout)
@@ -54,7 +42,6 @@ class SSEQueue:
             return None
 
     def cleanup(self, session_id: str) -> None:
-        """清理会话队列"""
         self._queues.pop(session_id, None)
 
 

@@ -13,19 +13,33 @@
 
 from dependency_injector import containers, providers
 
+from flypig.domain.registry import ModelRegistry
+from flypig.infrastructure.llm.model_factory import ModelFactory
+from flypig.infrastructure.usage.pricing import PricingService
+from flypig.application.chat_service import ChatApplicationService
+
 
 class AppContainer(containers.DeclarativeContainer):
     """应用依赖注入容器"""
 
     config = providers.Configuration()
 
-    # ── 后续逐步添加 ──
-    # model         = providers.Singleton(OpenAIAdapter, api_key=config.provided.api_key)
-    # tools         = providers.Singleton(ToolExecutor, workspace=config.provided.workspace)
-    # conversation  = providers.Singleton(SqliteConversationStore)
-    # policy        = providers.Singleton(PolicyService)
-    # prompts       = providers.Singleton(MultiRoleManager)
-    # graph_factory = providers.Singleton(GraphFactory, tools=tools, prompts=prompts)
-    # suggestion    = providers.Singleton(SuggestionEngine)
-    # events        = providers.Singleton(EventSubscriptions)
-    # usage_tracker = providers.Singleton(SqliteUsageTracker)
+    # ── 域服务 ──
+    model_registry = providers.Singleton(ModelRegistry)
+
+    # ── 基础设施 ──
+    model_factory = providers.Factory(
+        ModelFactory,
+        registry=model_registry,
+    )
+    pricing_service = providers.Singleton(
+        PricingService,
+        registry=model_registry,
+    )
+
+    # ── 应用服务 ──
+    chat_service = providers.Factory(
+        ChatApplicationService,
+        model_factory=model_factory,
+        settings=config,
+    )

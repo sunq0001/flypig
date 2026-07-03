@@ -1,15 +1,19 @@
 """定价路由 (/api/pricing)
 
-层&依赖：interface.rest.routes 层，依赖 infrastructure.usage.pricing
+层&依赖：interface.rest.routes 层，通过 PricingService 依赖 infrastructure.usage
 """
 
 import asyncio
 from quart import Blueprint, current_app, jsonify, request
 
-from flypig.infrastructure.usage.pricing import fetch_pricing
+from flypig.infrastructure.usage.pricing import PricingService
 
 pricing_bp = Blueprint("pricing", __name__)
 _refreshing = False
+
+
+def _get_pricing_service() -> PricingService:
+    return current_app.config["flypig_pricing_service"]
 
 
 @pricing_bp.route("/api/pricing")
@@ -22,7 +26,8 @@ async def pricing():
     global _refreshing
 
     currency = request.args.get("currency", "USD")
-    result = fetch_pricing(currency=currency)
+    service = _get_pricing_service()
+    result = service.fetch_pricing(currency=currency)
 
     # 如果没有今日缓存，后台异步刷新（不阻塞请求）
     if result.get("source") != "cached" and not _refreshing:
@@ -43,6 +48,7 @@ async def _refresh_background():
     global _refreshing
     try:
         await asyncio.sleep(2)  # 延迟 2 秒，不阻塞启动
-        fetch_pricing()
+        service = _get_pricing_service()
+        service.fetch_pricing()
     finally:
         _refreshing = False

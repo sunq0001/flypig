@@ -3,15 +3,18 @@
 为什么做：前端从单一端点获取所有配置，避免硬编码默认值。
 前端 POST 修改配置（工作区、API Key）持久化到 config.yaml。
 
-层&依赖：interface.rest.routes 层，依赖 domain + acl
+层&依赖：interface.rest.routes 层，通过 ModelRegistry 依赖 domain
 """
+
+from __future__ import annotations
 
 import asyncio
 from pathlib import Path
 
 from quart import Blueprint, current_app, jsonify, request
 
-from flypig.acl.ollama import OllamaACL
+from flypig.domain.registry import ModelRegistry
+from flypig.infrastructure.ollama.service import OllamaLocalModelService
 
 config_bp = Blueprint("config", __name__, url_prefix="/api/config")
 
@@ -20,11 +23,15 @@ def _get_settings():
     return current_app.config["flypig_settings"]
 
 
-def _build_providers():
-    """从 REGISTRY 重建厂商元数据字典（前端需要 icon/color/display_name）"""
-    from flypig.domain.model_ref import REGISTRY, get_local_config
-    providers = {}
-    for name, meta in REGISTRY.items():
+def _get_registry() -> ModelRegistry:
+    return current_app.config["flypig_model_registry"]
+
+
+def _build_providers() -> dict:
+    """从注册表重建厂商元数据字典（前端需要 icon/color/display_name）"""
+    registry = _get_registry()
+    providers: dict[str, dict] = {}
+    for name, meta in registry.all_models.items():
         provider = meta.get("provider", "")
         if not provider or provider in providers:
             continue
@@ -34,7 +41,7 @@ def _build_providers():
             "display_name": meta.get("display_name", ""),
         }
     # 本地厂商来自 JSON local 段
-    local = get_local_config()
+    local = registry.get_local_config()
     providers[local.get("provider", "Local")] = {
         "icon": local.get("icon", "mdi:laptop"),
         "color": local.get("color", "#888"),
@@ -46,15 +53,15 @@ def _build_providers():
 @config_bp.route("", methods=["GET"])
 async def get_config():
     cfg = _get_settings()
-    from flypig.domain.model_ref import known_models, resolve, get_local_models, PROVIDER_KEY_MAP
+    registry = _get_registry()
 
     models = []
-    for name in known_models():
-        meta = resolve(name)
+    for name in registry.known_models():
+        meta = registry.resolve(name)
         if meta is None:
             continue
         provider = meta["provider"]
-        attr = PROVIDER_KEY_MAP.get(provider, "")
+        attr = registry.provider_key_map.get(provider, "")
         has_key = bool(getattr(cfg, attr, None))
         models.append({
             "name": name, "provider": provider,
@@ -62,7 +69,10 @@ async def get_config():
             "api_model": meta.get("api_model", ""),
             "local": False, "has_key": has_key,
         })
-    models.extend(get_local_models(cfg))
+    # 本地模型通过 OllamaLocalModelService 动态获取
+    local_service = OllamaLocalModelService(cfg, registry)
+    models.extend(await local_service.list_models())
+
     return jsonify({
         "default_model": cfg.default_model,
         "workspace": cfg.workspace,
@@ -106,8 +116,8 @@ async def save_apikey():
         return jsonify({"error": "provider and api_key required"}), 400
 
     cfg = _get_settings()
-    from flypig.domain.model_ref import PROVIDER_KEY_MAP
-    attr = PROVIDER_KEY_MAP.get(provider, "")
+    registry = _get_registry()
+    attr = registry.provider_key_map.get(provider, "")
     if hasattr(cfg, attr):
         setattr(cfg, attr, api_key)
     return jsonify({"ok": True})
@@ -158,10 +168,11 @@ async def mkdir():
 @config_bp.route("/local-models", methods=["GET"])
 async def get_local_models():
     cfg = _get_settings()
-    acl = OllamaACL(cfg)
+    registry = _get_registry()
+    service = OllamaLocalModelService(cfg, registry)
 
-    ollama_running = acl.check_running()
-    installed = acl.list_installed_names() if ollama_running else []
+    ollama_running = await service.check_running()
+    installed = await service.list_installed_names() if ollama_running else []
 
     return jsonify({
         "running": ollama_running,
@@ -178,10 +189,11 @@ async def pull_local_model():
         return jsonify({"error": "model required"}), 400
 
     cfg = _get_settings()
-    acl = OllamaACL(cfg)
+    registry = _get_registry()
+    service = OllamaLocalModelService(cfg, registry)
 
     async def _pull():
-        await acl.pull_model(model)
+        await service.pull_model(model)
 
     asyncio.ensure_future(_pull())
     return jsonify({"status": "pulling", "model": model})

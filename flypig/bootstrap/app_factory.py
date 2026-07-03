@@ -17,7 +17,8 @@ from pathlib import Path
 from quart import Quart
 from quart_cors import cors
 
-from flypig.bootstrap.settings import AppSettings, load_config
+from flypig.shared.settings import AppSettings
+from flypig.bootstrap.settings import load_config
 from flypig.bootstrap.container import AppContainer
 from flypig.bootstrap.lifecycle import LifecycleEvents
 from flypig.bootstrap.logging import init_logging
@@ -37,8 +38,17 @@ def create_app(
     container.config.override(settings)
 
     app = Quart(__name__)
+
+    # 所有服务均由 DI 容器管理
+    pricing_service = container.pricing_service()
+    pricing_service.start()
+
     app.config["flypig_settings"] = settings
     app.config["flypig_container"] = container
+    app.config["flypig_model_registry"] = container.model_registry()
+    app.config["flypig_model_factory"] = container.model_factory()
+    app.config["flypig_pricing_service"] = pricing_service
+    app.config["flypig_chat_service"] = container.chat_service()
 
     app = cors(app, allow_origin="*")
 
@@ -64,6 +74,7 @@ def create_app(
 
     @app.after_serving
     async def shutdown():
+        pricing_service.stop()
         await events.fire_shutdown()
 
     return app

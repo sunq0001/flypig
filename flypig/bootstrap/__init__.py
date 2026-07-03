@@ -7,8 +7,18 @@
 使用方式：from flypig.bootstrap import AppContainer, LifecycleEvents, create_app, load_config
 """
 
-from flypig.bootstrap.settings import AppSettings, load_config
+from flypig.shared.settings import AppSettings
+from flypig.bootstrap.settings import load_config
 from flypig.bootstrap.container import AppContainer
 from flypig.bootstrap.lifecycle import LifecycleEvents
 from flypig.bootstrap.logging import init_logging
 from flypig.bootstrap.app_factory import create_app
+
+__all__ = [
+    "AppContainer",
+    "AppSettings",
+    "LifecycleEvents",
+    "create_app",
+    "init_logging",
+    "load_config",
+]

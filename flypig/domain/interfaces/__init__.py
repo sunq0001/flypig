@@ -1,10 +1,52 @@
-"""FlyPig 抽象接口包
+"""领域接口包 — 所有 ABC 抽象接口的统一出口
 
-为什么做：领域层通过抽象接口定义行为契约，基础设施层实现具体逻辑，解耦模块间依赖。
-实现方法：ABC 抽象基类 + @abstractmethod，每个接口单一职责（模型适配/工具执行/对话存储/搜索/权限等）。
-实现效果：替换实现不需要改业务代码（如 SQLite → PostgreSQL 只需换 conversation_store 的实现）。
-技术栈：ABC, @abstractmethod
-
-层&依赖：domain.interfaces 层，零依赖（纯 ABC 定义）
-细节见文档：docs/docs_refactor/architecture-guide.md → §接口隔离
+使用方式：
+    from flypig.domain.interfaces import IModel, IEventStream, IAgent
 """
+
+from flypig.domain.interfaces.iagent import IAgent
+from flypig.domain.interfaces.iast_parser import IASTParser
+from flypig.domain.interfaces.icache import ICache
+from flypig.domain.interfaces.icontext_pipeline import IContextPipeline
+from flypig.domain.interfaces.iconversation_store import IConversationStore
+from flypig.domain.interfaces.ievent_stream import IEventStream
+from flypig.domain.interfaces.ihook import IHook
+from flypig.domain.interfaces.iknowledge_graph import IKnowledgeGraph
+from flypig.domain.interfaces.ilicense_service import ILicenseService
+from flypig.domain.interfaces.ilocal_model_service import ILocalModelService
+from flypig.domain.interfaces.ilsp_diagnostics import ILspDiagnostics
+from flypig.domain.interfaces.imapper import IMapper
+from flypig.domain.interfaces.imodel import IModel
+from flypig.domain.interfaces.imodel_factory import IModelFactory
+from flypig.domain.interfaces.imodel_policy import IModelPolicy
+from flypig.domain.interfaces.iranker import IRanker
+from flypig.domain.interfaces.isearch import ISearch
+from flypig.domain.interfaces.itool_executor import IToolExecutor
+from flypig.domain.interfaces.iupdate_service import IUpdateService
+from flypig.domain.interfaces.iusage_tracker import IUsageTracker
+from flypig.domain.interfaces.ivector_store import IVectorStore
+from flypig.domain.interfaces.repository import Repository
+
+__all__ = [
+    "IAgent",
+    "IASTParser",
+    "ICache",
+    "IContextPipeline",
+    "IConversationStore",
+    "IEventStream",
+    "IHook",
+    "IKnowledgeGraph",
+    "ILicenseService",
+    "ILocalModelService",
+    "ILspDiagnostics",
+    "IMapper",
+    "IModel",
+    "IModelFactory",
+    "IRanker",
+    "ISearch",
+    "IToolExecutor",
+    "IUpdateService",
+    "IUsageTracker",
+    "IVectorStore",
+    "Repository",
+]

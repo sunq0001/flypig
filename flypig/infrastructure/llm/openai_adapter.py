@@ -10,28 +10,34 @@ from typing import Any, Optional
 from openai import AsyncOpenAI
 
 from flypig.domain.exceptions import ModelAPIError
-from flypig.domain.model_ref import REGISTRY, PROVIDER_KEY_MAP, get_local_config
-from flypig.bootstrap.settings import AppSettings
+from flypig.domain.registry import ModelRegistry
+from flypig.shared.settings import AppSettings
 from flypig.domain.interfaces.imodel import IModel
 
 
 class OpenAIAdapter(IModel):
     """OpenAI 兼容格式的 LLM 适配器"""
 
-    def __init__(self, model_name: str, settings: Optional[AppSettings] = None):
+    def __init__(
+        self,
+        model_name: str,
+        settings: Optional[AppSettings] = None,
+        registry: Optional[ModelRegistry] = None,
+    ):
         self._model_name = model_name
+        self._registry = registry or ModelRegistry()
 
-        meta = REGISTRY.get(model_name)
+        meta = self._registry.resolve(model_name)
         if meta:
             self._provider = meta["provider"]
             self._base_url = meta["base_url"]
             self._api_model = meta["api_model"]
             is_local = meta.get("local", False)
         else:
-            local = get_local_config()
+            local = self._registry.get_local_config()
             self._provider = local.get("provider", "Local")
             api_path = local.get("api_path", "/v1")
-            base_url = settings.ollama_base_url or local.get("default_ollama_url", "")
+            base_url = settings.ollama_base_url or local.get("default_ollama_url", "") if settings else ""
             self._base_url = f"{base_url}{api_path}"
             self._api_model = model_name
             is_local = True
@@ -48,11 +54,10 @@ class OpenAIAdapter(IModel):
             api_key=api_key,
         )
 
-    @staticmethod
-    def _resolve_api_key(settings: Optional[AppSettings], provider: str) -> Optional[str]:
+    def _resolve_api_key(self, settings: Optional[AppSettings], provider: str) -> Optional[str]:
         if settings is None:
             return None
-        attr = PROVIDER_KEY_MAP.get(provider, "")
+        attr = self._registry.provider_key_map.get(provider, "")
         return getattr(settings, attr, None) if attr else None
 
     async def stream(

@@ -8,3 +8,5 @@
 层&依赖：infrastructure.tools 层，实现 IToolExecutor，依赖 domain/interfaces
 细节见文档：docs/docs_refactor/tools.md → §核心哲学
 """
+
+__all__ = []

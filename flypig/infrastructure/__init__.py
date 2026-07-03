@@ -8,3 +8,5 @@
 层&依赖：infrastructure 层（最外层），实现 domain 接口，依赖第三方库
 细节见文档：docs/docs_refactor/backend-modules.md → §Infrastructure Layer
 """
+
+__all__ = []
