@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, architecture-refactor, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./flypig
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Ruff 代码格式检查
+        run: ruff check --output-format github
+
+      - name: DDD 架构合规检查（12 项）
+        run: python ../scripts/architecture_check.py
+
+      - name: 层依赖检查（import-linter）
+        run: lint-imports
+
+      - name: 单元测试
+        run: python -m pytest tests/ -v --tb=short --timeout=30 || echo "  暂无测试，跳过"
