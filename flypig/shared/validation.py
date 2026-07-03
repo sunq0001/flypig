@@ -6,7 +6,7 @@ ValidationResult 收集错误不抛异常，Validator 组合多条校验规则�
 """
 
 from dataclasses import dataclass, field
-from typing import Callable, List, Optional, TypeVar
+from typing import Callable, Generic, List, Optional, TypeVar
 
 T = TypeVar("T")
 
