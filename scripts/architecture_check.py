@@ -748,6 +748,89 @@ def check_magic_strings(file_path: Path) -> list[str]:
     return violations
 
 
+def check_many_returns(file_path: Path) -> list[str]:
+    """检查函数返回点过多（>4）"""
+    violations: list[str] = []
+    tree = read_tree(file_path)
+    if tree is None:
+        return violations
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            returns = sum(1 for _ in ast.walk(node) if isinstance(_, ast.Return))
+            if returns > 4:
+                violations.append(
+                    f"  [RETURNS] {node.name} 有 {returns} 个 return 语句（> 4），流程过于复杂"
+                )
+                break
+    return violations
+
+
+def check_large_class(file_path: Path) -> list[str]:
+    """检查类是否过大：方法 > 15 或 __init__ 属性 > 10"""
+    violations: list[str] = []
+    tree = read_tree(file_path)
+    if tree is None:
+        return violations
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            methods = sum(1 for _ in ast.walk(node)
+                          if isinstance(_, (ast.FunctionDef, ast.AsyncFunctionDef))
+                          and not _.name.startswith("_"))
+            if methods > 15:
+                violations.append(
+                    f"  [CLASS] {node.name} 有 {methods} 个公开方法（> 15），建议拆分"
+                )
+                break
+            # 检查 __init__ 中 self.xxx 赋值数量
+            for item in ast.iter_child_nodes(node):
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and item.name == "__init__":
+                    attrs = sum(1 for _ in ast.walk(item)
+                                if isinstance(_, ast.Attribute)
+                                and isinstance(_.value, ast.Name)
+                                and _.value.id == "self"
+                                and isinstance(_.ctx, ast.Store))
+                    if attrs > 10:
+                        violations.append(
+                            f"  [CLASS] {node.name}.__init__ 赋值 {attrs} 个属性（> 10），职责过多"
+                        )
+                        break
+    return violations
+
+
+def check_abc_without_abstract(file_path: Path) -> list[str]:
+    """检查继承 ABC 的类是否至少有一个 @abstractmethod"""
+    violations: list[str] = []
+    tree = read_tree(file_path)
+    if tree is None:
+        return violations
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
+            is_abc = any(
+                isinstance(b, ast.Name) and b.id == "ABC"
+                for b in node.bases
+            )
+            if not is_abc:
+                continue
+            has_abstract = False
+            for item in ast.walk(node):
+                if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    for deco in item.decorator_list:
+                        if isinstance(deco, ast.Name) and deco.id == "abstractmethod":
+                            has_abstract = True
+                            break
+                    if has_abstract:
+                        break
+            if not has_abstract:
+                violations.append(
+                    f"  [ABC] {node.name} 继承 ABC 但无 @abstractmethod，应改为普通类"
+                )
+                break
+    return violations
+
+
 REQUIRED_DOC_SECTIONS = ["为什么做", "实现方法", "层&依赖"]
 """实代码文件必须在 docstring 中包含的 FlyPig 格式段落"""
 
@@ -861,6 +944,9 @@ def main() -> int:
         ("print",    "生产代码print",       check_print),
         ("assert",   "生产代码assert",      check_assert),
         ("mstr",     "魔法字符串",          check_magic_strings),
+        ("returns",  "返回点过多",          check_many_returns),
+        ("class",    "类过大/属性过多",     check_large_class),
+        ("abc",      "ABC无抽象方法",       check_abc_without_abstract),
         ("docq",     "docstring质量",       check_docstring_quality),
     ]
 
@@ -929,6 +1015,9 @@ def main() -> int:
         "print":    ("PRINT",    "生产代码print"),
         "assert":   ("ASSERT",   "生产代码assert"),
         "mstr":     ("MSTR",     "魔法字符串"),
+        "returns":  ("RETURNS",  "返回点过多"),
+        "class":    ("CLASS",    "类过大/属性过多"),
+        "abc":      ("ABC",      "ABC无抽象方法"),
         "docq":     ("DOCQ",     "docstring质量"),
         "circular": ("CIRCULAR", "循环依赖"),
     }
