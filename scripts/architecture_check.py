@@ -867,6 +867,84 @@ def check_return_type(file_path: Path) -> list[str]:
     return violations
 
 
+
+def check_robust_async(file_path: Path) -> list[str]:
+    """检查 async 私有函数是否有 try 保护"""
+    violations: list[str] = []
+    tree = read_tree(file_path)
+    if tree is None:
+        return violations
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if not node.name.startswith("_"):
+                continue
+            has_await = any(isinstance(n, ast.Await) for n in ast.walk(node))
+            has_try = any(isinstance(n, ast.Try) for n in ast.walk(node))
+            if has_await and not has_try:
+                violations.append(f"  [ROBUST] {node.name} 有 await 但无 try/except")
+                break
+    return violations
+
+
+def check_robust_fileio(file_path: Path) -> list[str]:
+    """检查文件操作是否有 try 保护"""
+    violations: list[str] = []
+    if "test_" in file_path.name:
+        return violations
+    content = file_path.read_text(encoding="utf-8")
+    if not any(kw in content for kw in ("open(", ".read_text(", ".write_text(")):
+        return violations
+    if "try:" in content:
+        return violations
+    tree = read_tree(file_path)
+    if tree is None:
+        return violations
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Attribute) and func.attr in ("open", "read_text", "write_text"):
+                violations.append(f"  [ROBUST] 文件操作 ({func.attr}) 没有 try 包裹")
+                break
+    return violations
+
+
+def check_perf_import(file_path: Path) -> list[str]:
+    """检查函数内 import（多次调用重复加载）"""
+    violations: list[str] = []
+    tree = read_tree(file_path)
+    if tree is None:
+        return violations
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for inner in ast.walk(node):
+                if isinstance(inner, (ast.Import, ast.ImportFrom)):
+                    violations.append(f"  [PERF] 函数 {node.name} 内有 import，应提到文件顶部")
+                    return violations
+    return violations
+
+
+def check_couple_pkg(file_path: Path) -> list[str]:
+    """检查包级别耦合度"""
+    violations: list[str] = []
+    tree = read_tree(file_path)
+    if tree is None:
+        return violations
+    layers: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                pkg = get_imported_package(alias.name)
+                if pkg:
+                    layers.add(pkg)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            pkg = get_imported_package(node.module)
+            if pkg:
+                layers.add(pkg)
+    if len(layers) > 2:
+        violations.append(f"  [COUPLE_PKG] 依赖了 {len(layers)} 个包 ({', '.join(sorted(layers))})")
+    return violations
+
+
 REQUIRED_DOC_SECTIONS = ["为什么做", "实现方法", "层&依赖"]
 """实代码文件必须在 docstring 中包含的 FlyPig 格式段落"""
 
@@ -984,6 +1062,10 @@ def main() -> int:
         ("class",    "类过大/属性过多",     check_large_class),
         ("abc",      "ABC无抽象方法",       check_abc_without_abstract),
         ("rettype",  "缺返回类型注解",      check_return_type),
+                ("robust",   "IO无try保护",         check_robust_async),
+        ("robustio", "文件无try保护",        check_robust_fileio),
+        ("perf",     "函数内import",         check_perf_import),
+        ("couplepkg","包耦合度过高",         check_couple_pkg),
         ("docq",     "docstring质量",       check_docstring_quality),
     ]
 
@@ -1056,6 +1138,10 @@ def main() -> int:
         "class":    ("CLASS",    "类过大/属性过多"),
         "abc":      ("ABC",      "ABC无抽象方法"),
         "rettype":  ("RETTYPE",  "缺返回类型注解"),
+                "robust":   ("ROBUST",   "IO无try保护"),
+        "robustio": ("ROBUSTIO", "文件无try保护"),
+        "perf":     ("PERF",     "函数内import"),
+        "couplepkg":("COUPLE_PKG","包耦合度过高"),
         "docq":     ("DOCQ",     "docstring质量"),
         "circular": ("CIRCULAR", "循环依赖"),
     }
