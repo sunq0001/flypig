@@ -17,13 +17,14 @@ from flypig.shared.settings import AppSettings
 from flypig.domain.exceptions import ModelAPIError
 from flypig.domain.interfaces.imodel_factory import IModelFactory
 from flypig.shared.base import ApplicationService
-
-# ── SSE 事件类型常量 ──
-SSE_ERROR = "error"
-SSE_TEXT_START = "text-start"
-SSE_TEXT_DELTA = "text-delta"
-SSE_TEXT_END = "text-end"
-SSE_FINISH = "finish"
+from flypig.shared.constants import (
+    ERROR_TRUNCATE_LENGTH,
+    SSE_EVENT_ERROR as SSE_ERROR,
+    SSE_EVENT_FINISH as SSE_FINISH,
+    SSE_EVENT_TEXT_DELTA as SSE_TEXT_DELTA,
+    SSE_EVENT_TEXT_END as SSE_TEXT_END,
+    SSE_EVENT_TEXT_START as SSE_TEXT_START,
+)
 
 
 class ChatApplicationService(ApplicationService):
