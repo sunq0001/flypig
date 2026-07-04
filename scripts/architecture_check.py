@@ -824,6 +824,17 @@ def check_abc_without_abstract(file_path: Path) -> list[str]:
                     if has_abstract:
                         break
             if not has_abstract:
+                # 放行标记基类（类体只有 pass/docstring/property/私有方法）
+                is_marker = all(
+                    isinstance(item, (ast.Pass, ast.Expr)) or
+                    (isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)) and
+                     (item.name.startswith("_") or
+                      any(isinstance(d, ast.Name) and d.id == "property"
+                          for d in item.decorator_list)))
+                    for item in node.body
+                )
+                if is_marker:
+                    continue
                 violations.append(
                     f"  [ABC] {node.name} 继承 ABC 但无 @abstractmethod，应改为普通类"
                 )

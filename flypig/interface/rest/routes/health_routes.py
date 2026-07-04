@@ -13,10 +13,10 @@ health_bp = Blueprint("health", __name__)
 
 
 @health_bp.route("/api/health")
-async def health():
+async def health() -> dict:
     return {"status": "ok", "version": "0.1.0"}
 
 
 @health_bp.route("/api/ping")
-async def ping():
+async def ping() -> dict:
     return {"pong": True}

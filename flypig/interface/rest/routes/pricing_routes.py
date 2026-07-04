@@ -21,7 +21,7 @@ def _get_pricing_service() -> PricingService:
 
 
 @pricing_bp.route("/api/pricing")
-async def pricing():
+async def pricing() -> dict:
     """返回价格数据，缓存优先，后台异步刷新
 
     查询参数:
@@ -42,7 +42,7 @@ async def pricing():
 
 
 @pricing_bp.route("/api/routes")
-async def list_routes():
+async def list_routes() -> dict:
     rules = sorted([r.rule for r in current_app.url_map.iter_rules()])
     return jsonify({"routes": rules})
 

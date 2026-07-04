@@ -66,11 +66,11 @@ def create_app(
     app.config["flypig_events"] = events
 
     @app.before_serving
-    async def startup():
+    async def startup() -> None:
         await events.fire_startup()
 
     @app.after_serving
-    async def shutdown():
+    async def shutdown() -> None:
         pricing_service.stop()
         await events.fire_shutdown()
 

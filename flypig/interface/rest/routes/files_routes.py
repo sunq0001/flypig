@@ -15,7 +15,7 @@ files_bp = Blueprint("files", __name__)
 
 
 @files_bp.route("/api/tree", methods=["POST"])
-async def tree():
+async def tree() -> dict:
     data = await request.get_json(force=True)
     path_str = (data or {}).get("path", "")
     if not path_str:

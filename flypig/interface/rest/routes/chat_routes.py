@@ -19,7 +19,7 @@ chat_bp = Blueprint("chat", __name__, url_prefix="/api")
 
 
 @chat_bp.route("/chat", methods=["POST"])
-async def chat():
+async def chat() -> Response:
     data = await request.get_json(force=True) or {}
     messages = data.get("messages", [])
     model_name = data.get("model", "")
