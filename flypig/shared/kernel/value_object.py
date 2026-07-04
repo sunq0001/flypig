@@ -1,6 +1,10 @@
-"""值对象基类 — 不可变，按所有属性值相等
+"""ValueObject — 值对象基类
 
-使用 @dataclass(frozen=True) 继承此类。equals 基于所有属性值，不是 ID。
+为什么做：DDD 中值对象没有唯一标识，仅靠属性值区分。两个值对象的所有属性相同则视为相等。
+典型用途：金额、地址、日期范围、定价配置等。
+
+实现方法：ABC 基类，__eq__ 基于 __dict__ 比较，__hash__ 基于排序后的属性元组。
+使用方式：@dataclass(frozen=True) class Foo(ValueObject)
 
 层&依赖：shared.kernel 层，零依赖
 """

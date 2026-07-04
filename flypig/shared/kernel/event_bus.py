@@ -1,9 +1,12 @@
-"""事件发布器接口 — 领域层定义，基础设施层实现
+"""EventPublisher — 事件发布器接口
 
-AggregateRoot.pull_events() 取出事件后，由 ApplicationService
-调用 EventPublisher.publish() 发出。
+为什么做：AggregateRoot.pull_events() 取出的领域事件需要发布到消息中间件
+或事件总线，由对应的 Handler 处理。领域层只定义接口，不负责实现。
 
-层&依赖：shared.kernel 层，依赖 domain_event
+实现方法：ABC + @abstractmethod 定义 publish / publish_one 两个方法。
+基础设施层（如 InfMemoryEventBus）负责具体实现。
+
+层&依赖：shared.kernel 层，依赖 DomainEvent
 """
 
 from abc import ABC, abstractmethod

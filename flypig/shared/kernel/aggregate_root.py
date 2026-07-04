@@ -1,9 +1,12 @@
-"""聚合根基类 — 管理内部实体一致性和领域事件
+"""AggregateRoot — 聚合根基类
 
-约束：一个事务只修改一个聚合根实例。通过 record_event 记录事件，
-pull_events 取出事件后由 ApplicationService 通过 EventPublisher 发布。
+为什么做：DDD 聚合根是领域模型的入口，保证聚合内部实体的一致性和不变性。
+一个事务只修改一个聚合根实例，所有外部访问必须通过聚合根。
 
-层&依赖：shared.kernel 层，依赖 entity + domain_event
+实现方法：继承 Entity，内部维护 _events 列表。record_event 记录领域事件，
+pull_events 取出已记录的事件供 ApplicationService 通过 EventPublisher 发布。
+
+层&依赖：shared.kernel 层，依赖 Entity + DomainEvent
 """
 
 from typing import List

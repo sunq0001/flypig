@@ -1,7 +1,10 @@
-"""工作单元接口 — 事务管理
+"""UnitOfWork — 工作单元接口
 
-定义事务边界，自动 Commit 或 Rollback，作为仓储的统一入口。
-使用 async with uow 上下文管理。
+为什么做：一个业务操作可能涉及多个 Repository 的写入，需要事务保证原子性。
+UnitOfWork 定义了事务边界：全部成功则 commit，任一失败则 rollback。
+
+实现方法：async context manager（__aenter__ / __aexit__），
+退出时无异常 → commit，有异常 → rollback。
 
 层&依赖：shared.kernel 层，零依赖
 """

@@ -1,6 +1,10 @@
-"""领域事件基类 — 记录已发生的事实
+"""DomainEvent — 领域事件基类
 
-@dataclass 定义 event_id / occurred_at / aggregate_id。
+为什么做：领域事件记录领域内已发生的事实，用于解耦聚合根之间的通信。
+例如"会话已创建"、"消息已发送"等事件由 AggregateRoot 记录，
+通过 EventBus 路由到对应的 Handler 处理。
+
+实现方法：@dataclass 定义 event_id / occurred_at / aggregate_id 三个字段。
 由 AggregateRoot.record_event 自动填充 aggregate_id。
 
 层&依赖：shared.kernel 层，零依赖
