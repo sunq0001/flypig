@@ -404,7 +404,7 @@ ALLOWED_URL_PATTERNS = [
 ]
 
 HARDCODE_THRESHOLD_IMPORTS = 25   # 超过此数认为高耦合
-HARDCODE_THRESHOLD_PARAMS = 6     # 函数参数超过此数认为设计问题
+HARDCODE_THRESHOLD_PARAMS = 5     # 函数参数超过此数认为设计问题
 
 
 def check_coupling(file_path: Path) -> list[str]:
@@ -831,6 +831,31 @@ def check_abc_without_abstract(file_path: Path) -> list[str]:
     return violations
 
 
+def check_return_type(file_path: Path) -> list[str]:
+    """检查公开函数是否缺少返回类型注解"""
+    violations: list[str] = []
+    tree = read_tree(file_path)
+    if tree is None:
+        return violations
+    if file_path.name == "__init__.py":
+        return violations
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.name.startswith("_"):
+                continue
+            if node.returns is None:
+                if node.name in ("__init__", "__call__", "__new__",
+                                 "__enter__", "__aenter__", "__aexit__",
+                                 "__exit__"):
+                    continue
+                violations.append(
+                    f"  [RETTYPE] 公开函数 {node.name} 缺少返回类型注解"
+                )
+                break
+    return violations
+
+
 REQUIRED_DOC_SECTIONS = ["为什么做", "实现方法", "层&依赖"]
 """实代码文件必须在 docstring 中包含的 FlyPig 格式段落"""
 
@@ -947,6 +972,7 @@ def main() -> int:
         ("returns",  "返回点过多",          check_many_returns),
         ("class",    "类过大/属性过多",     check_large_class),
         ("abc",      "ABC无抽象方法",       check_abc_without_abstract),
+        ("rettype",  "缺返回类型注解",      check_return_type),
         ("docq",     "docstring质量",       check_docstring_quality),
     ]
 
@@ -1018,6 +1044,7 @@ def main() -> int:
         "returns":  ("RETURNS",  "返回点过多"),
         "class":    ("CLASS",    "类过大/属性过多"),
         "abc":      ("ABC",      "ABC无抽象方法"),
+        "rettype":  ("RETTYPE",  "缺返回类型注解"),
         "docq":     ("DOCQ",     "docstring质量"),
         "circular": ("CIRCULAR", "循环依赖"),
     }
