@@ -7,6 +7,7 @@
 层&依赖：tests.unit 层，依赖 domain.pricing_entry
 """
 
+import pytest
 from flypig.domain import PricingEntry
 
 
@@ -30,7 +31,6 @@ class TestPricingEntry:
         assert entry.input_cache_hit is None
 
     def test_frozen(self):
-        import pytest
         entry = PricingEntry(input_price=1.0, output_price=2.0)
         with pytest.raises(AttributeError):
             entry.input_price = 999.0

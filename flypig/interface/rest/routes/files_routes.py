@@ -9,7 +9,7 @@
 
 from http import HTTPStatus
 from pathlib import Path
-from quart import Blueprint, request, Response, jsonify
+from quart import Blueprint, request, Response, jsonify, send_file
 
 files_bp = Blueprint("files", __name__)
 
@@ -50,7 +50,6 @@ IMAGE_EXTENSIONS = {'.png','.jpg','.jpeg','.gif','.svg','.webp','.ico','.bmp'}
 
 async def _send_image(p: Path):
     """发送图片文件（原始二进制，不走 JSON）"""
-    from quart import send_file
     return await send_file(str(p), mimetype=f"image/{p.suffix[1:].lower()}")
 
 

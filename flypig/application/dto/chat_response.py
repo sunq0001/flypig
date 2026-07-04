@@ -8,6 +8,7 @@
 """
 
 from dataclasses import dataclass, field
+import json
 from typing import Any, Dict, List, Optional
 
 
@@ -27,7 +28,6 @@ class ChatResponse:
 
     def to_sse(self) -> str:
         """序列化为 SSE 格式字符串（由接口层调用）"""
-        import json
         payload: Dict[str, Any] = {"type": self.type}
         if self.content is not None:
             if self.type in ("text-delta", "text-start", "text-end"):

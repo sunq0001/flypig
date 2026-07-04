@@ -8,6 +8,8 @@
 | 层  级 | shared/constants.py | HTTP 状态码、SSE 事件类型等被多层使用 |
 | 配置级 | config.yaml | 可能被运维改的值 |
 
+实现方法：模块级常量定义，按用途分组，文件级/层级/配置级三级体系。
+
 使用方式：
     from shared.constants import SSE_EVENT_TEXT_DELTA
 
