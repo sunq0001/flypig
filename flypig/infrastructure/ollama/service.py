@@ -18,6 +18,8 @@ from flypig.shared.settings import AppSettings
 from flypig.domain.interfaces.ilocal_model_service import ILocalModelService
 from flypig.domain.registry import ModelRegistry
 
+OLLAMA_CHECK_TIMEOUT = 2  # Ollama 运行检测超时秒数
+
 
 class OllamaLocalModelService(ILocalModelService):
     """Ollama 本地模型服务 — 实现 ILocalModelService"""
@@ -47,7 +49,7 @@ class OllamaLocalModelService(ILocalModelService):
     # ── interface implementation ──
 
     async def check_running(self) -> bool:
-        timeout = self._local_cfg.get("check_timeout", 2)
+        timeout = self._local_cfg.get("check_timeout", OLLAMA_CHECK_TIMEOUT)
         try:
             resp = await httpx.AsyncClient().get(
                 f"{self._base_url}/api/tags", timeout=timeout

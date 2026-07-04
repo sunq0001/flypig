@@ -21,9 +21,10 @@ from loguru import logger
 from flypig.domain.registry import ModelRegistry
 
 # ── 常量 ──
-DEFAULT_EXCHANGE_CACHE_TTL = 3600  # 汇率缓存 1 小时
-EXCHANGE_RATE_TIMEOUT = 5  # 汇率 API 超时秒数
-DEFAULT_REFRESH_INTERVAL = 86400  # 定价刷新间隔 24 小时
+DEFAULT_EXCHANGE_CACHE_TTL = 3600
+EXCHANGE_RATE_TIMEOUT = 5
+DEFAULT_REFRESH_INTERVAL = 86400
+PORTKEY_REQUEST_TIMEOUT = 10
 
 
 class PricingService:
@@ -115,7 +116,7 @@ class PricingService:
         base = pricing.get("portkey_base")
         if not base:
             return {}
-        timeout = pricing.get("timeout", 10)
+        timeout = pricing.get("timeout", PORTKEY_REQUEST_TIMEOUT)
 
         provider_lower = provider.lower()
         url = f"{base}/{provider_lower}.json"
