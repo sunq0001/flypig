@@ -1,6 +1,10 @@
-"""文件操作路由 (/api/tree /api/file)
+"""files_routes
 
-层&amp;依赖：interface.rest.routes 层，依赖本地文件系统
+为什么做：前端需要浏览文件树和读取文件内容
+
+实现方法：POST /api/tree 返回目录结构，POST /api/file 读取文件内容
+
+层&依赖：interface.rest.routes 层
 """
 
 from http import HTTPStatus

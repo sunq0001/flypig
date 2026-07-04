@@ -1,7 +1,8 @@
-"""ModelRegistry — 模型注册表域服务
+"""registry
 
-从 model_registry.json 加载所有模型配置、厂商元数据、定价配置、本地配置。
-DDD 域服务，封装所有 JSON 读取逻辑，不暴露全局变量。
+为什么做：模型配置（厂商/API 路径/定价/本地模型）集中在 model_registry.json 中，需要统一的读取入口
+
+实现方法：从 model_registry.json 加载所有模型元数据、厂商映射、定价配置、本地配置。DomainService 封装 JSON 读取逻辑
 
 层&依赖：domain 层
 """

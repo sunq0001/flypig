@@ -1,10 +1,10 @@
-"""SSE 事件队列实现
+"""sse_queue
 
-实现方法：asyncio.Queue 封装，按 session_id 隔离。
-实现 IEventStream 接口，供 ChatService 依赖注入。
+为什么做：ChatService 需要按 session 隔离推送实时事件，IEventStream 接口的 asyncio.Queue 实现
 
-技术栈：asyncio.Queue, IEventStream
-层&依赖：interface 层，实现 domain.interfaces.ievent_stream
+实现方法：SSEQueue 实现 IEventStream 接口，内部用 dict[str, asyncio.Queue] 按 session_id 隔离
+
+层&依赖：interface.sse 层，实现 domain.interfaces.ievent_stream
 """
 
 from __future__ import annotations

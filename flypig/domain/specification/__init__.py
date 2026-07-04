@@ -1,7 +1,10 @@
-"""规格模式包 — 可组合的业务规则
+"""__init__
 
-使用方式：
-    from flypig.domain.specification import SessionByStatus, SessionByTime
+为什么做：统一导出所有规格模式实现
+
+实现方法：集中 import + __all__，每个规格一个文件
+
+层&依赖：domain.specification 层
 """
 
 from flypig.domain.specification.session_by_status import SessionByStatus

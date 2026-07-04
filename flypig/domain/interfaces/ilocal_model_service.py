@@ -1,9 +1,10 @@
-"""本地模型服务接口
+"""ilocal_model_service
 
-为什么做：domain 层需要定义"怎么查询本地模型状态/拉取模型"的契约，
-但不应直接依赖 Ollama HTTP 的具体实现（当前在 acl/ollama.py）。
+为什么做：本地模型（Ollama）的管理操作（检测运行状态、列表已安装模型、拉取模型）需要统一接口，方便测试和替换
 
-层&依赖：domain.interfaces 层，depends on nothing
+实现方法：ABC 定义 check_running / list_installed_names / pull_model 三个方法。OllamaLocalModelService 实现基于 httpx
+
+层&依赖：domain.interfaces 层
 """
 
 from abc import ABC, abstractmethod

@@ -1,13 +1,10 @@
-"""LifecycleEvents — 应用生命周期事件
+"""lifecycle
 
-为什么做：启动时需要初始化资源，关闭时需要清理（关闭线程池、保存状态），
-需要一个标准事件机制串联，模块各自注册自己的回调。
+为什么做：管理应用生命周期事件（启动/关闭），确保资源正确初始化和释放
 
-实现方法：提供 on_startup / on_shutdown 注册，fire_startup / fire_shutdown 依次触发。
+实现方法：LifecycleEvents 类注册 startup/shutdown 回调，按注册顺序依次触发
 
-实现效果：模块独立注册生命周期逻辑，新增模块只需在核心装配链路中加一行注册。
-
-层&amp;依赖：bootstrap 层，依赖 logging
+层&依赖：bootstrap 层
 """
 
 from __future__ import annotations

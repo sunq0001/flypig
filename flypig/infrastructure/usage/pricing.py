@@ -1,9 +1,10 @@
-"""PricingService — 模型价格获取（从 Portkey 定价 API 获取 + 本地缓存）
+"""pricing
 
-为什么做：前端需要显示各模型实时价格，PricingService 封装了从 Portkey 抓取、
-USD→CNY 汇率转换、本地缓存、每日自动刷新。
+为什么做：前端需要显示各模型实时价格，需要从 Portkey API 抓取 + 本地缓存 + 每日自动刷新
 
-层&依赖：infrastructure.usage 层，依赖 domain.registry.ModelRegistry
+实现方法：PricingService 封装了从 Portkey 抓取、USD→CNY 汇率转换、本地缓存（pricing_cache.json）、每日自动刷新循环
+
+层&依赖：infrastructure.usage 层，依赖 domain.registry
 """
 
 from __future__ import annotations

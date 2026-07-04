@@ -1,13 +1,10 @@
-"""Quart App 工厂
+"""app_factory
 
-为什么做：后端的 Web 入口需要统一创建 app 实例、注册蓝图、配置中间件。
+为什么做：后端的 Web 入口需要统一创建 app 实例、注册蓝图、配置中间件
 
-实现方法：create_app() 工厂函数，先通过 load_config + AppContainer 初始化配置和 DI 容器，
-再注册所有接口路由蓝图 + CORS + 日志中间件 + 生命周期事件。
+实现方法：create_app() 工厂函数，先通过 load_config + AppContainer 初始化配置和 DI 容器，再注册所有路由蓝图 + CORS + 日志 + 生命周期
 
-实现效果：启动方式切换不影响路由代码，新增蓝图只需在工厂里加一行。
-
-层&amp;依赖：bootstrap 层，依赖 interface/rest/routes 蓝图
+层&依赖：bootstrap 层，依赖 interface/rest/routes
 """
 
 from __future__ import annotations

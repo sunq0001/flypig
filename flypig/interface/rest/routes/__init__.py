@@ -1,6 +1,10 @@
-"""接口路由蓝图
+"""__init__
 
-使用方式：from flypig.interface.rest.routes import config_bp, files_bp, ...
+为什么做：统一导出所有 API 路由蓝图
+
+实现方法：集中 import + __all__，注册到 Quart app
+
+层&依赖：interface.rest.routes 层
 """
 
 from flypig.interface.rest.routes.config_routes import config_bp

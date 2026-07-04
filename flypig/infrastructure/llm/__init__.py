@@ -1,10 +1,10 @@
-"""LLM 模型适配包
+"""__init__
 
-为什么做：不同 LLM API（DeepSeek/Claude/GPT/本地模型）的调用方式不同，需要统一适配。
-实现方法：OpenAI 兼容适配 / Anthropic SDK / Ollama 本地模型，各实现 IModel 接口。
+为什么做：不同 LLM API 的适配器统一出口
 
-使用方式：
-    from flypig.infrastructure.llm import OpenAIAdapter, ModelFactory
+实现方法：集中 import + __all__
+
+层&依赖：infrastructure.llm 层
 """
 
 from flypig.infrastructure.llm.model_factory import ModelFactory

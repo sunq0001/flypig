@@ -1,6 +1,10 @@
-"""定价路由 (/api/pricing)
+"""pricing_routes
 
-层&依赖：interface.rest.routes 层，通过 PricingService 依赖 infrastructure.usage
+为什么做：前端需要获取模型价格信息
+
+实现方法：GET /api/pricing 返回 PricingService.fetch_pricing() 结果
+
+层&依赖：interface.rest.routes 层
 """
 
 import asyncio

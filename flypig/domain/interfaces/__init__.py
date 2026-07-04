@@ -1,7 +1,10 @@
-"""领域接口包 — 所有 ABC 抽象接口的统一出口
+"""__init__
 
-使用方式：
-    from flypig.domain.interfaces import IModel, IEventStream, IAgent
+为什么做：统一导出所有领域抽象接口（ABC）
+
+实现方法：集中 import + __all__，基础设施层实现这些接口
+
+层&依赖：domain.interfaces 层
 """
 
 from flypig.domain.interfaces.iagent import IAgent

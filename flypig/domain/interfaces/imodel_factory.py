@@ -1,7 +1,8 @@
-"""模型工厂接口
+"""imodel_factory
 
-为什么做：路由层（chat_routes）不应直接 new OpenAIAdapter(...)，应通过工厂接口创建模型适配器。
-IModelFactory 接收模型名 + 配置，返回对应的 IModel 实例。
+为什么做：路由层不应直接 new OpenAIAdapter，应通过工厂接口创建模型适配器
+
+实现方法：Factory[IModel] 泛型，create 方法接收模型名 + 配置，返回对应的 IModel 实例
 
 层&依赖：domain.interfaces 层，extends Factory[IModel]
 """

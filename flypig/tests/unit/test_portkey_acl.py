@@ -1,4 +1,11 @@
-"""测试 ACL 层 — Portkey JSON → PricingEntry 转换"""
+"""test_portkey_acl
+
+为什么做：测试 ACL 层的 Portkey 格式转换是否正确
+
+实现方法：构造 Portkey JSON 数据，调用 portkey_to_pricing_entry，验证返回的 PricingEntry 属性值
+
+层&依赖：tests.unit 层，依赖 acl.pricing
+"""
 
 from flypig.acl.pricing import portkey_to_pricing_entry
 

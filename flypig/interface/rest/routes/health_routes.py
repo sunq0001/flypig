@@ -1,6 +1,10 @@
-"""健康检查路由 (/api/health /api/ping)
+"""health_routes
 
-层&amp;依赖：interface.rest.routes 层，零依赖
+为什么做：健康检查端点，用于监控和负载均衡
+
+实现方法：GET /api/health 返回 {'status': 'ok'}
+
+层&依赖：interface.rest.routes 层
 """
 
 from quart import Blueprint

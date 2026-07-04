@@ -1,22 +1,10 @@
-"""DDD 基类定义 — 统一导出入口
+"""base
 
-所有领域层的共享基类和接口集中在此文件导出，
-业务模块只需 `from flypig.shared.base import ...` 即可。
+为什么做：统一导出入口，所有领域层的共享基类和接口集中在此导出
 
-包含：
-    - ValueObject:     值对象，不可变，按值相等         (kernel/)
-    - Entity:          实体，有唯一标识，按 ID 相等      (kernel/)
-    - AggregateRoot:   聚合根，管理内部实体和领域事件    (kernel/)
-    - DomainEvent:     领域事件基类                     (kernel/)
-    - Repository:      仓储接口泛型                     (kernel/)
-    - DomainService:   领域服务标记基类                  (kernel/)
-    - EventPublisher:  事件发布器接口                   (kernel/)
-    - UnitOfWork:      工作单元接口                     (kernel/)
-    - Factory:         工厂基类
-    - ApplicationService: 应用服务基类
-    - Result:          结果类型
-    - ValidationResult / Validator: 校验
-    - Specification:   规格模式
+实现方法：从 shared/kernel 和各模块 re-export，业务模块只需 from flypig.shared.base import Entity
+
+层&依赖：shared 层
 """
 
 from flypig.shared.kernel.aggregate_root import AggregateRoot

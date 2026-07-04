@@ -1,7 +1,10 @@
-"""领域事件包 — 所有 DomainEvent 和 EventHandler 的统一出口
+"""__init__
 
-使用方式：
-    from flypig.domain.event import SessionCreated, MessageSent
+为什么做：统一导出所有 DomainEvent 和 EventHandler
+
+实现方法：集中 import + __all__，按事件类型组织文件
+
+层&依赖：domain.event 层
 """
 
 from flypig.domain.event.message_received import MessageReceived

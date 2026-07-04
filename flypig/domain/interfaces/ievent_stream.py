@@ -1,9 +1,10 @@
-"""事件流接口
+"""ievent_stream
 
-为什么做：ChatService 需要向前端推送逐 token 事件（token/tool_call/error/done），
-但不应直接依赖 SSE 具体实现（sse_queue）。
+为什么做：ChatService 需要向前端推送逐 token 事件（token/tool_call/error/done），但不应直接依赖 SSE 具体实现
 
-层&依赖：domain.interfaces 层，depends on nothing
+实现方法：ABC 定义 push/pop/cleanup 三个方法。SSEQueue 实现基于 asyncio.Queue
+
+层&依赖：domain.interfaces 层
 """
 
 from abc import ABC, abstractmethod

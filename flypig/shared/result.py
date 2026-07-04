@@ -1,9 +1,10 @@
-"""Result 类型 — 显式处理成功/失败，代替异常
+"""result
 
-Ok(value) / Err(error) 模式，避免 try/except 传播。调用 unwrap() 获取值，
-失败时抛 UnwrapError（继承 FlyPigException）。
+为什么做：Result 类型显式处理成功/失败，代替 try/except 异常传播
 
-层&依赖：shared 层，零依赖
+实现方法：@dataclass 泛型，ok() / err() 工厂方法，unwrap() 安全取值
+
+层&依赖：shared 层
 """
 
 from dataclasses import dataclass

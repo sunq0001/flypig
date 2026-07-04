@@ -1,7 +1,10 @@
-"""编排层 — LangGraph Agent 状态图编排
+"""__init__
 
-使用方式：
-    from flypig.orchestration import ChatService, GraphFactory
+为什么做：统一导出编排层核心服务
+
+实现方法：集中 import + __all__
+
+层&依赖：orchestration 层
 """
 
 from flypig.orchestration.chat import ChatService

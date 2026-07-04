@@ -1,6 +1,8 @@
-"""SSE 聊天路由 (/api/chat)
+"""chat_routes
 
-为什么做：前端 useChat 通过 POST /api/chat 发送用户消息，后端返回 AI SDK v4 SSE 流。
+为什么做：前端 useChat 通过 POST /api/chat 发送用户消息，后端返回 AI SDK v4 SSE 流
+
+实现方法：POST 路由接收 messages + model，调 ChatApplicationService.generate_sse() 返回 text/event-stream 响应
 
 层&依赖：interface.rest.routes 层，通过 ChatApplicationService 依赖 application 层
 """

@@ -1,4 +1,11 @@
-"""测试 PricingEntry 值对象 — domain 层零依赖，最好测"""
+"""test_pricing_entry
+
+为什么做：测试 PricingEntry 值对象的不可变性、相等性、默认值
+
+实现方法：直接构造 PricingEntry 实例，验证 __eq__、__ne__、frozen 等特性
+
+层&依赖：tests.unit 层，依赖 domain.pricing_entry
+"""
 
 from flypig.domain import PricingEntry
 

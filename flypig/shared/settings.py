@@ -1,9 +1,10 @@
-"""AppSettings — 应用配置模型（共享内核）
+"""settings
 
-为什么做：AppSettings 被 application 层和 infrastructure 层引用，
-定义在 shared 层避免各层依赖 bootstrap。
+为什么做：AppSettings 被 application 层和 infrastructure 层引用，定义在 shared 层避免各层依赖 bootstrap
 
-依赖说明：pydantic-settings 是所有层都需要的，因此放在 shared 是合理的。
+实现方法：pydantic-settings BaseSettings，环境变量自动读取。所有 LLM API Key 和基础配置在此定义
+
+层&依赖：shared 层，依赖 pydantic-settings
 """
 
 from __future__ import annotations

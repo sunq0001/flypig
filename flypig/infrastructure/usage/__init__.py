@@ -1,7 +1,10 @@
-"""用量与定价包
+"""__init__
 
-使用方式：
-    from flypig.infrastructure.usage import PricingService
+为什么做：统一导出用量与定价服务
+
+实现方法：集中 import + __all__
+
+层&依赖：infrastructure.usage 层
 """
 
 from flypig.infrastructure.usage.pricing import PricingService

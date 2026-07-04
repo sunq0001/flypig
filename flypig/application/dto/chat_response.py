@@ -1,14 +1,10 @@
-"""DTO — 聊天响应
+"""chat_response
 
-为什么做：应用服务（ChatApplicationService）不应直接拼 SSE 格式字符串。
-应返回结构化 DTO，由接口层（SSE/WebSocket/gRPC）负责序列化。
+为什么做：应用服务不应直接拼 SSE 格式字符串，应返回结构化 DTO，由接口层负责序列化
 
-使用方式：
-    async for resp in service.chat(messages, model):
-        if resp.type == "text-delta":
-            sse_transport.send(resp.to_sse())
+实现方法：@dataclass 定义 ChatResponse，type/content/metadata 三个字段，to_sse() 方法序列化为 SSE 格式
 
-层&依赖：application.dto 层，零依赖
+层&依赖：application.dto 层
 """
 
 from dataclasses import dataclass, field

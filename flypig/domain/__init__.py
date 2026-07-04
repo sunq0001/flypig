@@ -1,7 +1,10 @@
-"""FlyPig 领域层 — 所有领域模型、值对象、实体、聚合根、异常的统一出口
+"""__init__
 
-使用方式：
-    from flypig.domain import Session, Message, ModelRegistry, FlyPigException
+为什么做：统一导出所有领域模型、值对象、实体、聚合根、异常、域服务
+
+实现方法：集中 import + __all__，外部只需 from flypig.domain import Xxx
+
+层&依赖：domain 层
 """
 
 from flypig.domain.agent_state import AgentState

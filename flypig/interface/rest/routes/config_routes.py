@@ -1,9 +1,10 @@
-"""配置路由 (/api/config/*)
+"""config_routes
 
-为什么做：前端从单一端点获取所有配置，避免硬编码默认值。
-前端 POST 修改配置（工作区、API Key）持久化到 config.yaml。
+为什么做：前端需要获取/修改应用配置（工作目录、API Key、本地模型等）
 
-层&依赖：interface.rest.routes 层，通过 ModelRegistry 依赖 domain
+实现方法：REST 路由组：workspace/apikey/browse/mkdir/local-models/local-models/pull
+
+层&依赖：interface.rest.routes 层
 """
 
 from __future__ import annotations

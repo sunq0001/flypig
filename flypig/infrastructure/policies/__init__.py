@@ -1,10 +1,10 @@
-"""执行策略包
+"""__init__
 
-为什么做：IModelPolicy 定义策略接口，infrastructure.policies 提供具体实现，
-包括重试、熔断、超时等策略的组合。
+为什么做：统一导出执行策略实现（重试/熔断/权限）
 
-使用方式：
-    from flypig.infrastructure.policies import RetryPolicy, CircuitBreaker
+实现方法：集中 import + __all__
+
+层&依赖：infrastructure.policies 层
 """
 
 from flypig.infrastructure.llm.circuit_breaker import CircuitBreaker

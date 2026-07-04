@@ -1,8 +1,10 @@
-"""规格模式 — 将业务规则封装为可组合的对象
+"""specification
 
-支持 and_ / or_ / not_ 组合。每个业务规则一个 Specification 类。
+为什么做：规格模式将业务规则封装为可组合的对象，支持 and_ / or_ / not_ 组合
 
-层&依赖：shared 层，零依赖
+实现方法：ABC + Generic[T]，定义 is_satisfied_by 抽象方法 + and_/or_/not_ 组合方法
+
+层&依赖：shared 层
 """
 
 from abc import ABC, abstractmethod

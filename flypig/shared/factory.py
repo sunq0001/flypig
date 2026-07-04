@@ -1,9 +1,10 @@
-"""工厂基类 — 封装复杂创建逻辑
+"""factory
 
-用于创建需要复杂装配的聚合根、根据策略创建不同实现、从外部数据重构领域对象。
-不处理持久化（那是 Repository 的事）。
+为什么做：工厂基类，封装复杂创建逻辑
 
-层&依赖：shared 层，零依赖
+实现方法：ABC + Generic[T]，定义 create 抽象方法
+
+层&依赖：shared 层
 """
 
 from abc import ABC, abstractmethod

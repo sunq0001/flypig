@@ -1,6 +1,8 @@
-"""ChatApplicationService — 对话应用服务
+"""chat_service
 
-封装 SSE 流式对话的编排逻辑：接收用户消息 → 创建模型适配器 → 逐 token 流式返回。
+为什么做：封装 SSE 流式对话的编排逻辑：接收用户消息 → 创建模型适配器 → 逐 token 流式返回
+
+实现方法：ChatApplicationService 通过 IModelFactory 创建适配器，调 adapter.stream() 得到 token 流，格式化为 SSE 事件字符串返回
 
 层&依赖：application 层，依赖 domain.interfaces
 """

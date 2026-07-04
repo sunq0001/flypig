@@ -1,8 +1,10 @@
-"""校验工具 — ValidationResult + Validator 组合
+"""validation
 
-ValidationResult 收集错误不抛异常，Validator 组合多条校验规则。
+为什么做：校验工具，收集错误不抛异常，避免 try/except 散落在业务代码中
 
-层&依赖：shared 层，零依赖
+实现方法：ValidationResult 收集错误列表，Validator 组合多条校验规则
+
+层&依赖：shared 层
 """
 
 from dataclasses import dataclass, field

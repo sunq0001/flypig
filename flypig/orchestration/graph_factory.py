@@ -1,8 +1,10 @@
-"""StateGraph 编译工厂
+"""graph_factory
 
-实现方法：GraphFactory 导入 orchestration/state 和 orchestration/nodes，组装 StateGraph → compile。
+为什么做：LangGraph 的 StateGraph 编译需要封装，避免业务代码直接依赖 LangGraph 细节
 
-层&amp;依赖：orchestration 层，依赖 domain/interfaces
+实现方法：GraphFactory 组装 nodes + edges，调用 StateGraph.compile() 返回可调用的 graph
+
+层&依赖：orchestration 层，依赖 domain/interfaces
 """
 
 from __future__ import annotations

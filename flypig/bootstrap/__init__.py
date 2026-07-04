@@ -1,10 +1,10 @@
-"""FlyPig 应用骨架
+"""__init__
 
-为什么做：应用启动需要统一注册所有依赖和服务。
+为什么做：引导层负责应用启动时装配所有依赖和服务
 
-实现方法：bootstrap 包提供 Settings → Container → Logging → Lifecycle → App 的装配链路。
+实现方法：Settings → Container → Logging → Lifecycle → App 的工厂链路
 
-使用方式：from flypig.bootstrap import AppContainer, LifecycleEvents, create_app, load_config
+层&依赖：bootstrap 层
 """
 
 from flypig.shared.settings import AppSettings

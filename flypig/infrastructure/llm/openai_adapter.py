@@ -1,6 +1,10 @@
-"""OpenAI/DeepSeek 兼容适配
+"""openai_adapter
 
-配置数据（如本地模型名、API路径前缀等）来自 model_registry.json。
+为什么做：OpenAI 兼容格式的 LLM API（DeepSeek/Qwen/GLM/豆包等）需要统一适配器
+
+实现方法：封装 AsyncOpenAI SDK，stream 方法返回异步 token 生成器。配置来自 model_registry.json + AppSettings
+
+层&依赖：infrastructure.llm 层，实现 domain.interfaces.imodel
 """
 
 from __future__ import annotations

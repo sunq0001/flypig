@@ -1,6 +1,10 @@
-"""ModelFactory 实现 — 根据模型名创建对应的 IModel 适配器
+"""model_factory
 
-层&依赖：infrastructure.llm 层，实现 domain.interfaces.imodel_factory.IModelFactory
+为什么做：根据模型名路由到对应的适配器实现
+
+实现方法：ModelFactory 实现 IModelFactory 接口，按 provider 路由：Anthropic → AnthropicAdapter，其他 → OpenAIAdapter
+
+层&依赖：infrastructure.llm 层，实现 domain.interfaces.imodel_factory
 """
 
 from __future__ import annotations

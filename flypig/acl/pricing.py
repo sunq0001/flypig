@@ -1,17 +1,10 @@
-"""防腐层 — Portkey 定价格式 → 领域定价值对象
+"""pricing
 
-为什么做：Portkey 定价 API 返回的 JSON 结构（cents/token）与领域模型的
-PricingEntry（USD/1M tokens）格式不同，ACL 负责翻译，不让外部格式污染 domain。
+为什么做：Portkey 定价 API 返回的 JSON 格式（cents/token）与领域模型 PricingEntry（USD/1M tokens）不同，ACL 负责翻译，不让外部格式污染 domain
 
-使用方法：
-    from flypig.acl.pricing import portkey_to_pricing_entry
+实现方法：portkey_to_pricing_entry 函数读取 Portkey JSON 的 pricing_config.pay_as_you_go，将 cents/token 转为 USD/1M tokens，返回 PricingEntry(ValueObject)
 
-    raw = httpx.get("https://api.portkey.ai/...").json()
-    entry = portkey_to_pricing_entry(raw, "deepseek-chat")
-
-如果 Portkey 改 API 格式，只需要改这个文件，domain 层和 infrastructure 层不动。
-
-层&依赖：acl 层，依赖 domain.pricing_entry.PricingEntry
+层&依赖：acl 层，依赖 domain.pricing_entry
 """
 
 from typing import Any, Optional

@@ -1,9 +1,10 @@
-"""应用服务基类 — 编排领域逻辑
+"""application_service
 
-职责：接收应用请求 → 调用 DomainService 和 Repository → 管理事务 → 发布领域事件。
-不含业务逻辑，只做协调编排。
+为什么做：应用服务基类，定义编排层的行为契约
 
-层&依赖：shared 层，零依赖
+实现方法：ABC 标记基类，约束：不含业务逻辑，只做协调和编排
+
+层&依赖：shared 层
 """
 
 from abc import ABC

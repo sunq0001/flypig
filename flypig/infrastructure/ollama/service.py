@@ -1,9 +1,10 @@
-"""Ollama 本地模型服务实现
+"""service
 
-实现 domain.interfaces.ilocal_model_service.ILocalModelService，
-封装所有 Ollama HTTP 调用。
+为什么做：封装 Ollama HTTP API，提供本地模型的生命周期管理
 
-配置数据全部来自 model_registry.json 的 local 段（超时、缓存TTL、API路径等）。
+实现方法：OllamaLocalModelService 通过 httpx 调用 Ollama API（/api/tags、/api/pull），实现 ILocalModelService 接口
+
+层&依赖：infrastructure.ollama 层，实现 domain.interfaces.ilocal_model_service
 """
 
 from __future__ import annotations

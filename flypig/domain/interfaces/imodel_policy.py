@@ -1,13 +1,10 @@
-"""模型执行策略接口
+"""imodel_policy
 
-为什么做：不同模型和场景需要不同的执行策略（重试/熔断/超时/回退）。
-IModelPolicy 定义了统一的策略接口，具体策略在 infrastructure 层实现。
+为什么做：不同模型和场景需要不同的执行策略（重试/熔断/超时/回退），需要统一策略接口
 
-使用方式：
-    policy = RetryWithCircuitBreaker(IModel)
-    result = await policy.execute(lambda: model.stream(messages))
+实现方法：ABC 定义 execute 方法，包装模型调用，基础设施层实现具体策略
 
-层&依赖：domain.interfaces 层，零依赖
+层&依赖：domain.interfaces 层
 """
 
 from __future__ import annotations

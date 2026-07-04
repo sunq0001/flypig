@@ -1,6 +1,10 @@
-"""AppSettings — 应用配置加载（pydantic-settings + YAML）
+"""settings
 
-注意：AppSettings 类定义在 shared/settings.py 中，此处只负责加载逻辑。
+为什么做：应用配置需要从环境变量 / YAML / JSON 三级加载，不能硬编码
+
+实现方法：AppSettings(pydantic-settings) 自动从环境变量读取，PyYAML 从 config.yaml 加载，JSON 提供默认值。优先级：环境变量 > YAML > JSON
+
+层&依赖：bootstrap 层，依赖 shared.settings
 """
 
 from __future__ import annotations
