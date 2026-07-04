@@ -13,6 +13,7 @@ import asyncio
 import json
 from datetime import date, datetime, timezone
 from pathlib import Path
+from http import HTTPStatus
 from typing import Optional
 
 import httpx
@@ -86,7 +87,7 @@ class PricingService:
         try:
             timeout = self._pricing_cfg("exchange_rate_timeout", EXCHANGE_RATE_TIMEOUT)
             resp = httpx.get(api_url, timeout=timeout)
-            if resp.status_code == 200:
+            if resp.status_code == HTTPStatus.OK:
                 rate = resp.json().get("rates", {}).get("CNY")
                 if rate:
                     rate = round(float(rate), 4)

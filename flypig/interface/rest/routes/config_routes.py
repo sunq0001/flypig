@@ -53,7 +53,7 @@ def _build_providers() -> dict:
 
 
 @config_bp.route("", methods=["GET"])
-async def get_config():
+async def get_config() -> dict:
     cfg = _get_settings()
     registry = _get_registry()
 

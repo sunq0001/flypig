@@ -9,7 +9,7 @@
 
 from http import HTTPStatus
 from pathlib import Path
-from quart import Blueprint, request, jsonify
+from quart import Blueprint, request, Response, jsonify
 
 files_bp = Blueprint("files", __name__)
 
@@ -64,7 +64,7 @@ async def _read_text_file(p: Path):
 
 
 @files_bp.route("/api/file", methods=["GET"])
-async def read_file():
+async def read_file():  # type: ignore[misc]
     file_path = request.args.get("path", "")
     if not file_path:
         return jsonify({"error": "path required"}), 400
