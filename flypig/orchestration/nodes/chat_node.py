@@ -18,8 +18,7 @@ from __future__ import annotations
 from flypig.orchestration.state import AgentState
 from flypig.domain.exceptions import ModelAPIError
 from flypig.domain.interfaces.imodel import IModel
-
-TRUNCATE_LENGTH = 200  # 错误消息截断长度
+from flypig.shared.constants import ERROR_TRUNCATE_LENGTH as TRUNCATE_LENGTH
 
 
 def chat_node(model: IModel) -> callable:

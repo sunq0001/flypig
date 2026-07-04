@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from flypig.domain.interfaces.ievent_stream import IEventStream
 from flypig.domain.interfaces.imodel import IModel
+from flypig.shared.constants import ERROR_TRUNCATE_LENGTH as TRUNCATE_LENGTH
 
 
 class ChatService:

@@ -13,8 +13,7 @@ import asyncio
 from datetime import datetime
 
 from flypig.domain.interfaces.ievent_stream import IEventStream
-
-MAX_QUEUE_SIZE = 500  # 单个会话最大事件队列容量
+from flypig.shared.constants import MAX_QUEUE_SIZE
 
 
 class SSEQueue(IEventStream):
