@@ -45,6 +45,24 @@ async def tree():
     return jsonify({"path": str(p), "entries": entries})
 
 
+IMAGE_EXTENSIONS = {'.png','.jpg','.jpeg','.gif','.svg','.webp','.ico','.bmp'}
+
+
+async def _send_image(p: Path):
+    """发送图片文件（原始二进制，不走 JSON）"""
+    from quart import send_file
+    return await send_file(str(p), mimetype=f"image/{p.suffix[1:].lower()}")
+
+
+async def _read_text_file(p: Path):
+    """读取文本文件内容，失败时返回错误信息"""
+    try:
+        content = p.read_text(encoding="utf-8", errors="replace")
+        return jsonify({"path": str(p), "name": p.name, "content": content})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @files_bp.route("/api/file", methods=["GET"])
 async def read_file():
     file_path = request.args.get("path", "")
@@ -55,14 +73,7 @@ async def read_file():
     if not p.exists() or not p.is_file():
         return jsonify({"error": "文件不存在", "path": str(p)}), 404
 
-    # 图片文件返回原始二进制
-    image_exts = {'.png','.jpg','.jpeg','.gif','.svg','.webp','.ico','.bmp'}
-    if p.suffix.lower() in image_exts:
-        from quart import send_file
-        return await send_file(str(p), mimetype=f"image/{p.suffix[1:].lower()}")
+    if p.suffix.lower() in IMAGE_EXTENSIONS:
+        return await _send_image(p)
 
-    try:
-        content = p.read_text(encoding="utf-8", errors="replace")
-        return jsonify({"path": str(p), "name": p.name, "content": content})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+    return await _read_text_file(p)
