@@ -703,6 +703,51 @@ def check_assert(file_path: Path) -> list[str]:
     return violations
 
 
+def check_magic_strings(file_path: Path) -> list[str]:
+    """检查魔法字符串：重复出现 3+ 次的字符串字面量应定义为常量"""
+    violations: list[str] = []
+    tree = read_tree(file_path)
+    if tree is None:
+        return violations
+
+    # 收集所有字符串字面量
+    strings: dict[str, list[int]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Constant) and isinstance(node.value, str):
+            s = node.value
+            # 跳过太短/太长的字符串
+            if len(s) < 3 or len(s) > 50:
+                continue
+            # 跳过常见的无害字符串
+            if s in ("", " ", "__main__", "__name__", "__file__", "utf-8",
+                      "r", "w", "a", "rb", "wb", "strict",
+                      "json", "text", "html", "xml", "yaml",
+                      "True", "False", "None", "self", "cls"):
+                continue
+            # 跳过看起来像路径/URL 的字符串
+            if s.startswith(("./", "/", "http", "https", "{", "data:")):
+                continue
+            # 跳过 f-string 模板
+            if "{" in s or "}" in s:
+                continue
+            # 跳过 import 语句中的模块名（在 ast 中会被解析）
+            strings.setdefault(s, []).append(node.lineno)
+
+    # 报告重复 3+ 次且不是 import 路径的字符串
+    for s, lines in strings.items():
+        # 跳过单字母/数字字符串
+        if len(set(s)) <= 2:
+            continue
+        # 跳过看起来像字典 key 的简单的词（大概率是合法的配置 key）
+        if len(lines) >= 3 and not s.startswith("_"):
+            violations.append(
+                f"  [MSTR] 字符串 \"{s}\" 出现了 {len(lines)} 次（行 {lines[0]}, {lines[1]}...），建议定义为常量"
+            )
+            break  # 一个文件最多报一次
+
+    return violations
+
+
 REQUIRED_DOC_SECTIONS = ["为什么做", "实现方法", "层&依赖"]
 """实代码文件必须在 docstring 中包含的 FlyPig 格式段落"""
 
@@ -815,6 +860,7 @@ def main() -> int:
         ("todo",     "遗留 TODO",          check_todo_left),
         ("print",    "生产代码print",       check_print),
         ("assert",   "生产代码assert",      check_assert),
+        ("mstr",     "魔法字符串",          check_magic_strings),
         ("docq",     "docstring质量",       check_docstring_quality),
     ]
 
@@ -882,6 +928,7 @@ def main() -> int:
         "todo":     ("TODO",     "遗留 TODO"),
         "print":    ("PRINT",    "生产代码print"),
         "assert":   ("ASSERT",   "生产代码assert"),
+        "mstr":     ("MSTR",     "魔法字符串"),
         "docq":     ("DOCQ",     "docstring质量"),
         "circular": ("CIRCULAR", "循环依赖"),
     }
