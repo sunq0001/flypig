@@ -703,8 +703,30 @@ def check_assert(file_path: Path) -> list[str]:
     return violations
 
 
+REQUIRED_DOC_SECTIONS = ["为什么做", "实现方法", "层&依赖"]
+"""实代码文件必须在 docstring 中包含的 FlyPig 格式段落"""
+
+
+def _is_skeleton_file(file_path: Path) -> bool:
+    """判断是否骨架文件（只有 docstring + 类骨架，没有实代码）"""
+    tree = read_tree(file_path)
+    if tree is None:
+        return True
+    docstring = ast.get_docstring(tree)
+    has_real_code = False
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom, ast.ClassDef,
+                              ast.FunctionDef, ast.AsyncFunctionDef, ast.Assign)):
+            if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                continue
+            has_real_code = True
+            break
+    return not has_real_code
+
+
 def check_docstring_quality(file_path: Path) -> list[str]:
     """检查 docstring 质量：
+    - 符合 FlyPig docstring 格式：为什么做 / 实现方法 / 层&依赖
     - domain 层的文件必须在 docstring 中标注 DDD 类型（值对象/实体/聚合根等）
     - docstring 不应是单行敷衍"""
     violations: list[str] = []
@@ -721,31 +743,43 @@ def check_docstring_quality(file_path: Path) -> list[str]:
     if not docstring:
         return violations  # 已有 DOC 检查
 
-    # 1. 检查 docstring 不是单行敷衍
+    # ── 0. 骨架文件跳过检查 ──
+    if _is_skeleton_file(file_path):
+        return violations
+
+    # ── 1. 检查 docstring 不是单行敷衍 ──
     lines = docstring.strip().split("\n")
     if len(lines) == 1 and len(docstring) < 20:
         violations.append(
-            f"  [DOCQ] docstring 太短（{len(docstring)} 字符），应描述文件职责和所属层"
+            "  [DOCQ] docstring 太短，应包含：为什么做 / 实现方法 / 层&依赖"
         )
         return violations
 
-    # 2. domain 层必须标注 DDD 类型
+    # ── 2. 检查 FlyPig docstring 必填段落 ──
+    missing = [s for s in REQUIRED_DOC_SECTIONS if s not in docstring]
+    if missing:
+        violations.append(
+            f"  [DOCQ] 缺少段落：{' / '.join(missing)}"
+        )
+
+    # ── 3. domain 层必须标注 DDD 类型 ──
     source_layer = None
     for skip in ("interfaces", "event", "specification", "prompts"):
         if skip in file_path.parts:
-            return violations
-    try:
-        rel = file_path.relative_to(Path(__file__).resolve().parent.parent / "flypig")
-        if len(rel.parts) >= 2:
-            source_layer = rel.parts[1]
-    except ValueError:
-        pass
+            break
+    else:
+        try:
+            rel = file_path.relative_to(Path(__file__).resolve().parent.parent / "flypig")
+            if len(rel.parts) >= 2:
+                source_layer = rel.parts[1]
+        except ValueError:
+            pass
 
     if source_layer == "domain" and file_path.name != "__init__.py":
         ddd_keywords = ["值对象", "实体", "聚合根", "领域事件", "域服务", "规格", "工厂"]
         if not any(kw in docstring for kw in ddd_keywords):
             violations.append(
-                f"  [DOCQ] domain 层文件应标注 DDD 类型（值对象/实体/聚合根等）"
+                "  [DOCQ] domain 层文件应标注 DDD 类型（值对象/实体/聚合根等）"
             )
 
     return violations
