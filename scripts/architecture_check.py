@@ -18,7 +18,10 @@
   14. EMPTY_EXC— 裸 except / except:pass，禁止静默吞异常
   15. LONGFUNC — 函数体 >50 行/ >80 行警告，建议拆分
   16. TODO     — 非骨架文件遗留 TODO/FIXME 标记
-  17. CIRCULAR — 循环依赖检测（A → B → C → A）
+  17. PRINT    — 生产代码中的 print()，应使用 logger
+  18. ASSERT   — 生产代码中的 assert，应使用显式异常
+  19. DOCQ     — docstring 质量：domain 层必须标注 DDD 类型
+  20. CIRCULAR — 循环依赖检测（A → B → C → A）
 
 用法：
     python scripts/architecture_check.py
@@ -656,6 +659,98 @@ def check_todo_left(file_path: Path) -> list[str]:
     return violations
 
 
+def check_print(file_path: Path) -> list[str]:
+    """检查生产代码中不应有 print()（应使用 loguru 日志）"""
+    violations: list[str] = []
+    if "test_" in file_path.name or file_path.parent.name == "tests":
+        return violations  # 测试代码允许 print
+    if file_path.name == "__init__.py":
+        return violations
+
+    tree = read_tree(file_path)
+    if tree is None:
+        return violations
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
+            func = node.value.func
+            if isinstance(func, ast.Name) and func.id == "print":
+                violations.append(
+                    f"  [PRINT] 第 {node.lineno} 行：print()，应使用 logger.info() 或 logger.debug()"
+                )
+                break
+    return violations
+
+
+def check_assert(file_path: Path) -> list[str]:
+    """检查生产代码中不应有 assert（应使用显式判断 + 异常）"""
+    violations: list[str] = []
+    if "test_" in file_path.name or file_path.parent.name == "tests":
+        return violations  # 测试代码允许 assert
+    if file_path.name == "__init__.py":
+        return violations
+
+    tree = read_tree(file_path)
+    if tree is None:
+        return violations
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assert):
+            violations.append(
+                f"  [ASSERT] 第 {node.lineno} 行：assert，应使用 if + 异常处理"
+            )
+            break
+    return violations
+
+
+def check_docstring_quality(file_path: Path) -> list[str]:
+    """检查 docstring 质量：
+    - domain 层的文件必须在 docstring 中标注 DDD 类型（值对象/实体/聚合根等）
+    - docstring 不应是单行敷衍"""
+    violations: list[str] = []
+    content = file_path.read_text(encoding="utf-8")
+    stripped = content.strip()
+    if not stripped:
+        return violations
+
+    tree = read_tree(file_path)
+    if tree is None:
+        return violations
+
+    docstring = ast.get_docstring(tree)
+    if not docstring:
+        return violations  # 已有 DOC 检查
+
+    # 1. 检查 docstring 不是单行敷衍
+    lines = docstring.strip().split("\n")
+    if len(lines) == 1 and len(docstring) < 20:
+        violations.append(
+            f"  [DOCQ] docstring 太短（{len(docstring)} 字符），应描述文件职责和所属层"
+        )
+        return violations
+
+    # 2. domain 层必须标注 DDD 类型
+    source_layer = None
+    for skip in ("interfaces", "event", "specification", "prompts"):
+        if skip in file_path.parts:
+            return violations
+    try:
+        rel = file_path.relative_to(Path(__file__).resolve().parent.parent / "flypig")
+        if len(rel.parts) >= 2:
+            source_layer = rel.parts[1]
+    except ValueError:
+        pass
+
+    if source_layer == "domain" and file_path.name != "__init__.py":
+        ddd_keywords = ["值对象", "实体", "聚合根", "领域事件", "域服务", "规格", "工厂"]
+        if not any(kw in docstring for kw in ddd_keywords):
+            violations.append(
+                f"  [DOCQ] domain 层文件应标注 DDD 类型（值对象/实体/聚合根等）"
+            )
+
+    return violations
+
+
 # ══════════════════════════════════════════════════════════════
 # 主函数
 # ══════════════════════════════════════════════════════════════
@@ -684,6 +779,9 @@ def main() -> int:
         ("empty_exc","空异常捕获",         check_empty_except),
         ("longfunc", "函数过长",           check_long_function),
         ("todo",     "遗留 TODO",          check_todo_left),
+        ("print",    "生产代码print",       check_print),
+        ("assert",   "生产代码assert",      check_assert),
+        ("docq",     "docstring质量",       check_docstring_quality),
     ]
 
     results: dict[str, list[str]] = {key: [] for key, _, _ in checks}
@@ -748,6 +846,9 @@ def main() -> int:
         "empty_exc":("EMPTY_EXC","空异常捕获"),
         "longfunc": ("LONG_FUNC","函数过长"),
         "todo":     ("TODO",     "遗留 TODO"),
+        "print":    ("PRINT",    "生产代码print"),
+        "assert":   ("ASSERT",   "生产代码assert"),
+        "docq":     ("DOCQ",     "docstring质量"),
         "circular": ("CIRCULAR", "循环依赖"),
     }
 
