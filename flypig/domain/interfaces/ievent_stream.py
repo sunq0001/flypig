@@ -24,7 +24,7 @@ class IEventStream(ABC):
         ...
 
     @abstractmethod
-    async def pop(self, session_id: str, timeout: float = 30) -> dict | None:
+    async def pop(self, session_id: str, timeout: float = DEFAULT_POP_TIMEOUT) -> dict | None:
         """从指定会话队列消费事件（阻塞）
 
         Returns:

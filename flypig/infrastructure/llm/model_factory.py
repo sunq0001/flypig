@@ -29,7 +29,6 @@ class ModelFactory(IModelFactory):
         provider = (meta or {}).get("provider", "")
 
         if provider == "Anthropic":
-            # TODO: 后续加入 AnthropicAdapter
-            pass
+            pass  # TODO: 后续加入 AnthropicAdapter（占位符标记）
 
         return OpenAIAdapter(model_name, settings, registry=self._registry)

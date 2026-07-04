@@ -19,11 +19,15 @@ from typing import Any, Optional
 from flypig.domain.pricing_entry import PricingEntry
 
 
+PRICE_PRECISION = 4  # 价格计算保留 4 位小数
+CENTS_TO_USD_FACTOR = 10000  # cents/token → USD/1M tokens 转换系数
+
+
 def _cents_per_token_to_usd_per_1m(cents: Optional[float]) -> Optional[float]:
     """Portkey 的 cents/token → USD/1M tokens"""
     if cents is None:
         return None
-    return round(cents * 10000, 4)
+    return round(cents * CENTS_TO_USD_FACTOR, PRICE_PRECISION)
 
 
 def portkey_to_pricing_entry(

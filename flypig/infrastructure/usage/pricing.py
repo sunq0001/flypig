@@ -19,6 +19,11 @@ from loguru import logger
 
 from flypig.domain.registry import ModelRegistry
 
+# ── 常量 ──
+DEFAULT_EXCHANGE_CACHE_TTL = 3600  # 汇率缓存 1 小时
+EXCHANGE_RATE_TIMEOUT = 5  # 汇率 API 超时秒数
+DEFAULT_REFRESH_INTERVAL = 86400  # 定价刷新间隔 24 小时
+
 
 class PricingService:
     """定价服务 — 从 Portkey API 获取模型价格并缓存"""
@@ -59,14 +64,14 @@ class PricingService:
                 json.dumps(data, indent=2, ensure_ascii=False),
                 encoding="utf-8",
             )
-        except Exception:
-            pass
+        except OSError:
+            pass  # 缓存写入失败不影响主流程
 
     # ── 汇率 ──
 
     def _fetch_exchange_rate(self) -> float:
         now = datetime.now().timestamp()
-        cache_ttl = self._pricing_cfg("exchange_rate_cache_ttl", 3600)
+        cache_ttl = self._pricing_cfg("exchange_rate_cache_ttl", DEFAULT_EXCHANGE_CACHE_TTL)
         rate_val = self._exchange_rate["rate"]
         ts_val = self._exchange_rate["ts"]
         if ts_val is not None and now - ts_val < cache_ttl and rate_val is not None:
@@ -77,7 +82,7 @@ class PricingService:
             return float(self._pricing_cfg("fallback_usd_cny", 7.2))
 
         try:
-            timeout = self._pricing_cfg("exchange_rate_timeout", 5)
+            timeout = self._pricing_cfg("exchange_rate_timeout", EXCHANGE_RATE_TIMEOUT)
             resp = httpx.get(api_url, timeout=timeout)
             if resp.status_code == 200:
                 rate = resp.json().get("rates", {}).get("CNY")
@@ -237,7 +242,7 @@ class PricingService:
     def start(self) -> None:
         """启动后台定价刷新循环（每天早上 0 点自动刷新）"""
         async def _loop():
-            refresh_interval = self._pricing_cfg("refresh_interval", 86400)
+            refresh_interval = self._pricing_cfg("refresh_interval", DEFAULT_REFRESH_INTERVAL)
             try:
                 self.fetch_pricing()
                 logger.info("[pricing] 预热完成，每天自动刷新")

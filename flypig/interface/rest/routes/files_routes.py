@@ -3,6 +3,7 @@
 层&amp;依赖：interface.rest.routes 层，依赖本地文件系统
 """
 
+from http import HTTPStatus
 from pathlib import Path
 from quart import Blueprint, request, jsonify
 
@@ -14,11 +15,11 @@ async def tree():
     data = await request.get_json(force=True)
     path_str = (data or {}).get("path", "")
     if not path_str:
-        return jsonify({"error": "path required"}), 400
+        return jsonify({"error": "path required"}), HTTPStatus.BAD_REQUEST
 
     p = Path(path_str).resolve()
     if not p.exists() or not p.is_dir():
-        return jsonify({"error": "目录不存在", "path": str(p)}), 404
+        return jsonify({"error": "目录不存在", "path": str(p)}), HTTPStatus.NOT_FOUND
 
     entries = []
     try:

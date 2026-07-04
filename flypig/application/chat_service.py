@@ -61,4 +61,4 @@ class ChatApplicationService(ApplicationService):
         except ModelAPIError as e:
             yield f"data: {json.dumps({'type': 'error', 'errorText': str(e)})}\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'errorText': f'服务错误: {str(e)[:200]}'})}\n\n"
+            yield f"data: {json.dumps({'type': 'error', 'errorText': f'服务错误: {str(e)[:TRUNCATE_LENGTH]}'})}\n\n"

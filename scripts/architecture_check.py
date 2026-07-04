@@ -547,19 +547,17 @@ def check_magic_numbers(file_path: Path) -> list[str]:
     ]
 
     for node in ast.walk(tree):
-        if isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name) and target.id.isupper():
-                    continue  # 大写命名常量跳过
         if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
             val = node.value
             if val in (0, 1, -1, 100, 1000):
                 continue  # 常见通用数字
             # 获取所在行检查是否为合法模式
             line = content.splitlines()[node.lineno - 1] if node.lineno else ""
+            # 跳过常量定义（如 MAX_SIZE = 500）
+            if re.match(r'^\s*[A-Z_][A-Z0-9_]*\s*=', line):
+                continue
             if any(re.search(p, line) for p in LEGAL_PATTERNS):
                 continue
-            # 排除 __init__ 中的默认值赋值
             if isinstance(val, (int, float)) and abs(val) >= 2:
                 violations.append(
                     f"  [MAGIC] 第 {node.lineno} 行：魔法数字 {val}，建议定义为命名常量"

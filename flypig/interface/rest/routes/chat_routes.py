@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from http import HTTPStatus
+
 from quart import Blueprint, current_app, request, Response, jsonify
 
 from flypig.application.chat_service import ChatApplicationService
@@ -21,9 +23,9 @@ async def chat():
     model_name = data.get("model", "")
 
     if not messages:
-        return jsonify({"error": "messages 不能为空"}), 400
+        return jsonify({"error": "messages 不能为空"}), HTTPStatus.BAD_REQUEST
     if not model_name:
-        return jsonify({"error": "model 不能为空"}), 400
+        return jsonify({"error": "model 不能为空"}), HTTPStatus.BAD_REQUEST
 
     service: ChatApplicationService = current_app.config["flypig_chat_service"]
 

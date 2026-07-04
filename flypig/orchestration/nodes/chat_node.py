@@ -19,6 +19,8 @@ from flypig.orchestration.state import AgentState
 from flypig.domain.exceptions import ModelAPIError
 from flypig.domain.interfaces.imodel import IModel
 
+TRUNCATE_LENGTH = 200  # 错误消息截断长度
+
 
 def chat_node(model: IModel) -> callable:
     """创建 chat_node（依赖注入方式，避免全局变量）
@@ -52,7 +54,7 @@ def chat_node(model: IModel) -> callable:
             }
         except Exception as e:
             return {
-                "messages": messages + [{"role": "assistant", "content": f"处理出错: {str(e)[:200]}"}],
+                "messages": messages + [{"role": "assistant", "content": f"处理出错: {str(e)[:TRUNCATE_LENGTH]}"}],
                 "error": str(e),
             }
 

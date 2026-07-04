@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import asyncio
+from http import HTTPStatus
 from pathlib import Path
 
 from quart import Blueprint, current_app, jsonify, request
@@ -96,7 +97,7 @@ async def set_workspace():
     data = await request.get_json(force=True)
     path = (data or {}).get("path", "")
     if not path:
-        return jsonify({"error": "path required"}), 400
+        return jsonify({"error": "path required"}), HTTPStatus.BAD_REQUEST
 
     p = Path(path).resolve()
     if not p.exists():
@@ -113,7 +114,7 @@ async def save_apikey():
     provider = (data or {}).get("provider", "")
     api_key = (data or {}).get("api_key", "")
     if not provider or not api_key:
-        return jsonify({"error": "provider and api_key required"}), 400
+        return jsonify({"error": "provider and api_key required"}), HTTPStatus.BAD_REQUEST
 
     cfg = _get_settings()
     registry = _get_registry()
@@ -130,7 +131,7 @@ async def browse():
     p = Path(path).resolve()
 
     if not p.exists() or not p.is_dir():
-        return jsonify({"error": "目录不存在", "path": str(p)}), 404
+        return jsonify({"error": "目录不存在", "path": str(p)}), HTTPStatus.NOT_FOUND
 
     entries = []
     try:
@@ -143,7 +144,7 @@ async def browse():
             except PermissionError:
                 continue
     except PermissionError:
-        return jsonify({"error": "无权限访问", "path": str(p)}), 403
+        return jsonify({"error": "无权限访问", "path": str(p)}), HTTPStatus.FORBIDDEN
 
     return jsonify({"path": str(p), "parent": str(p.parent) if p.parent != p else None, "entries": entries})
 
@@ -154,12 +155,12 @@ async def mkdir():
     parent = (data or {}).get("parent", "")
     name = (data or {}).get("name", "")
     if not parent or not name:
-        return jsonify({"error": "parent and name required"}), 400
+        return jsonify({"error": "parent and name required"}), HTTPStatus.BAD_REQUEST
     p = Path(parent).resolve() / name
     try:
         p.mkdir(parents=True, exist_ok=True)
     except PermissionError:
-        return jsonify({"error": "无权限创建目录"}), 403
+        return jsonify({"error": "无权限创建目录"}), HTTPStatus.FORBIDDEN
     return jsonify({"path": str(p), "name": name})
 
 

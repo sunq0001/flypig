@@ -14,6 +14,8 @@ from datetime import datetime
 
 from flypig.domain.interfaces.ievent_stream import IEventStream
 
+MAX_QUEUE_SIZE = 500  # 单个会话最大事件队列容量
+
 
 class SSEQueue(IEventStream):
     """SSE 事件队列，按 session_id 隔离"""
@@ -23,7 +25,7 @@ class SSEQueue(IEventStream):
 
     def _get_queue(self, session_id: str) -> asyncio.Queue:
         if session_id not in self._queues:
-            self._queues[session_id] = asyncio.Queue(maxsize=500)
+            self._queues[session_id] = asyncio.Queue(maxsize=MAX_QUEUE_SIZE)
         return self._queues[session_id]
 
     async def push(self, session_id: str, event: str, data: dict) -> None:
@@ -34,7 +36,7 @@ class SSEQueue(IEventStream):
             "timestamp": datetime.utcnow().isoformat(),
         })
 
-    async def pop(self, session_id: str, timeout: float = 30) -> dict | None:
+    async def pop(self, session_id: str, timeout: float = POP_TIMEOUT) -> dict | None:
         queue = self._get_queue(session_id)
         try:
             return await asyncio.wait_for(queue.get(), timeout=timeout)
