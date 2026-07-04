@@ -13,7 +13,12 @@
   9. COUPLE   — import 过多（>25条），提示高耦合
   10. PARAMS   — 函数参数过多（>6个），提示不单一职责
   11. HARDCODE — 硬编码 URL / 密钥，提示应放入配置文件
-  12. CIRCULAR — 循环依赖检测（A → B → C → A）
+  12. NESTING  — 嵌套深度 >4 层，提示复杂度高
+  13. MAGIC    — 魔法数字，建议定义为命名常量
+  14. EMPTY_EXC— 裸 except / except:pass，禁止静默吞异常
+  15. LONGFUNC — 函数体 >50 行/ >80 行警告，建议拆分
+  16. TODO     — 非骨架文件遗留 TODO/FIXME 标记
+  17. CIRCULAR — 循环依赖检测（A → B → C → A）
 
 用法：
     python scripts/architecture_check.py
@@ -470,6 +475,189 @@ def check_hardcode(file_path: Path) -> list[str]:
     return violations
 
 
+# ── 代码质量检查器 ──
+
+MAX_NESTING_DEPTH = 4      # 嵌套深度阈值
+MAX_FUNC_LINES = 50        # 函数行数阈值
+MAX_FUNC_LINES_WARN = 80   # 函数行数警告线
+
+
+def _nesting_depth(node: ast.AST, depth: int = 0) -> int:
+    """计算 AST 节点的最大嵌套深度"""
+    max_d = depth
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, (ast.If, ast.For, ast.AsyncFor, ast.While,
+                              ast.Try, ast.With, ast.AsyncWith,
+                              ast.comprehension)):
+            d = _nesting_depth(child, depth + 1)
+            if d > max_d:
+                max_d = d
+        elif isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            d = _nesting_depth(child, depth)
+            if d > max_d:
+                max_d = d
+        else:
+            d = _nesting_depth(child, depth)
+            if d > max_d:
+                max_d = d
+    return max_d
+
+
+def check_nesting(file_path: Path) -> list[str]:
+    """检查嵌套深度：超过 4 层表明代码复杂度高"""
+    violations: list[str] = []
+    tree = read_tree(file_path)
+    if tree is None:
+        return violations
+
+    max_depth = _nesting_depth(tree)
+    if max_depth > MAX_NESTING_DEPTH:
+        violations.append(
+            f"  [NESTING] 最大嵌套深度 {max_depth} 层（> {MAX_NESTING_DEPTH}），建议提前 return 或提取函数"
+        )
+    return violations
+
+
+def check_magic_numbers(file_path: Path) -> list[str]:
+    """检查魔法数字：不应出现散落的数字字面量"""
+    violations: list[str] = []
+    tree = read_tree(file_path)
+    if tree is None:
+        return violations
+
+    content = file_path.read_text(encoding="utf-8")
+
+    # 常见合法数字模式
+    LEGAL_PATTERNS = [
+        r"self\.\w+\s*=.*\d",        # 类属性赋值
+        r"return\s+-?\d",             # 返回常量
+        r"raise\s+.*\(\d",            # 异常带状态码
+        r"@.*\(\s*\d",                # 装饰器参数
+        r"range\(\s*\d",              # range()
+        r"max\(\s*\d|min\(\s*\d",     # max/min
+        r"sleep\(\s*\d",              # time.sleep
+        r"timeout\s*[=:]\s*\d",       # timeout 参数
+        r"default\s*[=:]\s*\d",       # 默认值
+        r"port\s*[=:]\s*\d",          # 端口号
+        r"version\s*[=:]\s*\d",       # 版本号
+        r"_MAX_|_MIN_|_LIMIT|_SIZE|_COUNT",  # 命名常量
+        r"\.\d{2,4}",                  # 小数（概率/比例）
+        r"\{\d\}",                     # 格式化占位符
+        r"\b[01]\b",                   # 0 和 1（常见布尔标志）
+    ]
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id.isupper():
+                    continue  # 大写命名常量跳过
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            val = node.value
+            if val in (0, 1, -1, 100, 1000):
+                continue  # 常见通用数字
+            # 获取所在行检查是否为合法模式
+            line = content.splitlines()[node.lineno - 1] if node.lineno else ""
+            if any(re.search(p, line) for p in LEGAL_PATTERNS):
+                continue
+            # 排除 __init__ 中的默认值赋值
+            if isinstance(val, (int, float)) and abs(val) >= 2:
+                violations.append(
+                    f"  [MAGIC] 第 {node.lineno} 行：魔法数字 {val}，建议定义为命名常量"
+                )
+                break  # 一个文件最多报一次
+
+    return violations
+
+
+def check_empty_except(file_path: Path) -> list[str]:
+    """检查空 except: pass（静默吞异常）"""
+    violations: list[str] = []
+    tree = read_tree(file_path)
+    if tree is None:
+        return violations
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ExceptHandler):
+            if node.type is None:
+                # except: - 裸 except
+                violations.append(
+                    f"  [EMPTY_EXC] 第 {node.lineno} 行：裸 except:，应指定异常类型"
+                )
+                break
+            if (node.type is not None
+                    and len(node.body) == 1
+                    and isinstance(node.body[0], ast.Pass)):
+                violations.append(
+                    f"  [EMPTY_EXC] 第 {node.lineno} 行：except {ast.dump(node.type)}: pass，静默吞异常"
+                )
+                break
+    return violations
+
+
+def check_long_function(file_path: Path) -> list[str]:
+    """检查函数体行数：超过 50 行应考虑拆分"""
+    violations: list[str] = []
+    tree = read_tree(file_path)
+    if tree is None:
+        return violations
+
+    content = file_path.read_text(encoding="utf-8").splitlines()
+
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if not node.body:
+                continue
+            first_line = node.lineno
+            last_line = max(
+                (n.lineno for n in ast.walk(node) if hasattr(n, 'lineno')),
+                default=first_line
+            )
+            func_lines = last_line - first_line + 1
+            if func_lines > MAX_FUNC_LINES_WARN:
+                violations.append(
+                    f"  [LONG_FUNC] {node.name} {func_lines} 行（> {MAX_FUNC_LINES_WARN}），建议拆分"
+                )
+                break
+            elif func_lines > MAX_FUNC_LINES:
+                violations.append(
+                    f"  [LONG_FUNC] {node.name} {func_lines} 行（> {MAX_FUNC_LINES}），考虑拆分"
+                )
+    return violations
+
+
+def check_todo_left(file_path: Path) -> list[str]:
+    """非骨架文件中不可遗留 TODO/FIXME（应在骨架中标记 TODO）"""
+    violations: list[str] = []
+    content = file_path.read_text(encoding="utf-8")
+    stripped = content.strip()
+    if not stripped:
+        return violations
+
+    # 检查是否骨架文件（只有 docstring 内容）
+    tree = read_tree(file_path)
+    if tree is None:
+        return violations
+    docstring = ast.get_docstring(tree)
+    has_real_code = False
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom, ast.ClassDef,
+                              ast.FunctionDef, ast.AsyncFunctionDef, ast.Assign)):
+            has_real_code = True
+            break
+
+    if not has_real_code:
+        return violations  # 骨架文件允许 TODO
+
+    # 非骨架文件检查 TODO/FIXME
+    for i, line in enumerate(content.splitlines(), 1):
+        stripped_line = line.strip()
+        if stripped_line.startswith("#") and "TODO" in stripped_line:
+            violations.append(f"  [TODO] 第 {i} 行：{stripped_line}")
+            break  # 一个文件最多报一次
+
+    return violations
+
+
 # ══════════════════════════════════════════════════════════════
 # 主函数
 # ══════════════════════════════════════════════════════════════
@@ -482,17 +670,22 @@ def main() -> int:
 
     # 注册所有检查器
     checks: list[tuple[str, str, callable]] = [
-        ("layer",   "层依赖方向",        check_layer),
-        ("ddd",     "DDD 基类继承",      check_ddd_inheritance),
-        ("wild",    "通配导入",          check_wildcard),
-        ("doc",     "文件级 docstring",  check_docstring),
-        ("all",     "__init__.__all__",  check_all_export),
-        ("exc",     "裸异常抛出",        check_bare_exception),
-        ("size",    "文件行数超限",      check_file_size),
-        ("skel",    "骨架文件标记",      check_skeleton_marker),
-        ("couple",  "高耦合(import过多)", check_coupling),
-        ("params",  "参数过多",          check_params),
-        ("hardcode","硬编码数据",        check_hardcode),
+        ("layer",    "层依赖方向",         check_layer),
+        ("ddd",      "DDD 基类继承",       check_ddd_inheritance),
+        ("wild",     "通配导入",           check_wildcard),
+        ("doc",      "文件级 docstring",   check_docstring),
+        ("all",      "__init__.__all__",   check_all_export),
+        ("exc",      "裸异常抛出",         check_bare_exception),
+        ("size",     "文件行数超限",       check_file_size),
+        ("skel",     "骨架文件标记",       check_skeleton_marker),
+        ("couple",   "高耦合(import过多)", check_coupling),
+        ("params",   "参数过多",           check_params),
+        ("hardcode", "硬编码数据",         check_hardcode),
+        ("nesting",  "嵌套过深",           check_nesting),
+        ("magic",    "魔法数字",           check_magic_numbers),
+        ("empty_exc","空异常捕获",         check_empty_except),
+        ("longfunc", "函数过长",           check_long_function),
+        ("todo",     "遗留 TODO",          check_todo_left),
     ]
 
     results: dict[str, list[str]] = {key: [] for key, _, _ in checks}
@@ -552,6 +745,11 @@ def main() -> int:
         "couple":   ("COUPLE",   "高耦合(import过多)"),
         "params":   ("PARAMS",   "函数参数过多"),
         "hardcode": ("HARDCODE", "硬编码数据"),
+        "nesting":  ("NESTING",  "嵌套过深"),
+        "magic":    ("MAGIC",    "魔法数字"),
+        "empty_exc":("EMPTY_EXC","空异常捕获"),
+        "longfunc": ("LONG_FUNC","函数过长"),
+        "todo":     ("TODO",     "遗留 TODO"),
         "circular": ("CIRCULAR", "循环依赖"),
     }
 
