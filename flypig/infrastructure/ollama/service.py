@@ -18,7 +18,9 @@ from flypig.shared.settings import AppSettings
 from flypig.domain.interfaces.ilocal_model_service import ILocalModelService
 from flypig.domain.registry import ModelRegistry
 
-OLLAMA_CHECK_TIMEOUT = 2  # Ollama 运行检测超时秒数
+OLLAMA_CHECK_TIMEOUT = 2
+CACHE_KEY_MODELS = "models"
+CACHE_KEY_TS = "ts"
 
 
 class OllamaLocalModelService(ILocalModelService):
@@ -31,7 +33,7 @@ class OllamaLocalModelService(ILocalModelService):
     ) -> None:
         self._settings = settings
         self._registry = registry
-        self._cache: dict = {"models": [], "ts": 0.0}
+        self._cache: dict = {CACHE_KEY_MODELS: [], CACHE_KEY_TS: 0.0}
 
     # ── internal helpers ──
 
@@ -65,8 +67,8 @@ class OllamaLocalModelService(ILocalModelService):
         api_path = self._local_cfg.get("api_path", "/v1")
         provider = self._local_cfg.get("provider", "Local")
 
-        if now - self._cache["ts"] < cache_ttl:
-            return self._cache["models"]
+        if now - self._cache[CACHE_KEY_TS] < cache_ttl:
+            return self._cache[CACHE_KEY_MODELS]
 
         try:
             resp = await httpx.AsyncClient().get(
@@ -76,7 +78,7 @@ class OllamaLocalModelService(ILocalModelService):
                 return []
 
             result = []
-            for m in resp.json().get("models", []):
+            for m in resp.json().get("models", []):  # Ollama API 返回的模型列表字段名
                 name = m.get("name", "")
                 if not name:
                     continue

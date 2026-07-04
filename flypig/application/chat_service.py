@@ -18,6 +18,13 @@ from flypig.domain.exceptions import ModelAPIError
 from flypig.domain.interfaces.imodel_factory import IModelFactory
 from flypig.shared.base import ApplicationService
 
+# ── SSE 事件类型常量 ──
+SSE_ERROR = "error"
+SSE_TEXT_START = "text-start"
+SSE_TEXT_DELTA = "text-delta"
+SSE_TEXT_END = "text-end"
+SSE_FINISH = "finish"
+
 
 class ChatApplicationService(ApplicationService):
     """对话应用服务 — 编排模型调用与 SSE 事件格式化"""
@@ -47,20 +54,20 @@ class ChatApplicationService(ApplicationService):
         try:
             adapter = self._factory.create(model_name, self._settings)
         except ModelAPIError as e:
-            yield f"data: {json.dumps({'type': 'error', 'errorText': str(e)})}\n\n"
+            yield f"data: {json.dumps({'type': SSE_ERROR, 'errorText': str(e)})}\n\n"
             return
 
         try:
-            yield f"data: {json.dumps({'type': 'text-start', 'id': 'text-1'})}\n\n"
+            yield f"data: {json.dumps({'type': SSE_TEXT_START, 'id': 'text-1'})}\n\n"
 
             async for token in adapter.stream(messages):
                 if token:
-                    yield f"data: {json.dumps({'type': 'text-delta', 'id': 'text-1', 'delta': token})}\n\n"
+                    yield f"data: {json.dumps({'type': SSE_TEXT_DELTA, 'id': 'text-1', 'delta': token})}\n\n"
 
-            yield f"data: {json.dumps({'type': 'text-end', 'id': 'text-1'})}\n\n"
-            yield f"data: {json.dumps({'type': 'finish'})}\n\n"
+            yield f"data: {json.dumps({'type': SSE_TEXT_END, 'id': 'text-1'})}\n\n"
+            yield f"data: {json.dumps({'type': SSE_FINISH})}\n\n"
             yield "data: [DONE]\n\n"
         except ModelAPIError as e:
-            yield f"data: {json.dumps({'type': 'error', 'errorText': str(e)})}\n\n"
+            yield f"data: {json.dumps({'type': SSE_ERROR, 'errorText': str(e)})}\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'errorText': f'服务错误: {str(e)[:TRUNCATE_LENGTH]}'})}\n\n"
+            yield f"data: {json.dumps({'type': SSE_ERROR, 'errorText': f'服务错误: {str(e)[:TRUNCATE_LENGTH]}'})}\n\n"
