@@ -60,4 +60,7 @@ onMounted(loadRoot)
 .tree-header { padding: 8px 12px; font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid #333; cursor: pointer; flex-shrink: 0; }
 .tree-header:hover { color: #aaa; }
 .tree-body { flex: 1; overflow: auto; padding: 4px 0; }
+.tree-body::-webkit-scrollbar { width: 6px; }
+.tree-body::-webkit-scrollbar-track { background: transparent; }
+.tree-body::-webkit-scrollbar-thumb { background: #3c3c3c; border-radius: 3px; }
 </style>

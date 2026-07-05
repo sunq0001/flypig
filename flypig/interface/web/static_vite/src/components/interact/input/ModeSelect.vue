@@ -28,6 +28,7 @@ emits: update:modelValue
 </template>
 
 <script setup>
+import '../../../style/td-overrides.css'
 defineProps({ modelValue: { type: String, default: 'explore' } })
 defineEmits(['update:modelValue'])
 </script>

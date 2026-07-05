@@ -75,7 +75,7 @@ const time = computed(() => {
 </script>
 
 <style scoped>
-.message-item { display: flex; gap: 8px; padding: 4px 12px; max-width: 100%; }
+.message-item { display: flex; gap: 8px; padding: 4px 12px; max-width: 100%; content-visibility: auto; contain-intrinsic-size: 60px; }
 .message-item.user { flex-direction: row-reverse; }
 .avatar { flex-shrink: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 15px; opacity: 0.8; }
 .bubble { max-width: 75%; padding: 6px 10px; border-radius: 6px; font-size: 13px; line-height: 1.5; word-break: break-word; }

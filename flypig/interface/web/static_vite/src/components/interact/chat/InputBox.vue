@@ -89,8 +89,8 @@ function handleSend() {
   font-family: inherit;
   font-size: 13px;
   line-height: 1.5;
-  padding: 10px 12px 4px;
-  min-height: 40px;
+  padding: 12px 14px 6px;
+  min-height: 56px;
   max-height: 120px;
   resize: vertical;
   outline: none;

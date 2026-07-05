@@ -22,6 +22,13 @@ MessageList：消息列表
       :message="m"
       :loading="loading && m === messages[messages.length - 1] && m.role === 'assistant'"
     />
+    <div
+      v-if="loading && messages.length && messages[messages.length - 1].role === 'user'"
+      class="model-loading"
+    >
+      <span class="loading-dot" />
+      <span>模型启动中…</span>
+    </div>
   </div>
 </template>
 
@@ -83,8 +90,24 @@ watch(() => props.messages.length, async () => {
   color: #555;
   font-size: 14px;
 }
-:deep(.message-item) {
-  content-visibility: auto;
-  contain-intrinsic-size: 60px;
+.model-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  color: #888;
+  font-size: 13px;
 }
+.loading-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #409eff;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
 </style>

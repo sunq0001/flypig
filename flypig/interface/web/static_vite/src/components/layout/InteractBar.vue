@@ -1,35 +1,32 @@
 <!--
 InteractBar：右侧交互栏容器（对话/终端标签切换）
 
-为什么做：用户需要在对话和终端之间切换查看，右侧面板空间有限需要标签页。
-实现方法：顶部标签栏（💬 对话 / 🖥 终端），根据 activeTab 显示 ChatPanel 或 TermBar。
-实现效果：右侧面板一个位置承载两种功能，标签切换即换内容。
-
-技术栈：Vue 3 SFC
-层&依赖：frontend.presentation → layout 组件群
-细节见文档：docs/docs_refactor/frontend-arch.md → §能力管理面板
+使用 TDesign <t-tabs> 替代手写标签栏，减少 2 层 div 嵌套。
 -->
 <template>
   <div class="interact-bar">
-    <div class="tabs-bar">
-      <div class="tab-list">
-        <div
-          v-for="tab in tabs"
-          :key="tab.id"
-          class="tab"
-          :class="{ active: activeTab === tab.id }"
-          @click="activeTab = tab.id"
-        >
-          {{ tab.label }}
-        </div>
-      </div>
-      <span class="model-name">{{ model }}</span>
-    </div>
-    <ChatPanel
-      v-show="activeTab === 'chat'"
-      :model="model"
-    />
-    <TermBar v-show="activeTab === 'term'" />
+    <t-tabs
+      v-model="activeTab"
+      theme="card"
+    >
+      <template #action>
+        <span class="model-name">{{ model }}</span>
+      </template>
+      <t-tab-panel
+        value="chat"
+        label="💬 对话"
+        :destroy-on-hide="false"
+      >
+        <ChatPanel :model="model" />
+      </t-tab-panel>
+      <t-tab-panel
+        value="term"
+        label="🖥 终端"
+        :destroy-on-hide="false"
+      >
+        <TermBar />
+      </t-tab-panel>
+    </t-tabs>
   </div>
 </template>
 <script setup>
@@ -48,11 +45,23 @@ const tabs = [
 ]
 </script>
 <style scoped>
-.interact-bar{flex:1;min-height:0;display:flex;flex-direction:column;background:#1e1e1e;border-left:1px solid #333;overflow:hidden}
-.tabs-bar{display:flex;align-items:center;height:36px;background:#252526;border-bottom:1px solid #1e1e1e;flex-shrink:0}
-.tab-list{display:flex;align-items:stretch;height:100%}
-.tab{display:flex;align-items:center;gap:4px;padding:0 12px;font-size:12px;color:#888;cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
-.tab.active{color:#ccc;border-bottom-color:#409eff}
-.tab:hover{color:#aaa}
+.interact-bar{flex:1;min-height:0;display:flex;flex-direction:column;overflow:hidden;background:#1e1e1e}
 .model-name{margin-left:auto;padding-right:12px;font-size:11px;color:#555}
+</style>
+
+<style>
+/* TDesign tabs 暗色主题覆盖 — 提高特异性覆盖 TDesign 内部样式 */
+.interact-bar .t-tabs { background: #1e1e1e; display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.interact-bar .t-tabs__header { background: #252526; }
+.interact-bar .t-tabs__nav { background: #252526; }
+.interact-bar .t-tabs__nav-scroll { background: #252526; }
+.interact-bar .t-tabs__nav-wrap { background: #252526; }
+.interact-bar .t-tabs__operations { background: #252526; }
+.interact-bar .t-tabs__action { background: #252526; }
+.interact-bar .t-tabs__nav-item { background: #252526 !important; color: #888 !important; border-color: transparent; }
+.interact-bar .t-tabs__nav-item:hover { background: #333 !important; color: #aaa !important; }
+.interact-bar .t-tabs__nav-item.t-is-active { background: #1e1e1e !important; color: #ccc !important; }
+.interact-bar .t-tabs__content { background: #1e1e1e; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.interact-bar .t-tab-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.interact-bar .t-tab-panel.t-is-hidden { display: none; flex: none; }
 </style>

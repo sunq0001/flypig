@@ -9,12 +9,10 @@ ViewBar：中间查看栏容器
 细节见文档：docs/docs_refactor/frontend-arch.md → §全局布局
 -->
 <template>
-  <div class="view-bar">
-    <EditorArea
-      ref="editorRef"
-      @open-file="$emit('open-file', $event)"
-    />
-  </div>
+  <EditorArea
+    ref="editorRef"
+    @open-file="$emit('open-file', $event)"
+  />
 </template>
 <script setup>
 import { ref } from 'vue'
@@ -30,5 +28,5 @@ function openFile(path) {
 defineExpose({ openFile })
 </script>
 <style scoped>
-.view-bar{width:100%;height:100%;display:flex;flex-direction:column;overflow:hidden;border-left:1px solid #333}
+/* border-left 已合并到全局 .panel CSS 中 */
 </style>

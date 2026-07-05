@@ -9,22 +9,20 @@
       :style="panelStyle(p)"
       :data-panel-id="p.id"
     >
-      <div class="pcontent">
-        <ResourceBar
-          v-if="p.id === 'resource'"
-          :active-view="activeView"
-          @switch-workspace="$emit('switch-workspace')"
-          @open-file="onOpenFile"
-        />
-        <ViewerBar
-          v-else-if="p.id === 'viewer'"
-          :ref="el => { if (el) viewerRef = el }"
-        />
-        <InteractBar
-          v-else-if="p.id === 'interact'"
-          :model="defaultModel"
-        />
-      </div>
+      <ResourceBar
+        v-if="p.id === 'resource'"
+        :active-view="activeView"
+        @switch-workspace="$emit('switch-workspace')"
+        @open-file="onOpenFile"
+      />
+      <ViewerBar
+        v-else-if="p.id === 'viewer'"
+        :ref="el => { if (el) viewerRef = el }"
+      />
+      <InteractBar
+        v-else-if="p.id === 'interact'"
+        :model="defaultModel"
+      />
     </div>
     <ResizeHandleLR
       v-if="i < panels.length - 1"

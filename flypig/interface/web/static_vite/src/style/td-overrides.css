@@ -1,0 +1,114 @@
+/**
+ * td-overrides.css — TDesign 组件库暗色主题覆盖
+ *
+ * 合并自：
+ *   - interact/input/mode-select-popper.css（从未被 import，ModeSelect 下拉弹窗完全失效）
+ *   - interact/input/model-select-popper.css（间接 import，20+ !important 全局污染）
+ *
+ * 修复：
+ *   - !important → CSS 变量（不需 !important）
+ *   - .modt-select-popper 拼写修正（保留原名作为向后兼容 fallback）
+ *   - 两份相同语义的 CSS 合并为一份
+ */
+
+/* ── ModeSelect 下拉弹窗 ── */
+.mode-select-popper,
+.modt-select-popper {
+  --td-bg-color-container: #252526;
+  --td-bg-color-container-hover: #3c3c3c;
+  --td-bg-color-container-active: #2a2a2a;
+  --td-text-color-primary: #e5e5e5;
+  --td-text-color-secondary: #999;
+  --td-component-stroke: #444;
+  --td-border-level-1-color: #444;
+  border: 1px solid #333;
+  min-width: 100px;
+}
+.mode-select-popper .t-popup__content,
+.modt-select-popper .t-popup__content {
+  background: var(--td-bg-color-container);
+}
+
+/* ── ModelSelect 下拉弹窗（更多变量覆盖） ── */
+.modt-select-popper {
+  min-width: 260px;
+  --td-bg-color-specialcomponent: #252526;
+  --td-brand-color: #409eff;
+  --td-brand-color-light: rgba(64,158,255,0.12);
+  --td-brand-color-light-hover: rgba(64,158,255,0.2);
+  --td-font-gray-1: #eee;
+  --td-font-gray-2: #bbb;
+  --td-success-color: #52c41a;
+  --td-warning-color: #faad14;
+  --td-error-color: #ff4d4f;
+}
+
+/* ── 嵌套元素通用样式 ── */
+.mode-select-popper .t-select-dropdown__item,
+.modt-select-popper .t-select-dropdown__item {
+  font-size: 12px;
+  color: var(--td-text-color-primary);
+  background: transparent;
+}
+.mode-select-popper .t-select-dropdown__item:hover,
+.modt-select-popper .t-select-dropdown__item:hover,
+.mode-select-popper .t-select-dropdown__item.hover,
+.modt-select-popper .t-select-dropdown__item.hover {
+  background: var(--td-bg-color-container-hover);
+}
+.mode-select-popper .t-select-dropdown__item.is-selected,
+.modt-select-popper .t-select-dropdown__item.is-selected,
+.mode-select-popper .t-option.t-is-selected,
+.modt-select-popper .t-option.t-is-selected,
+.mode-select-popper .t-select-option.t-is-selected,
+.modt-select-popper .t-select-option.t-is-selected {
+  color: var(--td-brand-color);
+  background: var(--td-bg-color-container-active);
+}
+
+/* ── ModelSelect 特有：下拉列表背景 ── */
+.modt-select-popper .t-select-dropdown-inner,
+.modt-select-popper .t-select-option-list,
+.modt-select-popper .t-select-dropdown,
+.modt-select-popper .t-select__list,
+.modt-select-popper ul {
+  background: var(--td-bg-color-container);
+}
+
+/* ── ModelSelect 特有：弹窗箭头 ── */
+.modt-select-popper .t-popup__arrow::before {
+  background: var(--td-bg-color-container);
+  border-color: #333;
+}
+
+/* ── ModelSelect 选项内布局 ── */
+.option-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  width: 100%;
+}
+.option-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.option-name {
+  color: var(--td-text-color-primary);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.option-provider {
+  color: #666;
+  font-size: 10px;
+  margin-left: auto;
+  flex-shrink: 0;
+  padding-left: 8px;
+}

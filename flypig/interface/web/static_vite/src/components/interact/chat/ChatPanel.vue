@@ -17,6 +17,12 @@ ChatPanel：对话框面板容器
       :messages="messages"
       :loading="isStreaming"
     />
+    <div
+      v-if="status === 'submitted'"
+      class="model-loading-hint"
+    >
+      <t-loading indicator size="small" /> 模型启动中，请稍候...
+    </div>
     <InputBox
       :model="currentModel"
       :models="modelList"
@@ -27,49 +33,37 @@ ChatPanel：对话框面板容器
       @update:mode="m => currentMode = m"
     />
 
-    <!-- API Key 弹框（自定义 div 弹窗，避免 TDesign Dialog Teleport bug） -->
-    <div
-      v-if="showApiKeyDialog"
-      class="ak-overlay"
-      @click.self="showApiKeyDialog = false"
+    <!-- API Key 弹框 -->
+    <DialogWrapper
+      :show="showApiKeyDialog"
+      title="配置 API Key"
+      narrow
+      @close="showApiKeyDialog = false"
     >
-      <div class="ak-box">
-        <div class="ak-header">
-          <span>配置 API Key</span>
-          <button
-            class="ak-close"
-            @click="showApiKeyDialog = false"
-          >
-            ✕
-          </button>
-        </div>
-        <div class="ak-body">
-          <p class="ak-desc">
-            模型 <strong>{{ currentModel }}</strong> 尚未配置 API Key。输入后即可开始对话。
-          </p>
-          <t-input
-            v-model="apiKeyInput"
-            type="password"
-            show-password-icon
-            :placeholder="`输入 ${apiKeyProvider} API Key`"
-            clearable
-          />
-        </div>
-        <div class="ak-footer">
-          <t-button @click="showApiKeyDialog = false">
-            取消
-          </t-button>
-          <t-button
-            theme="primary"
-            :disabled="!apiKeyInput.trim()"
-            :loading="savingKey"
-            @click="saveApiKey"
-          >
-            保存并发送
-          </t-button>
-        </div>
-      </div>
-    </div>
+      <p class="ak-desc">
+        模型 <strong>{{ currentModel }}</strong> 尚未配置 API Key。输入后即可开始对话。
+      </p>
+      <t-input
+        v-model="apiKeyInput"
+        type="password"
+        show-password-icon
+        :placeholder="`输入 ${apiKeyProvider} API Key`"
+        clearable
+      />
+      <template #footer>
+        <t-button @click="showApiKeyDialog = false">
+          取消
+        </t-button>
+        <t-button
+          theme="primary"
+          :disabled="!apiKeyInput.trim()"
+          :loading="savingKey"
+          @click="saveApiKey"
+        >
+          保存并发送
+        </t-button>
+      </template>
+    </DialogWrapper>
   </div>
 </template>
 
@@ -80,6 +74,7 @@ import { useConfigStore } from '@/stores/config'
 import { updateDefaultModel, saveApiKey as saveApiKey_ } from '@/utils/api'
 import MessageList from './MessageList.vue'
 import InputBox from './InputBox.vue'
+import DialogWrapper from '../../common/DialogWrapper.vue'
 
 const props = defineProps({
   model: { type: String, default: '' },
@@ -209,50 +204,7 @@ async function saveApiKey() {
 .message-list::-webkit-scrollbar-track { background: transparent; }
 .message-list::-webkit-scrollbar-thumb { background: #3c3c3c; border-radius: 3px; }
 
-/* API Key 弹窗 */
-.ak-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 3000;
-}
-.ak-box {
-  background: #252526;
-  border: 1px solid #333;
-  border-radius: 8px;
-  width: 420px;
-  max-width: 90vw;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-}
-.ak-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 20px;
-  border-bottom: 1px solid #333;
-  color: #ccc;
-  font-size: 14px;
-  font-weight: 500;
-}
-.ak-close {
-  background: none;
-  border: none;
-  color: #666;
-  cursor: pointer;
-  font-size: 16px;
-  padding: 2px 6px;
-  border-radius: 3px;
-}
-.ak-close:hover {
-  color: #ccc;
-  background: #333;
-}
-.ak-body {
-  padding: 20px;
-}
+/* API Key 弹窗描述文字 */
 .ak-desc {
   margin-bottom: 12px;
   color: #999;
@@ -261,12 +213,5 @@ async function saveApiKey() {
 }
 .ak-desc strong {
   color: #ccc;
-}
-.ak-footer {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  padding: 12px 20px;
-  border-top: 1px solid #333;
 }
 </style>

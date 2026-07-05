@@ -92,7 +92,7 @@ import { useProviderConfig } from '@/config/model-providers.js'
 import { getPricing } from '@/utils/api'
 import PriceTooltip from './PriceTooltip.vue'
 import LocalModelDialog from './LocalModelDialog.vue'
-import './model-select-popper.css'
+import '../../../style/td-overrides.css'
 
 const { iconMap, colorMap, providerDisplayMap } = useProviderConfig()
 

@@ -17,18 +17,17 @@ MainLayout：三栏布局 — TDesign Layout 组件
           @switch="onSwitch"
         />
       </t-aside>
-      <div
-        ref="bodyRef"
-        class="layout-body"
-      >
-        <LayoutPanels
-          :panels="panels"
-          :active-view="activeView"
-          :default-model="defaultModel"
-          @switch-workspace="onSwitchWorkspace"
-          @open-file="onOpenFile"
-        />
-      </div>
+      <t-content>
+        <div ref="containerRef" class="layout-content">
+          <LayoutPanels
+            :panels="panels"
+            :active-view="activeView"
+            :default-model="defaultModel"
+            @switch-workspace="onSwitchWorkspace"
+            @open-file="onOpenFile"
+          />
+        </div>
+      </t-content>
     </t-layout>
 
     <t-footer
@@ -39,27 +38,14 @@ MainLayout：三栏布局 — TDesign Layout 组件
     </t-footer>
   </t-layout>
 
-  <!-- 切换工作区弹窗（div 弹窗，修复 TDesign Dialog Teleport bug） -->
-  <div
-    v-if="showWorkspacePicker"
-    class="dlg-overlay"
-    @click.self="showWorkspacePicker = false"
+  <!-- 切换工作区弹窗 -->
+  <DialogWrapper
+    :show="showWorkspacePicker"
+    title="切换工作区"
+    @close="showWorkspacePicker = false"
   >
-    <div class="dlg-box">
-      <div class="dlg-header">
-        <span>切换工作区</span>
-        <button
-          class="dlg-close"
-          @click="showWorkspacePicker = false"
-        >
-          ✕
-        </button>
-      </div>
-      <div class="dlg-body">
-        <WorkspaceStep @selected="onWorkspaceChanged" />
-      </div>
-    </div>
-  </div>
+    <WorkspaceStep @selected="onWorkspaceChanged" />
+  </DialogWrapper>
 </template>
 
 <script setup>
@@ -68,6 +54,7 @@ import Sortable from 'sortablejs'
 import SideBar from './SideBar.vue'
 import StatusBar from './StatusBar.vue'
 import LayoutPanels from './LayoutPanels.vue'
+import DialogWrapper from '../common/DialogWrapper.vue'
 import WorkspaceStep from '../init/WorkspaceStep.vue'
 
 defineProps({ workspace: { type: String, default: '' }, defaultModel: { type: String, default: '' } })
@@ -76,6 +63,9 @@ const activeView = ref('file')
 const showWorkspacePicker = ref(false)
 
 function onSwitch(v) { activeView.value = v }
+function onOpenFile(path) {
+  // 由 LayoutPanels 透传给 ViewerBar.openFile
+}
 function onSwitchWorkspace() {
   showWorkspacePicker.value = true
 }
@@ -85,7 +75,7 @@ function onWorkspaceChanged() {
   emit('workspaceChanged')
 }
 
-const bodyRef = ref(null)
+const containerRef = ref(null)
 const panels = reactive([
   { id: 'resource', w: 260 },  // 侧栏宽度 px
   { id: 'viewer', w: 0 },
@@ -93,7 +83,7 @@ const panels = reactive([
 ])
 
 onMounted(() => {
-  const el = bodyRef.value
+  const el = containerRef.value
   if (!el) return
   nextTick(() => {
     Sortable.create(el, {
@@ -111,66 +101,20 @@ onMounted(() => {
 
 <style scoped>
 .t-layout { background: #1e1e1e; }
-.layout-body { flex: 1; min-height: 0; min-width: 0; display: flex; overflow: hidden; align-items: stretch; }
+:deep(.t-layout__content) { flex: 1; min-height: 0; min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+.layout-content { display: flex; flex: 1; min-height: 0; min-width: 0; overflow: hidden; align-items: stretch; }
 </style>
 
 <style>
 /* panel 容器 — 全局 CSS 穿透子组件 LayoutPanels */
-.panel { display: flex; flex-direction: column; min-width: 0; }
-.pcontent { flex: 1; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border-left: 1px solid #333; }
+.panel:first-child { border-left: none; }
 .panel.sortable-ghost { opacity: 0.3; }
 .panel.sortable-chosen { box-shadow: 0 0 0 2px #409eff inset; }
 
-/* TDesign t-layout__content 必须溢出隐藏，否则内部 .layout-body 撑破容器 */
+/* TDesign t-layout__content 必须溢出隐藏 */
 .t-layout__content {
   min-height: 0 !important;
   overflow: hidden !important;
 }
-
-/* 自定义弹窗样式 */
-.dlg-overlay {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 3000;
-}
-.dlg-box {
-  background: #252526;
-  border: 1px solid #333;
-  border-radius: 8px;
-  width: 500px;
-  max-width: 90vw;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
-}
-.dlg-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 20px;
-  border-bottom: 1px solid #333;
-  color: #ccc;
-  font-size: 14px;
-  font-weight: 500;
-}
-.dlg-close {
-  background: none;
-  border: none;
-  color: #666;
-  cursor: pointer;
-  font-size: 16px;
-  padding: 2px 6px;
-  border-radius: 3px;
-}
-.dlg-close:hover {
-  color: #ccc;
-  background: #333;
-}
-.dlg-body {
-  padding: 20px;
-}
-
-
 </style>
