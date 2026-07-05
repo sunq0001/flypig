@@ -28,6 +28,22 @@ repos:
         pass_filenames: false
         always_run: true
 
+  # ── 架构合规检查（DDD 层依赖 + 接口契约 + 测试覆盖）──
+  - repo: local
+    hooks:
+      - id: architecture-check
+        name: 架构合规检查（Python 变更时触发）
+        entry: python scripts/architecture_check.py
+        language: python
+        files: ^flypig/.*\.py$
+        pass_filenames: false
+      - id: frontend-check
+        name: 前端合规检查（前端文件变更时触发）
+        entry: python scripts/frontend_check.py
+        language: python
+        files: ^flypig/interface/web/static_vite/src/.*\.(vue|js)$
+        pass_filenames: false
+
   # ── 前端: Vitest 测试 ──
   - repo: local
     hooks:
