@@ -8,15 +8,27 @@ TreeNode：文件树的递归节点组件
     <div
       class="tree-node"
       :class="{ 'is-dir': isDir, 'is-open': isDir && expanded }"
-      :style="{ paddingLeft: depth * 18 + 8 + 'px' }"
+      :style="{ paddingLeft: depth * INDENT_STEP + BASE_PAD + 'px' }"
       @click="onClick"
     >
-      <span class="node-arrow" v-if="isDir">{{ expanded ? '▾' : '▸' }}</span>
-      <span class="node-arrow spacer" v-else></span>
-      <Icon class="node-icon" :icon="fileIcon" />
+      <span
+        v-if="isDir"
+        class="node-arrow"
+      >{{ expanded ? '▾' : '▸' }}</span>
+      <span
+        v-else
+        class="node-arrow spacer"
+      />
+      <Icon
+        class="node-icon"
+        :icon="fileIcon"
+      />
       <span class="node-name">{{ node.name }}</span>
     </div>
-    <div v-if="isDir && expanded" class="tree-children">
+    <div
+      v-if="isDir && expanded"
+      class="tree-children"
+    >
       <TreeNode
         v-for="child in childrenList"
         :key="child.path"
@@ -31,6 +43,11 @@ TreeNode：文件树的递归节点组件
 <script setup>
 import { ref, computed } from 'vue'
 import { Icon } from '@iconify/vue'
+import { readDir } from '@/utils/api'
+import { getFileIcon } from '@/config/file-icons'
+
+const INDENT_STEP = 18
+const BASE_PAD = 8
 
 const props = defineProps({
   node: { type: Object, required: true },
@@ -43,23 +60,10 @@ const expanded = ref(false)
 const childrenList = ref(props.node.children || [])
 const loading = ref(false)
 
-const iconMap = {
-  js: 'vscode-icons:file-type-js', ts: 'vscode-icons:file-type-typescript',
-  vue: 'vscode-icons:file-type-vue', py: 'vscode-icons:file-type-python',
-  json: 'vscode-icons:file-type-json', md: 'vscode-icons:file-type-markdown',
-  html: 'vscode-icons:file-type-html', css: 'vscode-icons:file-type-css',
-  yml: 'vscode-icons:file-type-yaml', yaml: 'vscode-icons:file-type-yaml',
-  toml: 'vscode-icons:file-type-toml',
-  png: 'vscode-icons:file-type-image', jpg: 'vscode-icons:file-type-image',
-  jpeg: 'vscode-icons:file-type-image', svg: 'vscode-icons:file-type-image',
-  txt: 'vscode-icons:file-type-text',
-  gitignore: 'vscode-icons:file-type-git',
-}
-
 const fileIcon = computed(() => {
   if (isDir.value) return expanded.value ? 'vscode-icons:default-folder-opened' : 'vscode-icons:default-folder'
   const ext = (props.node.name || '').split('.').pop()?.toLowerCase()
-  return iconMap[ext] || 'vscode-icons:default-file'
+  return getFileIcon(ext)
 })
 
 async function onClick() {
@@ -69,15 +73,10 @@ async function onClick() {
     if (expanded.value && childrenList.value.length === 0 && !loading.value) {
       loading.value = true
       try {
-        const res = await fetch('/api/tree', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: props.node.path }),
-        })
-        if (res.ok) {
-          const json = await res.json()
-          childrenList.value = (json.entries || []).map(e => ({ ...e, children: [], loaded: false }))
-        }
+        const entries = await readDir(props.node.path)
+        childrenList.value = entries.map(e => ({ ...e, children: [], loaded: false }))
+      } catch {
+        childrenList.value = []
       } finally {
         loading.value = false
       }

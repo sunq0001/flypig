@@ -5,7 +5,10 @@ ResizeHandleLR：拖拽手柄，直接调整左右 panel 宽度
 requestAnimationFrame 节流避免卡顿。
 -->
 <template>
-  <div class="resize-lr" @mousedown.prevent="startDrag"></div>
+  <div
+    class="resize-lr"
+    @mousedown.prevent="startDrag"
+  />
 </template>
 
 <script setup>
@@ -24,30 +27,28 @@ function startDrag(e) {
   document.addEventListener('mouseup', onUp)
 }
 
+function _captureWidths(e) {
+  const delta = e.clientX - startX
+  if (dragStarts.length === 0) {
+    const parent = document.querySelector('.layout-body')
+    const divs = parent?.querySelectorAll('.panel') || []
+    dragStarts = props.panels.map((p, i) => {
+      if (p.w > 0) return p.w
+      return Math.round(divs[i]?.getBoundingClientRect().width || 200)
+    })
+  }
+  const left = props.panels[props.idx]
+  const right = props.panels[props.idx + 1]
+  if (!left || !right) return
+  left.w = Math.max(80, dragStarts[props.idx] + delta)
+  right.w = Math.max(80, dragStarts[props.idx + 1] - delta)
+  if (left.id === 'viewer') left.w = 0
+  if (right.id === 'viewer') right.w = 0
+}
+
 function onMove(e) {
   if (rafId) cancelAnimationFrame(rafId)
-  rafId = requestAnimationFrame(() => {
-    const delta = e.clientX - startX
-    if (dragStarts.length === 0) {
-      // 用 DOM 实际渲染宽度，包括 w=0 的 flex panel
-      const parent = document.querySelector('.layout-body')
-      const divs = parent?.querySelectorAll('.panel') || []
-      dragStarts = props.panels.map((p, i) => {
-        if (p.w > 0) return p.w
-        const w = divs[i]?.getBoundingClientRect().width || 200
-        return Math.round(w)
-      })
-    }
-    const left = props.panels[props.idx]
-    const right = props.panels[props.idx + 1]
-    if (!left || !right) { rafId = null; return }
-    left.w = Math.max(80, dragStarts[props.idx] + delta)
-    right.w = Math.max(80, dragStarts[props.idx + 1] - delta)
-    // viewer 始终保持 flex:1（w=0），只调两侧面板宽度
-    if (left.id === 'viewer') left.w = 0
-    if (right.id === 'viewer') right.w = 0
-    rafId = null
-  })
+  rafId = requestAnimationFrame(() => { _captureWidths(e); rafId = null })
 }
 
 function onUp() {

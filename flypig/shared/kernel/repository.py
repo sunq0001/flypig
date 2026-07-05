@@ -10,7 +10,7 @@ Repository 接口在 domain 层定义，基础设施层负责实现。
 """
 
 from abc import ABC, abstractmethod
-from typing import Generic, List, Optional, TypeVar
+from typing import Generic, TypeVar
 
 from flypig.shared.kernel.entity import Entity
 
@@ -30,7 +30,7 @@ class Repository(ABC, Generic[T]):
         ...
 
     @abstractmethod
-    async def find_by_id(self, id: str) -> Optional[T]:
+    async def find_by_id(self, id: str) -> T | None:
         """按 ID 查找"""
         ...
 
@@ -40,6 +40,6 @@ class Repository(ABC, Generic[T]):
         ...
 
     @abstractmethod
-    async def list_all(self) -> List[T]:
+    async def list_all(self) -> list[T]:
         """列出所有"""
         ...

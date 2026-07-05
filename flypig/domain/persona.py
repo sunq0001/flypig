@@ -11,4 +11,5 @@ from flypig.shared.base import ValueObject
 
 class Persona(ValueObject):
     """角色值对象 — 不可变，按属性相等"""
+
     pass

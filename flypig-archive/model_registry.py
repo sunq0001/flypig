@@ -1,4 +1,5 @@
 """模型注册表 — 模型名 → 提供商/接口/环境变量 的动态映射"""
+
 from typing import Optional
 
 # ============================================================
@@ -7,17 +8,50 @@ from typing import Optional
 # ============================================================
 REGISTRY = {
     # ── DeepSeek ──
-    "deepseek-v4-flash":   {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY", "model": "deepseek-v4-flash"},
-    "deepseek-v4-pro":     {"provider": "DeepSeek",  "base_url": "https://api.deepseek.com",          "env_key": "DEEPSEEK_API_KEY", "model": "deepseek-v4-pro"},
-
+    "deepseek-v4-flash": {
+        "provider": "DeepSeek",
+        "base_url": "https://api.deepseek.com",
+        "env_key": "DEEPSEEK_API_KEY",
+        "model": "deepseek-v4-flash",
+    },
+    "deepseek-v4-pro": {
+        "provider": "DeepSeek",
+        "base_url": "https://api.deepseek.com",
+        "env_key": "DEEPSEEK_API_KEY",
+        "model": "deepseek-v4-pro",
+    },
     # ── OpenAI ──
-    "gpt-4o-mini":         {"provider": "OpenAI",    "base_url": "https://api.openai.com/v1",         "env_key": "OPENAI_API_KEY",    "model": "gpt-4o-mini"},
-    "gpt-4o":              {"provider": "OpenAI",    "base_url": "https://api.openai.com/v1",         "env_key": "OPENAI_API_KEY",    "model": "gpt-4o"},
-
+    "gpt-4o-mini": {
+        "provider": "OpenAI",
+        "base_url": "https://api.openai.com/v1",
+        "env_key": "OPENAI_API_KEY",
+        "model": "gpt-4o-mini",
+    },
+    "gpt-4o": {
+        "provider": "OpenAI",
+        "base_url": "https://api.openai.com/v1",
+        "env_key": "OPENAI_API_KEY",
+        "model": "gpt-4o",
+    },
     # ── Anthropic ──
-    "claude-3-5-haiku":    {"provider": "Anthropic", "base_url": "https://api.anthropic.com",         "env_key": "ANTHROPIC_API_KEY", "model": "claude-3-5-haiku"},
-    "claude-3-5-sonnet":   {"provider": "Anthropic", "base_url": "https://api.anthropic.com",         "env_key": "ANTHROPIC_API_KEY", "model": "claude-3-5-sonnet"},
-    "claude-4-opus":       {"provider": "Anthropic", "base_url": "https://api.anthropic.com",         "env_key": "ANTHROPIC_API_KEY", "model": "claude-4-opus"},
+    "claude-3-5-haiku": {
+        "provider": "Anthropic",
+        "base_url": "https://api.anthropic.com",
+        "env_key": "ANTHROPIC_API_KEY",
+        "model": "claude-3-5-haiku",
+    },
+    "claude-3-5-sonnet": {
+        "provider": "Anthropic",
+        "base_url": "https://api.anthropic.com",
+        "env_key": "ANTHROPIC_API_KEY",
+        "model": "claude-3-5-sonnet",
+    },
+    "claude-4-opus": {
+        "provider": "Anthropic",
+        "base_url": "https://api.anthropic.com",
+        "env_key": "ANTHROPIC_API_KEY",
+        "model": "claude-4-opus",
+    },
 }
 
 # ============================================================
@@ -59,4 +93,3 @@ def models_by_provider(provider: str) -> list:
 def provider_info(name: str) -> Optional[dict]:
     """返回提供商信息（控制台 URL 等）"""
     return PROVIDER_INFO.get(name)
-

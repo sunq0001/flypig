@@ -30,4 +30,6 @@ class ChatService:
 
             await self._event_stream.push(session_id, "done", {})
         except Exception as e:
-            await self._event_stream.push(session_id, "error", {"message": str(e)[:TRUNCATE_LENGTH]})
+            await self._event_stream.push(
+                session_id, "error", {"message": str(e)[:TRUNCATE_LENGTH]}
+            )

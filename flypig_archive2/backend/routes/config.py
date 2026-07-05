@@ -89,20 +89,24 @@ async def browse():
     try:
         for entry in sorted(p.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
             try:
-                entries.append({
-                    "name": entry.name,
-                    "type": "directory" if entry.is_dir() else "file",
-                })
+                entries.append(
+                    {
+                        "name": entry.name,
+                        "type": "directory" if entry.is_dir() else "file",
+                    }
+                )
             except PermissionError:
                 continue
     except PermissionError:
         return jsonify({"error": "无权限访问", "path": str(p)}), 403
 
-    return jsonify({
-        "path": str(p),
-        "parent": str(p.parent) if p.parent != p else None,
-        "entries": entries,
-    })
+    return jsonify(
+        {
+            "path": str(p),
+            "parent": str(p.parent) if p.parent != p else None,
+            "entries": entries,
+        }
+    )
 
 
 @config_bp.route("/mkdir", methods=["POST"])
@@ -128,9 +132,13 @@ async def mkdir():
 
 # Ollama 推荐下载的轻量模型
 RECOMMENDED_LOCAL = [
-    {"name": "qwen2.5:1.5b", "size": "~1.5GB", "description": "阿里通义千问 1.5B 轻量版，中文表现好"},
-    {"name": "llama3.2:1b",  "size": "~700MB", "description": "Meta Llama 3.2 1B，英文通用"},
-    {"name": "phi3:mini",    "size": "~2.1GB", "description": "Microsoft Phi-3 Mini，代码能力强"},
+    {
+        "name": "qwen2.5:1.5b",
+        "size": "~1.5GB",
+        "description": "阿里通义千问 1.5B 轻量版，中文表现好",
+    },
+    {"name": "llama3.2:1b", "size": "~700MB", "description": "Meta Llama 3.2 1B，英文通用"},
+    {"name": "phi3:mini", "size": "~2.1GB", "description": "Microsoft Phi-3 Mini，代码能力强"},
 ]
 
 
@@ -141,6 +149,7 @@ async def get_local_models():
     ollama_running = False
     try:
         import httpx
+
         resp = httpx.get("http://localhost:11434/api/tags", timeout=2)
         if resp.status_code == 200:
             ollama_running = True
@@ -151,11 +160,13 @@ async def get_local_models():
 
     suggestions = [m for m in RECOMMENDED_LOCAL if m["name"] not in installed]
 
-    return jsonify({
-        "running": ollama_running,
-        "installed": installed,
-        "suggestions": suggestions,
-    })
+    return jsonify(
+        {
+            "running": ollama_running,
+            "installed": installed,
+            "suggestions": suggestions,
+        }
+    )
 
 
 @config_bp.route("/local-models/pull", methods=["POST"])
@@ -170,7 +181,9 @@ async def pull_local_model():
 
     async def _pull():
         proc = await asyncio.create_subprocess_exec(
-            str(OLLAMA_PATH), "pull", model,
+            str(OLLAMA_PATH),
+            "pull",
+            model,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )

@@ -1,10 +1,19 @@
 """LSP 诊断接口
 
-为什么做：改完代码后需要检查是否有语法错误/类型错误，LSP 诊断提供标准化的检查结果。
-实现方法：ILspDiagnostics ABC 定义 check(file) → diagnostics[] 方法，pyright CLI 实现。
-实现效果：AI 改完代码后自动检查语法错误，用户不会看到明显"坏了的代码"。
-技术栈：ILspDiagnostics ABC, pyright CLI
+为什么做：AI 修改代码后需要检查语法错误，LSP 提供实时诊断。
+
+实现方法：ILspDiagnostics ABC 定义 get_diagnostics(file_path) → [Diagnostic]。
 
 层&依赖：domain.interfaces 层，零依赖
-细节见文档：docs/docs_refactor/tech-stack.md → §LSP 诊断
+TODO: 骨架文件，待实现具体方法
 """
+
+from abc import ABC, abstractmethod
+from typing import Any
+
+
+class ILspDiagnostics(ABC):
+    """LSP 诊断接口 — 代码语法/类型错误检查"""
+
+    @abstractmethod
+    async def get_diagnostics(self, file_path: str) -> list[dict[str, Any]]: ...

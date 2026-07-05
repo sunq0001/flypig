@@ -7,6 +7,8 @@
 层&依赖：shared 层
 """
 
+from flypig.shared.application_service import ApplicationService
+from flypig.shared.factory import Factory
 from flypig.shared.kernel.aggregate_root import AggregateRoot
 from flypig.shared.kernel.domain_event import DomainEvent
 from flypig.shared.kernel.domain_service import DomainService
@@ -15,9 +17,6 @@ from flypig.shared.kernel.event_bus import EventPublisher
 from flypig.shared.kernel.repository import Repository
 from flypig.shared.kernel.unit_of_work import UnitOfWork
 from flypig.shared.kernel.value_object import ValueObject
-
-from flypig.shared.application_service import ApplicationService
-from flypig.shared.factory import Factory
 from flypig.shared.result import Result
 from flypig.shared.specification import (
     AndSpecification,

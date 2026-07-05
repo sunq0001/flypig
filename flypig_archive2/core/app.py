@@ -20,10 +20,10 @@ from pathlib import Path
 from quart import Quart
 from quart_cors import cors
 
-from core.settings import AppSettings, load_config
 from core.container import AppContainer
 from core.events import LifecycleEvents
 from core.logging import init_logging
+from core.settings import AppSettings, load_config
 
 
 def create_app(

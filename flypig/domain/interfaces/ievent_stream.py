@@ -9,6 +9,8 @@
 
 from abc import ABC, abstractmethod
 
+DEFAULT_POP_TIMEOUT: float = 30.0  # 默认弹出超时（秒）
+
 
 class IEventStream(ABC):
     """事件流接口 — 按 session 隔离推送实时事件"""

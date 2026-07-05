@@ -11,4 +11,5 @@ from flypig.shared.base import ValueObject
 
 class GraphSpec(ValueObject):
     """LangGraph 图谱规格值对象"""
+
     pass

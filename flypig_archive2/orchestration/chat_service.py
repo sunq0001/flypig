@@ -15,8 +15,8 @@ R1 阶段为简化版：直接调模型 stream，不经过图。后续轮次接�
 
 from __future__ import annotations
 
-from domain.interfaces.imodel import IModel
 from backend.sse_queue import sse_queue
+from domain.interfaces.imodel import IModel
 
 
 class ChatService:

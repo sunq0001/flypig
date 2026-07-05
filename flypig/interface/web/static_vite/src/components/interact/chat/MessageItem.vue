@@ -1,9 +1,19 @@
+<!-- MessageItem：单条消息气泡，支持流式打字机效果 -->
 <template>
-  <div class="message-item" :class="[message.role]">
-    <div class="avatar">{{ message.role === 'user' ? '🧑' : '🤖' }}</div>
+  <div
+    class="message-item"
+    :class="[message.role]"
+  >
+    <div class="avatar">
+      {{ message.role === 'user' ? '🧑' : '🤖' }}
+    </div>
     <div class="bubble">
-      <div class="content">{{ displayText }}</div>
-      <div class="time">{{ time }}</div>
+      <div class="content">
+        {{ displayText }}
+      </div>
+      <div class="time">
+        {{ time }}
+      </div>
     </div>
   </div>
 </template>

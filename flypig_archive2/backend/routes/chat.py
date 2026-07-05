@@ -19,11 +19,11 @@ from __future__ import annotations
 
 import json
 
-from quart import Blueprint, current_app, request, Response, jsonify
+from quart import Blueprint, Response, current_app, jsonify, request
 
 from domain.config.config import Config
-from domain.exceptions import ModelAPIError
 from domain.config.model_registry import REGISTRY
+from domain.exceptions import ModelAPIError
 from infrastructure.llm.openai_adapter import OpenAIAdapter
 
 chat_bp = Blueprint("chat", __name__, url_prefix="/api")

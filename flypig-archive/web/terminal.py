@@ -19,32 +19,38 @@ from typing import Optional
 
 # Windows: shell 类型 → 可执行文件（按优先级列出多个可能路径）
 SHELL_MAP_WIN = {
-    'ps':   ['powershell.exe', 'pwsh.exe', 'pwsh'],
-    'bash': ['bash.exe', 'C:\\Program Files\\Git\\bin\\bash.exe',
-             'C:\\Program Files\\Git\\usr\\bin\\bash.exe'],
-    'zsh':  ['zsh.exe'],
-    'wsl':  ['wsl.exe'],
+    "ps": ["powershell.exe", "pwsh.exe", "pwsh"],
+    "bash": [
+        "bash.exe",
+        "C:\\Program Files\\Git\\bin\\bash.exe",
+        "C:\\Program Files\\Git\\usr\\bin\\bash.exe",
+    ],
+    "zsh": ["zsh.exe"],
+    "wsl": ["wsl.exe"],
 }
 # Unix: shell 类型 → 可执行路径
 SHELL_MAP_UNIX = {
-    'ps':   ['pwsh', 'powershell'],
-    'bash': ['/bin/bash', '/usr/bin/bash'],
-    'zsh':  ['/bin/zsh', '/usr/bin/zsh'],
-    'wsl':  ['/bin/bash'],
+    "ps": ["pwsh", "powershell"],
+    "bash": ["/bin/bash", "/usr/bin/bash"],
+    "zsh": ["/bin/zsh", "/usr/bin/zsh"],
+    "wsl": ["/bin/bash"],
 }
 SHELL_LABELS = {
-    'ps': 'PowerShell', 'bash': 'Bash', 'zsh': 'Zsh', 'wsl': 'WSL',
+    "ps": "PowerShell",
+    "bash": "Bash",
+    "zsh": "Zsh",
+    "wsl": "WSL",
 }
 # 各 shell 启动参数
 SHELL_ARGS = {
-    'ps':   '-NoProfile -NoLogo',
-    'bash': '--login',
-    'zsh':  '',
-    'wsl':  '',
+    "ps": "-NoProfile -NoLogo",
+    "bash": "--login",
+    "zsh": "",
+    "wsl": "",
 }
 # 默认 fallback
-_DEFAULT_SHELL = 'ps'
-_WIN_DEFAULT_CMD = 'powershell.exe -NoProfile -NoLogo'
+_DEFAULT_SHELL = "ps"
+_WIN_DEFAULT_CMD = "powershell.exe -NoProfile -NoLogo"
 
 
 def detect_available_shells() -> dict:
@@ -84,12 +90,12 @@ def resolve_shell_cmd(shell_type: str) -> str:
         print(f"  [PTY] shell '{shell_type}' 不可用，降级到 PowerShell")
         if platform.system() == "Windows":
             return _WIN_DEFAULT_CMD
-        return '/bin/bash'
+        return "/bin/bash"
 
     # 追加启动参数
-    args = SHELL_ARGS.get(shell_type, '')
+    args = SHELL_ARGS.get(shell_type, "")
     if args:
-        cmd = f'{cmd} {args}'
+        cmd = f"{cmd} {args}"
     print(f"  [PTY] 使用 shell: {shell_type} → {cmd}")
     return cmd
 
@@ -97,7 +103,7 @@ def resolve_shell_cmd(shell_type: str) -> str:
 class Terminal:
     """单个 PTY 终端 — 与 Shell 进程的字节管道"""
 
-    def __init__(self, term_id: str, cwd: Optional[str] = None, shell: str = 'ps'):
+    def __init__(self, term_id: str, cwd: Optional[str] = None, shell: str = "ps"):
         self.term_id = term_id
         raw_cwd = cwd or os.getcwd()
         self.cwd = raw_cwd if os.path.isdir(raw_cwd) else os.getcwd()
@@ -105,7 +111,7 @@ class Terminal:
         self._process = None
         self._alive = False
         self._lock = threading.Lock()
-        self.shell_name = SHELL_LABELS.get(shell, 'PowerShell')
+        self.shell_name = SHELL_LABELS.get(shell, "PowerShell")
 
     def create(self) -> bool:
         """启动 PTY shell 进程"""
@@ -136,9 +142,12 @@ class Terminal:
             return False
         try:
             shell = resolve_shell_cmd(self.shell)
-            print(f"  [PTY] 启动 {self.shell_name} (via {pty_mod.__name__}): cwd={self.cwd}")
+            print(
+                f"  [PTY] 启动 {self.shell_name} (via {pty_mod.__name__}): cwd={self.cwd}"
+            )
             spawn_kwargs = {"cwd": self.cwd}
             import inspect
+
             sig = inspect.signature(pty_mod.PtyProcess.spawn)
             if "dimensions" in sig.parameters:
                 spawn_kwargs["dimensions"] = (24, 80)
@@ -187,7 +196,7 @@ class Terminal:
                     return data
                 return None
             else:
-                if hasattr(self, '_fd') and self._fd >= 0:
+                if hasattr(self, "_fd") and self._fd >= 0:
                     data = os.read(self._fd, size)
                     return data if data else None
                 return None
@@ -205,7 +214,7 @@ class Terminal:
                 if platform.system() == "Windows" and self._process:
                     text = data.decode("utf-8", errors="replace")
                     self._process.write(text)
-                elif hasattr(self, '_fd') and self._fd >= 0:
+                elif hasattr(self, "_fd") and self._fd >= 0:
                     os.write(self._fd, data)
             except (OSError, RuntimeError):
                 self._alive = False
@@ -218,11 +227,12 @@ class Terminal:
                 except Exception:
                     pass
         else:
-            if hasattr(self, '_fd') and self._fd >= 0:
+            if hasattr(self, "_fd") and self._fd >= 0:
                 try:
                     import struct
                     import termios
                     import fcntl
+
                     winsize = struct.pack("HHHH", rows, cols, 0, 0)
                     fcntl.ioctl(self._fd, termios.TIOCSWINSZ, winsize)
                 except Exception:
@@ -243,15 +253,16 @@ class Terminal:
                         pass
                     self._process = None
             else:
-                if hasattr(self, '_pid') and self._pid > 0:
+                if hasattr(self, "_pid") and self._pid > 0:
                     try:
                         import signal
+
                         os.kill(self._pid, signal.SIGTERM)
                         os.waitpid(self._pid, 0)
                     except Exception:
                         pass
                     self._pid = -1
-                if hasattr(self, '_fd') and self._fd >= 0:
+                if hasattr(self, "_fd") and self._fd >= 0:
                     try:
                         os.close(self._fd)
                     except Exception:
@@ -279,7 +290,9 @@ class TerminalManager:
         self._terminals: dict[str, Terminal] = {}
         self._lock = threading.Lock()
 
-    def create(self, term_id: str, cwd: Optional[str] = None, shell: str = 'ps') -> Terminal:
+    def create(
+        self, term_id: str, cwd: Optional[str] = None, shell: str = "ps"
+    ) -> Terminal:
         """创建并注册一个新终端"""
         term = Terminal(term_id, cwd, shell)
         term.create()

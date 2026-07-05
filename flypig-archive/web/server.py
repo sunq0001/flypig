@@ -4,25 +4,25 @@ agent 事件通过 SSE 的 threading.Queue 传递，避免 Windows 跨线程广�
 WS 仅用于 PTY 终端，不受影响。
 实时文件监控：watchfiles 检测工作区变化时自动刷新文件树缓存。
 """
+
 import asyncio
 import json
-import os
-import sys
 import threading
 import time
-import uuid
 import webbrowser
 import queue as queue_mod
 import re
 from pathlib import Path
-from typing import Optional
 
 from quart import (
-    Quart, copy_current_websocket_context,
-    jsonify, request, send_from_directory, websocket, Response,
+    Quart,
+    copy_current_websocket_context,
+    jsonify,
+    request,
+    send_from_directory,
+    websocket,
+    Response,
 )
-
-from ..hooks import WsEventHook
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -38,13 +38,13 @@ _workspace = ""
 #           "consumed": bool, "truncated": bool, "completed": bool,
 #           "interactive": bool, "notified": bool}
 _terminal_injections: dict = {}
-_active_injections: dict = {}     # pty_term_id → msgId
-_SILENCE_THRESHOLD = 3.0          # 3 秒无输出视为完成（非交互式命令）
+_active_injections: dict = {}  # pty_term_id → msgId
+_SILENCE_THRESHOLD = 3.0  # 3 秒无输出视为完成（非交互式命令）
 
 
 def _extract_output_between_markers(text: str) -> str:
     """提取 ###AI_START### 和 ###AI_END### 之间的纯净输出
-    
+
     PTY 输出包含命令 echo（如 'echo "###AI_START###"' ）、prompt 等噪音。
     用行级匹配找到独立占一行的 START/END 标记，提取中间的实际命令输出。
     无标记时返回原始文本（兼容交互式命令）。
@@ -52,13 +52,12 @@ def _extract_output_between_markers(text: str) -> str:
     start_tag = "###AI_START###"
     end_tag = "###AI_END###"
     # 用正则匹配独立占一行的标记（不含 echo "..." 等前置内容）
-    start_match = re.search(rf'^{re.escape(start_tag)}\s*$', text, re.MULTILINE)
-    end_match = re.search(rf'^{re.escape(end_tag)}\s*$', text, re.MULTILINE)
+    start_match = re.search(rf"^{re.escape(start_tag)}\s*$", text, re.MULTILINE)
+    end_match = re.search(rf"^{re.escape(end_tag)}\s*$", text, re.MULTILINE)
     if start_match and end_match and start_match.start() < end_match.start():
-        content = text[start_match.end():end_match.start()]
+        content = text[start_match.end() : end_match.start()]
         return content.strip()
     return text  # 无标记则返回全部
-
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -68,10 +67,12 @@ def _extract_output_between_markers(text: str) -> str:
 static_dir = Path(__file__).parent / "static"
 app = Quart(__name__, static_folder=str(static_dir), static_url_path="")
 from .terminal import TerminalManager
+
 _terminal_manager = TerminalManager()
 
 
 # ── HTTP 路由 ──
+
 
 @app.route("/")
 async def index():
@@ -84,6 +85,7 @@ async def index():
 
 # ── 文件浏览 API ──
 
+
 @app.route("/api/files")
 async def api_list_files():
     path = request.args.get("path", ".")
@@ -95,14 +97,46 @@ async def api_list_files():
         return jsonify({"error": "path outside workspace"}), 403
     if not target.exists() or not target.is_dir():
         return jsonify({"error": "directory not found"}), 404
-    _EXCLUDE = {".git", "node_modules", "__pycache__", ".venv", ".codebuddy",
-                ".vscode", ".idea", "venv", "env", "dist", "build", ".tox"}
-    _CODE_EXTS = {".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".rs",
-                  ".md", ".txt", ".yaml", ".yml", ".json", ".toml",
-                  ".css", ".html", ".sh", ".bat", ".ps1", ".vue"}
+    _EXCLUDE = {
+        ".git",
+        "node_modules",
+        "__pycache__",
+        ".venv",
+        ".codebuddy",
+        ".vscode",
+        ".idea",
+        "venv",
+        "env",
+        "dist",
+        "build",
+        ".tox",
+    }
+    _CODE_EXTS = {
+        ".py",
+        ".js",
+        ".ts",
+        ".jsx",
+        ".tsx",
+        ".go",
+        ".rs",
+        ".md",
+        ".txt",
+        ".yaml",
+        ".yml",
+        ".json",
+        ".toml",
+        ".css",
+        ".html",
+        ".sh",
+        ".bat",
+        ".ps1",
+        ".vue",
+    }
     items = []
     try:
-        entries = sorted(target.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower()))
+        entries = sorted(
+            target.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower())
+        )
     except PermissionError:
         return jsonify({"error": "permission denied"}), 403
     for entry in entries:
@@ -112,12 +146,15 @@ async def api_list_files():
         if not is_dir and entry.suffix not in _CODE_EXTS:
             continue
         rel = str(entry.relative_to(base))
-        items.append({
-            "name": entry.name,
-            "path": rel.replace("\\", "/"),
-            "is_dir": is_dir,
-        })
+        items.append(
+            {
+                "name": entry.name,
+                "path": rel.replace("\\", "/"),
+                "is_dir": is_dir,
+            }
+        )
     return jsonify({"items": items, "current": path})
+
 
 @app.route("/api/file")
 async def api_read_file():
@@ -141,6 +178,7 @@ async def api_read_file():
 
 # ── Agent 配置 API ──
 
+
 @app.route("/api/config")
 async def api_config():
     global _config
@@ -149,12 +187,17 @@ async def api_config():
     models = []
     for m in _config.models:
         has_key = bool(m.get("api_key"))
-        models.append({"name": m["name"], "provider": m.get("provider", ""), "has_key": has_key})
-    return jsonify({
-        "workspace": _workspace,
-        "default_model": _config.default_model_name,
-        "models": models,
-    })
+        models.append(
+            {"name": m["name"], "provider": m.get("provider", ""), "has_key": has_key}
+        )
+    return jsonify(
+        {
+            "workspace": _workspace,
+            "default_model": _config.default_model_name,
+            "models": models,
+        }
+    )
+
 
 @app.route("/api/config/workspace", methods=["POST"])
 async def api_set_workspace():
@@ -171,6 +214,7 @@ async def api_set_workspace():
         _config._workspace_override = _workspace
     return jsonify({"workspace": _workspace})
 
+
 @app.route("/api/config/apikey", methods=["POST"])
 async def api_save_apikey():
     global _config
@@ -183,6 +227,7 @@ async def api_save_apikey():
         return jsonify({"error": "provider and api_key required"}), 400
     _config.save_api_key(provider, key)
     return jsonify({"ok": True})
+
 
 @app.route("/api/config/select-model", methods=["POST"])
 async def api_select_model():
@@ -197,6 +242,7 @@ async def api_select_model():
 
 
 # ── Agent 初始化 ──
+
 
 @app.route("/api/init", methods=["POST"])
 async def api_init_agent():
@@ -217,12 +263,16 @@ async def api_init_agent():
     model_name = data.get("model", "deepseek-v4-flash")
     api_key = data.get("api_key", "")
     model_config = _config.find_model(model_name) or {
-        "name": model_name, "provider": "DeepSeek", "model": model_name,
+        "name": model_name,
+        "provider": "DeepSeek",
+        "model": model_name,
     }
     if api_key:
         model_config["api_key"] = api_key
     elif not model_config.get("api_key"):
-        model_config["api_key"] = _config.api_keys.get(model_config.get("provider", ""), "")
+        model_config["api_key"] = _config.api_keys.get(
+            model_config.get("provider", ""), ""
+        )
     if not model_config.get("api_key"):
         return jsonify({"error": "API Key not configured"}), 400
 
@@ -232,6 +282,7 @@ async def api_init_agent():
     tools._web_mode = True
 
     from ..pricing_fetcher import fetch_pricing
+
     prices, _ = fetch_pricing(model_config["name"], model_config.get("provider", ""))
     if prices:
         cost_tracker.set_pricing(model_config["name"], prices)
@@ -256,6 +307,7 @@ async def api_init_agent():
 
 
 # ── API: Agent 命令 ──
+
 
 @app.route("/api/agent/command", methods=["POST"])
 async def api_agent_command():
@@ -309,7 +361,7 @@ async def api_chat():
         q.put({"type": event_type, **kw})
 
     # 注入终端交互所需的对象到 tools（tool_bash 会用到）
-    if _agent and hasattr(_agent, 'tools'):
+    if _agent and hasattr(_agent, "tools"):
         _agent.tools._terminal_push_fn = _push
         _agent.tools._terminal_injections = _terminal_injections
 
@@ -346,8 +398,11 @@ async def api_chat():
                     _last_keepalive = now
                 continue
 
-    return Response(generate(), mimetype="text/event-stream",
-                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 def _tool_label(name: str, args: dict) -> str | None:
@@ -378,10 +433,10 @@ def _tool_label(name: str, args: dict) -> str | None:
         return None  # bash 由前端单独处理为命令卡片
     elif name == "grep":
         pattern = args.get("pattern", "")
-        return f"🔎 正在搜索 \"{pattern[:40]}\"" if pattern else None
+        return f'🔎 正在搜索 "{pattern[:40]}"' if pattern else None
     elif name == "find_files":
         pattern = args.get("pattern", "")
-        return f"📂 正在查找文件 \"{pattern}\"" if pattern else None
+        return f'📂 正在查找文件 "{pattern}"' if pattern else None
     elif name in ("task_status", "task_list"):
         return None  # 后台任务管理，不需要显示
     return None  # 其他未知工具不显示
@@ -389,26 +444,42 @@ def _tool_label(name: str, args: dict) -> str | None:
 
 class _SseHook:
     """SSE 钩子：把 agent 事件推入 threading.Queue"""
+
     def __init__(self, push):
         self._push = push
-    def on_llm_start(self, *a): pass
+
+    def on_llm_start(self, *a):
+        pass
+
     def on_llm_end(self, usage, cost_info, iteration, model=""):
         total = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
         cost = cost_info.get("cost", 0)
         hit = usage.get("cache_hit_tokens", 0)
         inp = usage.get("input_tokens", 0)
-        self._push("llm_end", model=model, tokens=total, input_tokens=inp,
-                    output_tokens=usage.get("output_tokens", 0),
-                    cache_hit_tokens=hit,
-                    cache_pct=round(100 * hit / inp, 0) if inp and hit else 0,
-                    cost=cost)
+        self._push(
+            "llm_end",
+            model=model,
+            tokens=total,
+            input_tokens=inp,
+            output_tokens=usage.get("output_tokens", 0),
+            cache_hit_tokens=hit,
+            cache_pct=round(100 * hit / inp, 0) if inp and hit else 0,
+            cost=cost,
+        )
+
     def on_tool_start(self, name, args):
         label = _tool_label(name, args)
         self._push("tool_call", name=name, args=args, label=label)
+
     def on_tool_end(self, name, result, args=None):
         self._push("tool_result", name=name, result=result[:3000], args=args or {})
-    def on_tool_chain_end(self, *a): self._push("tool_chain_end")
-    def on_thinking(self, content): self._push("thinking", content=content)
+
+    def on_tool_chain_end(self, *a):
+        self._push("tool_chain_end")
+
+    def on_thinking(self, content):
+        self._push("thinking", content=content)
+
     def on_response(self, content, usage_line):
         self._push("response", content=content)
 
@@ -418,21 +489,55 @@ class _SseHook:
 _tree_cache: dict = {}
 _tree_cache_lock = threading.RLock()
 
+
 def _scan_workspace_tree():
     global _tree_cache
     base = Path(_workspace)
     if not base.exists():
         _tree_cache = {}
         return
-    _EXCLUDE = {".git", "node_modules", "__pycache__", ".venv", ".codebuddy",
-                ".vscode", ".idea", "venv", "env", "dist", "build", ".tox"}
-    _CODE_EXTS = {".py", ".js", ".ts", ".jsx", ".tsx", ".go", ".rs",
-                  ".md", ".txt", ".yaml", ".yml", ".json", ".toml",
-                  ".css", ".html", ".sh", ".bat", ".ps1", ".vue"}
+    _EXCLUDE = {
+        ".git",
+        "node_modules",
+        "__pycache__",
+        ".venv",
+        ".codebuddy",
+        ".vscode",
+        ".idea",
+        "venv",
+        "env",
+        "dist",
+        "build",
+        ".tox",
+    }
+    _CODE_EXTS = {
+        ".py",
+        ".js",
+        ".ts",
+        ".jsx",
+        ".tsx",
+        ".go",
+        ".rs",
+        ".md",
+        ".txt",
+        ".yaml",
+        ".yml",
+        ".json",
+        ".toml",
+        ".css",
+        ".html",
+        ".sh",
+        ".bat",
+        ".ps1",
+        ".vue",
+    }
+
     def _build_tree(path: Path):
         children = []
         try:
-            entries = sorted(path.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower()))
+            entries = sorted(
+                path.iterdir(), key=lambda e: (not e.is_dir(), e.name.lower())
+            )
         except PermissionError:
             return {"name": path.name, "path": "", "is_dir": False, "children": []}
         for entry in entries:
@@ -446,8 +551,10 @@ def _scan_workspace_tree():
             elif entry.suffix in _CODE_EXTS:
                 children.append({"name": entry.name, "path": rel, "is_dir": False})
         return {"name": path.name, "path": "", "is_dir": True, "children": children}
+
     with _tree_cache_lock:
         _tree_cache = _build_tree(base)
+
 
 @app.route("/api/tree")
 async def api_file_tree():
@@ -458,6 +565,7 @@ async def api_file_tree():
 
 
 # ── 终端交互注入状态管理 ──
+
 
 @app.route("/api/terminal/inject-bind/<msg_id>", methods=["POST"])
 async def api_terminal_inject_bind(msg_id):
@@ -475,6 +583,7 @@ async def api_terminal_inject_bind(msg_id):
 async def api_get_terminal_output(msg_id):
     """前端获取终端输出（点击"是，分析结果"时调用）"""
     from ..tools import strip_ansi
+
     inj = _terminal_injections.get(msg_id)
     if not inj:
         return jsonify({"error": "not found"}), 404
@@ -489,19 +598,21 @@ async def api_get_terminal_output(msg_id):
 
 # ── 独立 SSE 端点：终端事件实时推送（与 AI 对话 SSE 完全独立）──
 
+
 @app.route("/api/terminal-events")
 async def api_terminal_events():
     """SSE 端点：轮询 buffer 增量，推送 terminal_output / terminal_complete 事件
-    
+
     前端通过 EventSource 连接，页面打开期间常驻。
     事件格式:
       event: terminal_output
       data: {"msgId":"...","chunk":"..."}
-      
-      event: terminal_complete  
+
+      event: terminal_complete
       data: {"msgId":"..."}
     """
     from ..tools import strip_ansi
+
     async def generate():
         local_cursors = {}
         notified_set = set()  # 已推送 terminal_complete 的 msgId 集合
@@ -509,9 +620,11 @@ async def api_terminal_events():
             while True:
                 for msg_id, inj in list(_terminal_injections.items()):
                     # ── 完成通知（所有命令自动推）──
-                    if (inj.get("completed")
-                            and not inj.get("consumed")
-                            and msg_id not in notified_set):
+                    if (
+                        inj.get("completed")
+                        and not inj.get("consumed")
+                        and msg_id not in notified_set
+                    ):
                         notified_set.add(msg_id)
                         yield f"event: terminal_complete\ndata: {json.dumps({'msgId': msg_id, 'interactive': inj.get('interactive', False)}, ensure_ascii=False)}\n\n"
 
@@ -547,14 +660,21 @@ async def api_terminal_events():
         except (GeneratorExit, asyncio.CancelledError):
             pass
 
-    return Response(generate(), mimetype="text/event-stream",
-                    headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no",
-                             "Connection": "keep-alive"})
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 # ── 实时文件监控 ──
 
 _file_watcher_started = False
+
 
 def _start_file_watcher(workspace: str):
     """启动 watchfiles 后台线程，文件变化时自动刷新文件树缓存（防抖 1s）"""
@@ -582,44 +702,53 @@ def _start_file_watcher(workspace: str):
     t.start()
 
 
-
 # ═══════════════════════════════════════════════════════════════
 # API — 查询可用 shell 类型
 # ═══════════════════════════════════════════════════════════════
 
+
 @app.route("/api/shells")
 async def api_available_shells():
     from .terminal import detect_available_shells, SHELL_LABELS
+
     available = detect_available_shells()
     shells = []
     for key, label in SHELL_LABELS.items():
-        shells.append({"key": key, "label": label, "available": available.get(key, False)})
+        shells.append(
+            {"key": key, "label": label, "available": available.get(key, False)}
+        )
     return jsonify(shells)
+
 
 # ═══════════════════════════════════════════════════════════════
 # WebSocket — PTY 终端通道 /ws/pty/<term_id> (仅 PTY)
 # ═══════════════════════════════════════════════════════════════
 
+
 @app.websocket("/ws/pty/<term_id>")
 async def ws_pty(term_id: str):
     from urllib.parse import urlparse, parse_qs
+
     try:
         # 从WebSocket URL中解析查询参数（shell类型）
         query_params = parse_qs(urlparse(websocket.url).query)
-        shell = query_params.get('shell', ['ps'])[0]
-        print(f"  [PTY] WebSocket 连接请求: term_id={term_id}, shell={shell}, workspace={_workspace}")
+        shell = query_params.get("shell", ["ps"])[0]
+        print(
+            f"  [PTY] WebSocket 连接请求: term_id={term_id}, shell={shell}, workspace={_workspace}"
+        )
         # 检查工作区是否设置
         if not _workspace:
-            print(f"  [PTY] 错误: 工作区未初始化")
+            print("  [PTY] 错误: 工作区未初始化")
             try:
-                await websocket.send(json.dumps({
-                    "type": "error",
-                    "msg": "工作区未初始化，请先完成初始化设置"
-                }))
+                await websocket.send(
+                    json.dumps(
+                        {"type": "error", "msg": "工作区未初始化，请先完成初始化设置"}
+                    )
+                )
             except Exception:
                 pass
             return
-        
+
         term = _terminal_manager.get(term_id)
         if not term:
             print(f"  [PTY] 创建终端 {term_id}, shell={shell}")
@@ -629,28 +758,32 @@ async def ws_pty(term_id: str):
             except Exception as e:
                 print(f"  [PTY] 终端创建失败: {e}")
                 import traceback
+
                 traceback.print_exc()
                 try:
-                    await websocket.send(json.dumps({
-                        "type": "error",
-                        "msg": f"终端创建失败: {str(e)}"
-                    }))
+                    await websocket.send(
+                        json.dumps({"type": "error", "msg": f"终端创建失败: {str(e)}"})
+                    )
                 except Exception:
                     pass
                 return
-        
+
         if not term.is_alive():
-            print(f"  [PTY] 终端未激活")
+            print("  [PTY] 终端未激活")
             try:
-                await websocket.send(json.dumps({
-                    "type": "error",
-                    "msg": f"终端启动失败，请确保已安装 pywinpty/winpty（pip install pywinpty）"
-                }))
+                await websocket.send(
+                    json.dumps(
+                        {
+                            "type": "error",
+                            "msg": "终端启动失败，请确保已安装 pywinpty/winpty（pip install pywinpty）",
+                        }
+                    )
+                )
             except Exception:
                 pass
             return
-        
-        print(f"  [PTY] 终端已激活，开始数据流传输")
+
+        print("  [PTY] 终端已激活，开始数据流传输")
         reader_stopped = False
         ws_send_queue: asyncio.Queue = asyncio.Queue(maxsize=100)
 
@@ -680,7 +813,10 @@ async def ws_pty(term_id: str):
                         inj = _terminal_injections.get(active_msg_id)
                         if inj and not inj.get("consumed") and not inj.get("completed"):
                             now = time.time()
-                            if last_output_time > 0 and (now - last_output_time) > _SILENCE_THRESHOLD:
+                            if (
+                                last_output_time > 0
+                                and (now - last_output_time) > _SILENCE_THRESHOLD
+                            ):
                                 inj["completed"] = True
                     await asyncio.sleep(1)
 
@@ -729,7 +865,9 @@ async def ws_pty(term_id: str):
                         cmd = json.loads(msg)
                         if isinstance(cmd, dict):
                             if cmd.get("type") == "resize":
-                                await asyncio.to_thread(term.resize, cmd["cols"], cmd["rows"])
+                                await asyncio.to_thread(
+                                    term.resize, cmd["cols"], cmd["rows"]
+                                )
                             elif cmd.get("type") == "destroy":
                                 print(f"  [PTY] 收到销毁指令，清理终端 {term_id}")
                                 _terminal_manager.destroy(term_id)
@@ -749,6 +887,7 @@ async def ws_pty(term_id: str):
     except Exception as e:
         print(f"  [PTY] WebSocket 处理异常: {e}")
         import traceback
+
         traceback.print_exc()
 
 
@@ -756,15 +895,17 @@ async def ws_pty(term_id: str):
 # 启动入口
 # ═══════════════════════════════════════════════════════════════
 
-def start_server(config, host: str = "127.0.0.1", port: int = 8321,
-                  open_browser: bool = True):
+
+def start_server(
+    config, host: str = "127.0.0.1", port: int = 8321, open_browser: bool = True
+):
     global _config, _workspace, _tree_cache
     _config = config
     _workspace = config.workspace
     _scan_workspace_tree()
     _start_file_watcher(_workspace)
     url = f"http://{host}:{port}"
-    print(f"\n  [FlyPig Web UI] 启动服务器...")
+    print("\n  [FlyPig Web UI] 启动服务器...")
     print(f"  [SSE + PTY WS] {url}")
     print(f"  [工作区] {_workspace}")
     print()
@@ -772,6 +913,7 @@ def start_server(config, host: str = "127.0.0.1", port: int = 8321,
         webbrowser.open(url)
     import hypercorn.asyncio
     import hypercorn.config as hcfg
+
     hconfig = hcfg.Config()
     hconfig.bind = [f"{host}:{port}"]
     hconfig.use_reloader = False

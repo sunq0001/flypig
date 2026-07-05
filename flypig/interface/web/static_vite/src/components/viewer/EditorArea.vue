@@ -11,8 +11,12 @@ FileBar 显示标签栏，EditorPane 根据文件类型选择渲染器。
 -->
 <template>
   <div class="editor-area">
-    <FileBar :files="openFiles" :active-file="activeFile"
-      @select-file="onSelectFile" @close-file="onCloseFile" />
+    <FileBar
+      :files="openFiles"
+      :active-file="activeFile"
+      @select-file="onSelectFile"
+      @close-file="onCloseFile"
+    />
     <EditorPane :file-path="activeFile" />
   </div>
 </template>

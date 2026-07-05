@@ -11,4 +11,5 @@ from flypig.shared.base import DomainEvent
 
 class MessageSent(DomainEvent):
     """消息已发送事件"""
+
     pass

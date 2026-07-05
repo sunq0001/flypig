@@ -19,7 +19,8 @@ Handler 通过 register() 订阅事件类型，dispatch() 自动匹配并调用�
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Type
+from collections.abc import Callable
+from typing import Any
 
 from flypig.shared.kernel.domain_event import DomainEvent
 from flypig.shared.kernel.event_bus import EventPublisher
@@ -32,11 +33,11 @@ class InMemoryEventBus(EventPublisher):
     """
 
     def __init__(self) -> None:
-        self._handlers: Dict[str, List[Callable[[DomainEvent], Any]]] = {}
+        self._handlers: dict[str, list[Callable[[DomainEvent], Any]]] = {}
 
     def register(
         self,
-        event_type: Type[DomainEvent],
+        event_type: type[DomainEvent],
         handler: Callable[[DomainEvent], Any],
     ) -> None:
         """注册事件处理器
@@ -59,7 +60,7 @@ class InMemoryEventBus(EventPublisher):
 
     # ── EventPublisher 接口实现 ──
 
-    async def publish(self, events: List[DomainEvent]) -> None:
+    async def publish(self, events: list[DomainEvent]) -> None:
         """批量发布领域事件"""
         for event in events:
             await self.dispatch(event)

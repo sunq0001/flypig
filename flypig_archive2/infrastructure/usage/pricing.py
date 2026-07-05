@@ -33,7 +33,6 @@ from __future__ import annotations
 import json
 from datetime import date
 from pathlib import Path
-from typing import Optional
 
 import httpx
 
@@ -95,7 +94,7 @@ def _fetch_portkey_provider(provider: str) -> dict:
         return {}
 
 
-def _extract_model_price(portkey_data: dict, model_name: str) -> Optional[dict]:
+def _extract_model_price(portkey_data: dict, model_name: str) -> dict | None:
     """从 Portkey 某厂商数据中提取单个模型的定价"""
     meta = REGISTRY.get(model_name, {})
     api_model = meta.get("model")
@@ -218,7 +217,7 @@ def fetch_pricing() -> dict:
     }
 
 
-def get_pricing(model_name: str) -> Optional[dict]:
+def get_pricing(model_name: str) -> dict | None:
     """查询单个模型价格（从缓存，不触发网络请求）"""
     cache = _load_cache()
     if cache:
@@ -233,6 +232,7 @@ def start_pricing_loop(app):
         start_pricing_loop(app)
     """
     import asyncio
+
     from loguru import logger
 
     @app.before_serving
@@ -243,4 +243,5 @@ def start_pricing_loop(app):
             while True:
                 await asyncio.sleep(86400)
                 fetch_pricing()
+
         asyncio.create_task(_loop())

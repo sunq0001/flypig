@@ -1,3 +1,4 @@
+/** main.js — FlyPig 前端入口，挂载 Vue 应用 + Pinia 状态管理 + TDesign UI */
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import TDesign from 'tdesign-vue-next'

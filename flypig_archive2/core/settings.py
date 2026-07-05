@@ -16,9 +16,7 @@ PyYAML 从 config.yaml 加载持久化配置，两者合并后输出最终配置
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from typing import Optional
 
 import yaml
 from pydantic_settings import BaseSettings
@@ -29,17 +27,17 @@ class AppSettings(BaseSettings):
 
     # ── LLM ──
     default_model: str = "deepseek-v4-flash"
-    deepseek_api_key: Optional[str] = None
-    openai_api_key: Optional[str] = None
-    anthropic_api_key: Optional[str] = None
-    qwen_api_key: Optional[str] = None
-    hunyuan_api_key: Optional[str] = None
-    doubao_api_key: Optional[str] = None
-    moonshot_api_key: Optional[str] = None
-    zhipu_api_key: Optional[str] = None
+    deepseek_api_key: str | None = None
+    openai_api_key: str | None = None
+    anthropic_api_key: str | None = None
+    qwen_api_key: str | None = None
+    hunyuan_api_key: str | None = None
+    doubao_api_key: str | None = None
+    moonshot_api_key: str | None = None
+    zhipu_api_key: str | None = None
 
     # ── 应用 ──
-    workspace: Optional[str] = None
+    workspace: str | None = None
     log_level: str = "DEBUG"
     data_dir: str = ""
 

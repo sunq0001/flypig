@@ -13,7 +13,10 @@ ChatPanel：对话框面板容器
 -->
 <template>
   <div class="chat-panel">
-    <MessageList :messages="messages" :loading="isStreaming" />
+    <MessageList
+      :messages="messages"
+      :loading="isStreaming"
+    />
     <InputBox
       :model="currentModel"
       :models="modelList"
@@ -25,11 +28,20 @@ ChatPanel：对话框面板容器
     />
 
     <!-- API Key 弹框（自定义 div 弹窗，避免 TDesign Dialog Teleport bug） -->
-    <div v-if="showApiKeyDialog" class="ak-overlay" @click.self="showApiKeyDialog = false">
+    <div
+      v-if="showApiKeyDialog"
+      class="ak-overlay"
+      @click.self="showApiKeyDialog = false"
+    >
       <div class="ak-box">
         <div class="ak-header">
           <span>配置 API Key</span>
-          <button class="ak-close" @click="showApiKeyDialog = false">✕</button>
+          <button
+            class="ak-close"
+            @click="showApiKeyDialog = false"
+          >
+            ✕
+          </button>
         </div>
         <div class="ak-body">
           <p class="ak-desc">
@@ -44,8 +56,15 @@ ChatPanel：对话框面板容器
           />
         </div>
         <div class="ak-footer">
-          <t-button @click="showApiKeyDialog = false">取消</t-button>
-          <t-button theme="primary" :disabled="!apiKeyInput.trim()" :loading="savingKey" @click="saveApiKey">
+          <t-button @click="showApiKeyDialog = false">
+            取消
+          </t-button>
+          <t-button
+            theme="primary"
+            :disabled="!apiKeyInput.trim()"
+            :loading="savingKey"
+            @click="saveApiKey"
+          >
             保存并发送
           </t-button>
         </div>
@@ -57,7 +76,8 @@ ChatPanel：对话框面板容器
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useChat } from '@ai-sdk/vue'
-import { useConfigStore } from '../../../stores/config'
+import { useConfigStore } from '@/stores/config'
+import { updateDefaultModel, saveApiKey as saveApiKey_ } from '@/utils/api'
 import MessageList from './MessageList.vue'
 import InputBox from './InputBox.vue'
 
@@ -78,10 +98,10 @@ watch(() => configStore.default_model, (val) => {
 }, { immediate: true })
 
 // ── useChat ──
-const { messages, status, sendMessage, error } = useChat({
+const { messages, status, sendMessage } = useChat({
   api: '/api/chat',
-  experimental_throttle: 30,
-  onError: (e) => console.error('Chat error:', e),
+  experimental_throttle: 30,  // ms, 流式更新节流间隔
+  onError: () => {}, // 由外层 useChat 的 error 返回值处理
 })
 
 const isStreaming = computed(() =>
@@ -111,11 +131,7 @@ watch(isStreaming, (v) => {
 async function onModelChange(m) {
   currentModel.value = m
   try {
-    await fetch('/api/config', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ default_model: m }),
-    })
+    await updateDefaultModel(m)
   } catch { /* */ }
 }
 
@@ -163,11 +179,7 @@ async function saveApiKey() {
   if (!key) return
   savingKey.value = true
   try {
-    await fetch('/api/config/apikey', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ provider: apiKeyProvider.value, api_key: key }),
-    })
+    await saveApiKey_(apiKeyProvider.value, key)
     await configStore.fetchConfig()
     showApiKeyDialog.value = false
     if (pendingText) {

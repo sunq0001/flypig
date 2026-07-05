@@ -7,7 +7,6 @@
 """
 
 from dataclasses import dataclass
-from typing import Optional
 
 from flypig.shared.base import ValueObject
 
@@ -21,6 +20,7 @@ class PricingEntry(ValueObject):
         output_price: 输出价格（USD / 1M tokens）
         input_cache_hit: 缓存命中输入价格（USD / 1M tokens）
     """
-    input_price: Optional[float] = None
-    output_price: Optional[float] = None
-    input_cache_hit: Optional[float] = None
+
+    input_price: float | None = None
+    output_price: float | None = None
+    input_cache_hit: float | None = None

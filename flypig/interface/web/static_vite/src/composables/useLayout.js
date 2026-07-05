@@ -23,10 +23,13 @@ import { ref, computed } from 'vue'
 
 const DEFAULT_ORDER = ['sidebar', 'center', 'chat']
 const FLIPPED_ORDER = ['chat', 'center', 'sidebar']
+const SIDEBAR_DEFAULT_WIDTH = 260
+const CHAT_DEFAULT_WIDTH = 360
+const DEFAULT_EDITOR_RATIO = 0.55
 
-const sidebarWidth = ref(260)
-const chatWidth = ref(360)
-const editorRatio = ref(0.55)
+const sidebarWidth = ref(SIDEBAR_DEFAULT_WIDTH)
+const chatWidth = ref(CHAT_DEFAULT_WIDTH)
+const editorRatio = ref(DEFAULT_EDITOR_RATIO)
 const isFlipped = ref(false)
 
 export function useLayout() {

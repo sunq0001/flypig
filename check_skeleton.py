@@ -1,5 +1,7 @@
 """比对 flypig/ 文件列表 vs folder-tree.md"""
-import os, re, sys
+
+import os
+import re
 
 BASE = r"c:\Users\mss\WorkBuddy\Flypig-agent"
 FLYPIG = os.path.join(BASE, "flypig")
@@ -39,13 +41,13 @@ for raw_line in tree_lines:
         continue
     stripped = line.lstrip()
     indent = len(line) - len(stripped)
-    m = re.match(r'[|\+\\\xa0\s]*[-├└]\s*──\s+(.+)', stripped)
+    m = re.match(r"[|\+\\\xa0\s]*[-├└]\s*──\s+(.+)", stripped)
     if not m:
         continue
     entry = m.group(1).strip()
-    entry = re.sub(r'\s*[←└├─]\s*[★☆P\d\s]*.*$', '', entry).strip()
-    is_dir = entry.endswith('/')
-    name = entry.rstrip('/')
+    entry = re.sub(r"\s*[←└├─]\s*[★☆P\d\s]*.*$", "", entry).strip()
+    is_dir = entry.endswith("/")
+    name = entry.rstrip("/")
     while path_stack and path_stack[-1][0] >= indent:
         path_stack.pop()
     parent = path_stack[-1][1] if path_stack else ""

@@ -1,10 +1,22 @@
 """对话存储接口
 
-为什么做：对话记录、任务、用量、checkpoint、建议反馈需要统一存储和检索，存储方式（SQLite/PostgreSQL/S3）可替换。
-实现方法：IConversationStore ABC 定义会话/轮次/任务/checkpoint/用量/建议的 CRUD 方法。
-实现效果：切换数据库后端只需换实现类，所有业务代码不变。对话/任务/用量共享同一数据源。
-技术栈：IConversationStore ABC, SQLite/S3 可替换, 7 表 CRUD
+为什么做：历史会话和消息需要持久化，不同后端（SQLite/文件/远程）通过统一接口切换。
 
-层&依赖：domain.interfaces 层，依赖 domain/models 中的 Message/Session/Task 数据类
-细节见文档：docs/docs_refactor/mem_convStore.md → §所有表、mem_convStore_tasks.md → §任务状态
+实现方法：IConversationStore ABC 定义会话和消息的 CRUD 方法。
+
+层&依赖：domain.interfaces 层，零依赖
+TODO: 骨架文件，待实现具体方法
 """
+
+from abc import ABC, abstractmethod
+from typing import Any
+
+
+class IConversationStore(ABC):
+    """对话存储接口 — 会话和消息的持久化"""
+
+    @abstractmethod
+    async def save_session(self, session: Any) -> None: ...
+
+    @abstractmethod
+    async def get_session(self, session_id: str) -> Any | None: ...

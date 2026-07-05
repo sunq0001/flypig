@@ -13,10 +13,21 @@ ResourceBar：左侧资源栏容器
   <div class="resource-bar">
     <div class="bar-header">
       <span>{{ activeLabel }}</span>
-      <button v-if="activeView === 'file'" class="btn-workspace" title="切换工作区" @click="$emit('switch-workspace')">📁</button>
+      <button
+        v-if="activeView === 'file'"
+        class="btn-workspace"
+        title="切换工作区"
+        @click="$emit('switch-workspace')"
+      >
+        📁
+      </button>
     </div>
     <div class="bar-body">
-      <FileTreeBar v-if="activeView === 'file'" @switch-workspace="$emit('switch-workspace')" @open-file="p => $emit('open-file', p)" />
+      <FileTreeBar
+        v-if="activeView === 'file'"
+        @switch-workspace="$emit('switch-workspace')"
+        @open-file="p => $emit('open-file', p)"
+      />
       <McpBar v-if="activeView === 'mcp'" />
       <StatsBar v-if="activeView === 'stats'" />
     </div>

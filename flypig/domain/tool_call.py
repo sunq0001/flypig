@@ -11,14 +11,17 @@ from flypig.shared.base import ValueObject
 
 class ToolCall(ValueObject):
     """工具调用值对象 — 记录单次工具调用的参数和上下文"""
+
     pass
 
 
 class ToolDef(ValueObject):
     """工具定义值对象 — 描述工具的名称、参数 schema、描述"""
+
     pass
 
 
 class ToolResult(ValueObject):
     """工具执行结果值对象 — 记录工具执行的输出和状态"""
+
     pass

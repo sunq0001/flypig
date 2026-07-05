@@ -7,9 +7,9 @@
 层&依赖：application.dto 层
 """
 
-from dataclasses import dataclass, field
 import json
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -22,13 +22,14 @@ class ChatResponse:
         - finish: 完成
         - error: 错误
     """
+
     type: str
-    content: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    content: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_sse(self) -> str:
         """序列化为 SSE 格式字符串（由接口层调用）"""
-        payload: Dict[str, Any] = {"type": self.type}
+        payload: dict[str, Any] = {"type": self.type}
         if self.content is not None:
             if self.type in ("text-delta", "text-start", "text-end"):
                 payload["delta"] = self.content

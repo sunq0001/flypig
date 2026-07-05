@@ -6,10 +6,19 @@ MessageList：消息列表
 -->
 
 <template>
-  <div ref="scrollRef" class="message-list">
-    <div v-if="!messages.length" class="empty">开始一段新对话</div>
+  <div
+    ref="scrollRef"
+    class="message-list"
+  >
+    <div
+      v-if="!messages.length"
+      class="empty"
+    >
+      开始一段新对话
+    </div>
     <MessageItem
-      v-for="m in messages" :key="m.id"
+      v-for="m in messages"
+      :key="m.id"
       :message="m"
       :loading="loading && m === messages[messages.length - 1] && m.role === 'assistant'"
     />
@@ -35,36 +44,28 @@ function getMessageContent(msg) {
   return ''
 }
 
-// ── 打字机效果诊断: 记录每次内容变化（精确到毫秒） ──
+// ── 自动滚到底部 ──
 let lastLen = 0
+function _trackContent(val) {
+  if (val && val.length !== lastLen) {
+    lastLen = val.length
+  } else if (!val && lastLen !== 0) {
+    lastLen = 0
+  }
+}
 watch(() => {
   const last = props.messages[props.messages.length - 1]
   return last?.role === 'assistant' ? getMessageContent(last) : ''
-}, (val) => {
-  const now = Date.now()
-  const ts = new Date(now).toISOString().slice(11, 23)
-  if (val && val.length !== lastLen) {
-    const added = val.length - lastLen
-    // console.log(`[fe] ${ts} +${added} total=${val.length} "${val.slice(-30)}"`)
-    lastLen = val.length
-  } else if (!val && lastLen !== 0) {
-    // console.log(`[fe] ${ts} RESET (content cleared)`)
-    lastLen = 0
-  }
-  // 始终打印最新消息的 metadata
-  const last = props.messages[props.messages.length - 1]
-  if (last?.role === 'assistant') {
-    const ml = props.messages.length
-    // console.log(`[fe] ${ts} msgs=${ml} role=${last.role} id=${last.id?.slice(0,8)||'-'} parts=${last.parts?.length||0}`)
-  }
-})
+}, _trackContent)
 
 watch(() => props.messages.length, async () => {
   lastLen = 0  // 新消息重置计数
-  await nextTick()
-  if (scrollRef.value) {
-    scrollRef.value.scrollTop = scrollRef.value.scrollHeight
-  }
+  try {
+    await nextTick()
+    if (scrollRef.value) {
+      scrollRef.value.scrollTop = scrollRef.value.scrollHeight
+    }
+  } catch { /* 滚动失败不影响后续 */ }
 })
 </script>
 

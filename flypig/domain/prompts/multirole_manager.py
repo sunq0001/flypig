@@ -51,7 +51,12 @@ class MultiRoleManager:
             self._cache[persona] = ""
             return ""
 
-        text = filepath.read_text(encoding="utf-8")
+        try:
+            text = filepath.read_text(encoding="utf-8")
+        except OSError:
+            self._cache[persona] = ""
+            return ""
+
         self._cache[persona] = text
         return text
 
@@ -64,4 +69,3 @@ class MultiRoleManager:
     def reload(self) -> None:
         """清空缓存，下次 get_system_message 时重新读取文件"""
         self._cache.clear()
-

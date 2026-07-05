@@ -1,9 +1,11 @@
 """FlyPig 入口点"""
-import asyncio
+
 import argparse
+import asyncio
+
+from flypig.bootstrap import create_app
 from hypercorn.asyncio import serve
 from hypercorn.config import Config as HCConfig
-from flypig.bootstrap import create_app
 
 
 def main():

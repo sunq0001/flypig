@@ -1,7 +1,7 @@
 """入口点 - 支持 --task 头戴模式、--web UI 模式、--kill-port 端口清理"""
+
 import sys
 import argparse
-import os
 import subprocess
 from .cli import main as cli_main
 
@@ -9,6 +9,7 @@ from .cli import main as cli_main
 def kill_port(port: int = 8321):
     """杀掉占用指定端口的进程（跨平台）"""
     import platform
+
     system = platform.system()
 
     if system == "Windows":
@@ -16,12 +17,14 @@ def kill_port(port: int = 8321):
         try:
             result = subprocess.run(
                 f'netstat -ano | findstr ":{port}"',
-                capture_output=True, text=True, shell=True,
+                capture_output=True,
+                text=True,
+                shell=True,
             )
             pids = set()
             for line in result.stdout.splitlines():
                 parts = line.strip().split()
-                if len(parts) >= 5 and 'LISTENING' in line:
+                if len(parts) >= 5 and "LISTENING" in line:
                     pid = parts[-1]
                     if pid.isdigit():
                         pids.add(int(pid))
@@ -29,8 +32,9 @@ def kill_port(port: int = 8321):
                 print(f"  [端口 {port}] 未发现监听进程")
                 return
             for pid in pids:
-                subprocess.run(f"taskkill /PID {pid} /F",
-                               capture_output=True, shell=True)
+                subprocess.run(
+                    f"taskkill /PID {pid} /F", capture_output=True, shell=True
+                )
                 print(f"  [端口 {port}] 已终止 PID {pid}")
         except Exception as e:
             print(f"  [错误] 无法终止进程: {e}")
@@ -38,13 +42,15 @@ def kill_port(port: int = 8321):
         # Linux/Mac: lsof + kill
         try:
             result = subprocess.run(
-                f"lsof -ti:{port}", capture_output=True, text=True,
-                shell=True, timeout=3
+                f"lsof -ti:{port}",
+                capture_output=True,
+                text=True,
+                shell=True,
+                timeout=3,
             )
             if result.stdout.strip():
                 for pid in result.stdout.strip().splitlines():
-                    subprocess.run(["kill", "-9", pid],
-                                   capture_output=True, timeout=3)
+                    subprocess.run(["kill", "-9", pid], capture_output=True, timeout=3)
                     print(f"  [端口 {port}] 已终止 PID {pid}")
             else:
                 print(f"  [端口 {port}] 未发现监听进程")
@@ -55,17 +61,29 @@ def kill_port(port: int = 8321):
 def main():
     """支持命令行参数"""
     parser = argparse.ArgumentParser(description="FlyPig - AI Coding Agent")
-    parser.add_argument("--task", "-t", type=str, help="Task to execute (headless mode)")
-    parser.add_argument("--web", action="store_true", default=True,
-                        help="Use Web UI (default)")
-    parser.add_argument("--no-web", action="store_true",
-                        help="Use classic terminal interface")
-    parser.add_argument("--port", type=int, default=8321,
-                        help="Web UI port (default: 8321)")
-    parser.add_argument("--host", type=str, default="127.0.0.1",
-                        help="Web UI host (default: 127.0.0.1)")
-    parser.add_argument("--kill-port", type=int, nargs="?", const=8321, default=0,
-                        help="Kill process on port and exit (default: 8321)")
+    parser.add_argument(
+        "--task", "-t", type=str, help="Task to execute (headless mode)"
+    )
+    parser.add_argument(
+        "--web", action="store_true", default=True, help="Use Web UI (default)"
+    )
+    parser.add_argument(
+        "--no-web", action="store_true", help="Use classic terminal interface"
+    )
+    parser.add_argument(
+        "--port", type=int, default=8321, help="Web UI port (default: 8321)"
+    )
+    parser.add_argument(
+        "--host", type=str, default="127.0.0.1", help="Web UI host (default: 127.0.0.1)"
+    )
+    parser.add_argument(
+        "--kill-port",
+        type=int,
+        nargs="?",
+        const=8321,
+        default=0,
+        help="Kill process on port and exit (default: 8321)",
+    )
     args = parser.parse_args()
 
     if args.kill_port:
@@ -87,12 +105,14 @@ def _web_main(host: str = "127.0.0.1", port: int = 8321):
     config = Config()
 
     from .web.server import start_server
+
     try:
         start_server(config, host=host, port=port, open_browser=True)
     finally:
         # 服务器退出后清理沙箱
         from .tools import ToolExecutor
-        if hasattr(ToolExecutor, 'sandbox_manager') and ToolExecutor.sandbox_manager:
+
+        if hasattr(ToolExecutor, "sandbox_manager") and ToolExecutor.sandbox_manager:
             ToolExecutor.sandbox_manager.cleanup()
 
 
@@ -133,6 +153,7 @@ def _headless_main(task: str):
             cost_tracker.set_pricing(api_model, prices)
 
     from .sandbox import create_sandbox_components, PathValidator
+
     sandbox_cfg = config.build_sandbox_config()
     sandbox_mgr, path_val = create_sandbox_components(sandbox_cfg, config.workspace)
 
@@ -162,21 +183,18 @@ def _headless_main(task: str):
             "Use Linux/bash syntax: ls, cat, grep, && to chain commands.\n"
             f"The workspace folder '{ws_name}' is mounted at /workspace.\n"
             "To access subdirectories, use: cd /workspace/<subfolder_name>\n"
-                "Use forward slashes / for paths.\n"
-                "IMPORTANT: Always use the correct container path. If a directory "
-                "is not found, check 'ls /workspace/' for available subdirectories.\n"
-                "CRITICAL: You CANNOT run interactive programs that need user input "
-                "(e.g., scripts with input(), while True loops waiting for stdin, "
-                "python -i, node REPL). These will hang forever because stdin is "
-                "not connected. Instead, tell the user to open the terminal panel "
-                "and run the command there manually.\n"
+            "Use forward slashes / for paths.\n"
+            "IMPORTANT: Always use the correct container path. If a directory "
+            "is not found, check 'ls /workspace/' for available subdirectories.\n"
+            "CRITICAL: You CANNOT run interactive programs that need user input "
+            "(e.g., scripts with input(), while True loops waiting for stdin, "
+            "python -i, node REPL). These will hang forever because stdin is "
+            "not connected. Instead, tell the user to open the terminal panel "
+            "and run the command there manually.\n"
         )
 
     agent = Agent(
-        model=model,
-        cost_tracker=cost_tracker,
-        tools=tools,
-        system_prompt=ws_prompt
+        model=model, cost_tracker=cost_tracker, tools=tools, system_prompt=ws_prompt
     )
 
     print(f"[*] Executing task: {task[:50]}...")
@@ -184,7 +202,7 @@ def _headless_main(task: str):
     print(f"\n[Result]: {response}")
     print(f"\n[Cost Summary]:\n{agent.get_session_summary()}")
 
-    if hasattr(tools, 'sandbox_manager') and tools.sandbox_manager:
+    if hasattr(tools, "sandbox_manager") and tools.sandbox_manager:
         tools.sandbox_manager.cleanup()
 
 

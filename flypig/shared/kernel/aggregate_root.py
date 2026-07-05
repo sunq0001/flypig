@@ -9,8 +9,6 @@ pull_events 取出已记录的事件供 ApplicationService 通过 EventPublisher
 层&依赖：shared.kernel 层，依赖 Entity + DomainEvent
 """
 
-from typing import List
-
 from flypig.shared.kernel.domain_event import DomainEvent
 from flypig.shared.kernel.entity import Entity
 
@@ -26,14 +24,14 @@ class AggregateRoot(Entity):
 
     def __init__(self, id: str = "") -> None:
         super().__init__(id)
-        self._events: List[DomainEvent] = []
+        self._events: list[DomainEvent] = []
 
     def record_event(self, event: DomainEvent) -> None:
         """记录一个领域事件（暂存于内存，等待发布）"""
         event.aggregate_id = self.id
         self._events.append(event)
 
-    def pull_events(self) -> List[DomainEvent]:
+    def pull_events(self) -> list[DomainEvent]:
         """拉取并清空已记录的所有领域事件"""
         events = list(self._events)
         self._events.clear()

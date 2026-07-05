@@ -10,21 +10,30 @@ TerminalBar：终端栏容器
 细节见文档：docs/docs_refactor/frontend-arch.md → §目标目录结构
 -->
 <template>
-  <div class="terminal-bar" :class="{ collapsed }">
+  <div
+    class="terminal-bar"
+    :class="{ collapsed }"
+  >
     <div class="term-header">
       <div class="term-tabs">
         <span class="term-tab active">
-          <span class="dot"></span>
+          <span class="dot" />
           终端 1
         </span>
         <span class="term-tab">+</span>
       </div>
       <div class="term-actions">
-        <span class="term-btn" title="折叠" @click="$emit('toggle')">_</span>
+        <span
+          class="term-btn"
+          title="折叠"
+          @click="$emit('toggle')"
+        >_</span>
       </div>
     </div>
     <div class="term-body">
-      <div class="term-placeholder">终端输出区域</div>
+      <div class="term-placeholder">
+        终端输出区域
+      </div>
     </div>
   </div>
 </template>

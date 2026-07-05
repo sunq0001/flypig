@@ -8,11 +8,10 @@
 """
 
 from dependency_injector import containers, providers
-
+from flypig.application.chat_service import ChatApplicationService
 from flypig.domain.registry import ModelRegistry
 from flypig.infrastructure.llm.model_factory import ModelFactory
 from flypig.infrastructure.usage.pricing import PricingService
-from flypig.application.chat_service import ChatApplicationService
 
 
 class AppContainer(containers.DeclarativeContainer):

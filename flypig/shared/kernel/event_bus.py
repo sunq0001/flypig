@@ -10,7 +10,6 @@
 """
 
 from abc import ABC, abstractmethod
-from typing import List
 
 from flypig.shared.kernel.domain_event import DomainEvent
 
@@ -23,7 +22,7 @@ class EventPublisher(ABC):
     """
 
     @abstractmethod
-    async def publish(self, events: List[DomainEvent]) -> None:
+    async def publish(self, events: list[DomainEvent]) -> None:
         """批量发布领域事件到消息中间件"""
         ...
 

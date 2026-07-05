@@ -11,4 +11,5 @@ from flypig.shared.base import DomainEvent
 
 class ToolCalled(DomainEvent):
     """工具已调用事件"""
+
     pass

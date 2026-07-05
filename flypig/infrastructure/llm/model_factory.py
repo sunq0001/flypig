@@ -9,13 +9,11 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
-from flypig.shared.settings import AppSettings
 from flypig.domain.interfaces.imodel import IModel
 from flypig.domain.interfaces.imodel_factory import IModelFactory
 from flypig.domain.registry import ModelRegistry
 from flypig.infrastructure.llm.openai_adapter import OpenAIAdapter
+from flypig.shared.settings import AppSettings
 
 
 class ModelFactory(IModelFactory):
@@ -27,7 +25,7 @@ class ModelFactory(IModelFactory):
     def create(
         self,
         model_name: str,
-        settings: Optional[AppSettings] = None,
+        settings: AppSettings | None = None,
     ) -> IModel:
         meta = self._registry.resolve(model_name)
         provider = (meta or {}).get("provider", "")

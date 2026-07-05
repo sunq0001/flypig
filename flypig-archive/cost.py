@@ -1,5 +1,4 @@
 """成本追踪"""
-from typing import Optional
 
 # DeepSeek 缓存折扣：缓存命中 token 按输入价格的 10% 计费
 CACHE_DISCOUNT_RATIO = 0.1
@@ -35,8 +34,13 @@ class CostTracker:
         self.total_cost = 0.0
         self.api_calls = 0
 
-    def record(self, model: str, input_tokens: int, output_tokens: int,
-               cache_hit_tokens: int = 0):
+    def record(
+        self,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        cache_hit_tokens: int = 0,
+    ):
         """记录一次 API 调用，区分缓存成本"""
         self.api_calls += 1
         self.total_input_tokens += input_tokens
@@ -68,9 +72,13 @@ class CostTracker:
         """获取会话汇总（含缓存统计）"""
         total_tokens = self.total_input_tokens + self.total_output_tokens
         if self.total_cache_hit_tokens:
-            hit_pct = 100 * self.total_cache_hit_tokens / max(1, self.total_input_tokens)
-            cache_line = (f"  Cache Hit: {self.total_cache_hit_tokens:,} "
-                          f"({hit_pct:.0f}% of input)\n")
+            hit_pct = (
+                100 * self.total_cache_hit_tokens / max(1, self.total_input_tokens)
+            )
+            cache_line = (
+                f"  Cache Hit: {self.total_cache_hit_tokens:,} "
+                f"({hit_pct:.0f}% of input)\n"
+            )
         else:
             cache_line = ""
         return (
@@ -82,8 +90,13 @@ class CostTracker:
             f"  Total Cost: {_format_cost(self.total_cost)}"
         )
 
-    def format_usage(self, input_tokens: int, output_tokens: int, cost: float,
-                     cache_hit_tokens: int = 0) -> str:
+    def format_usage(
+        self,
+        input_tokens: int,
+        output_tokens: int,
+        cost: float,
+        cache_hit_tokens: int = 0,
+    ) -> str:
         """格式化单次使用信息"""
         total = input_tokens + output_tokens
         cache_info = ""

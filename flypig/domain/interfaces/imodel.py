@@ -46,4 +46,3 @@ class IModel(ABC):
     def get_model_name(self) -> str:
         """返回当前模型名（如 deepseek-v4-flash），用于日志和用量追踪"""
         ...
-

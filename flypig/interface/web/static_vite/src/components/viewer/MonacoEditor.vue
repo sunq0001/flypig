@@ -4,26 +4,16 @@ MonacoEditor：代码编辑器
 -->
 
 <template>
-  <div ref="container" class="monaco-editor"></div>
+  <div
+    ref="container"
+    class="monaco-editor"
+  />
 </template>
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import * as monaco from 'monaco-editor'
-import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
-import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
-import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
-import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
-import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
-
-self.MonacoEnvironment = {
-  getWorker(_, label) {
-    if (label === 'json') return new jsonWorker()
-    if (label === 'css' || label === 'scss' || label === 'less') return new cssWorker()
-    if (label === 'html' || label === 'handlebars' || label === 'razor') return new htmlWorker()
-    if (label === 'typescript' || label === 'javascript') return new tsWorker()
-    return new editorWorker()
-  },
-}
+import { monaco } from '@/lib/monaco-setup'
+import { getLanguage as getMonacoLang } from '@/config/editor-languages'
+// worker 注册移至 lib/monaco-setup.js，统一管理
 
 const props = defineProps({
   value: { type: String, default: '' },
@@ -36,18 +26,8 @@ let editor = null
 let model = null
 
 function getLanguage(filename) {
-  const map = {
-    js: 'javascript', ts: 'typescript', jsx: 'javascript', tsx: 'typescript',
-    vue: 'html', py: 'python', json: 'json', md: 'markdown',
-    html: 'html', css: 'css', scss: 'scss', less: 'less',
-    yml: 'yaml', yaml: 'yaml', toml: 'ini',
-    xml: 'xml', svg: 'xml', sh: 'shell', bash: 'shell',
-    go: 'go', rs: 'rust', java: 'java', kt: 'kotlin',
-    c: 'c', cpp: 'cpp', h: 'c', hpp: 'cpp',
-    sql: 'sql', rb: 'ruby', php: 'php', r: 'r',
-    txt: 'plaintext', gitignore: 'plaintext',
-  }
-  return map[filename.split('.').pop()?.toLowerCase()] || 'plaintext'
+  const ext = filename.split('.').pop()?.toLowerCase()
+  return getMonacoLang(ext)
 }
 
 function createModel(value, filePath) {
@@ -59,7 +39,8 @@ onMounted(() => {
   model = createModel(props.value, props.language)
   editor = monaco.editor.create(container.value, {
     model, readOnly: props.readonly, theme: 'vs-dark',
-    fontSize: 13, fontFamily: "'Cascadia Code', 'Fira Code', Consolas, monospace",
+    fontSize: 13,  // 编辑器字号 px
+    fontFamily: "'Cascadia Code', 'Fira Code', Consolas, monospace",
     fontLigatures: true, lineNumbers: 'on',
     minimap: { enabled: false }, scrollBeyondLastLine: false,
     automaticLayout: true, wordWrap: 'on', padding: { top: 8 },

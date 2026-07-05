@@ -11,5 +11,6 @@ from flypig.domain.event.message_sent import MessageSent
 
 class MessageSentHandler:
     """消息发送事件处理器"""
+
     async def handle(self, event: MessageSent) -> None:
         """TODO: 用量追踪、持久化"""

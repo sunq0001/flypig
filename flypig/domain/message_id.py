@@ -6,4 +6,5 @@
 
 层&依赖：domain 层
 """
+
 from flypig.domain.message import MessageId  # noqa: F401

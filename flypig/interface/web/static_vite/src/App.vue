@@ -1,21 +1,39 @@
+<!-- App.vue：FlyPig 应用根组件，加载配置 → 显示主界面或错误/加载状态 -->
 <template>
   <div id="flypig-app">
     <!-- 加载中 -->
-    <div v-if="loading" class="app-loading">
-      <div class="loading-spinner"></div>
+    <div
+      v-if="loading"
+      class="app-loading"
+    >
+      <div class="loading-spinner" />
       <p>正在连接 FlyPig 服务...</p>
     </div>
 
     <!-- 连接失败 -->
-    <div v-else-if="error" class="app-error">
-      <div class="error-icon">⚠</div>
+    <div
+      v-else-if="error"
+      class="app-error"
+    >
+      <div class="error-icon">
+        ⚠
+      </div>
       <h2>连接失败</h2>
       <p>{{ error }}</p>
-      <t-button theme="primary" @click="retry">重试</t-button>
+      <t-button
+        theme="primary"
+        @click="retry"
+      >
+        重试
+      </t-button>
     </div>
 
     <!-- 直接显示主布局（文件夹树界面） -->
-    <MainLayout v-else :workspace="configStore.workspace" @workspaceChanged="onWorkspaceChanged" />
+    <MainLayout
+      v-else
+      :workspace="configStore.workspace"
+      @workspace-changed="onWorkspaceChanged"
+    />
   </div>
 </template>
 
@@ -45,7 +63,11 @@ async function loadConfig() {
 }
 
 async function onWorkspaceChanged() {
-  await configStore.fetchConfig()
+  try {
+    await configStore.fetchConfig()
+  } catch {
+    // store 内部已有错误处理
+  }
 }
 
 function retry() {

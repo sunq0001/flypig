@@ -12,9 +12,11 @@ from flypig.shared.base import Entity, ValueObject
 
 class MessageId(ValueObject):
     """消息 ID 值对象"""
+
     pass
 
 
 class Message(Entity):
     """消息实体 — 每条对话消息有唯一 ID"""
+
     pass

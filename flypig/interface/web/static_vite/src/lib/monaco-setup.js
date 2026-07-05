@@ -1,8 +1,19 @@
-/** monaco-setup：Monaco Editor 初始化
- * @module monaco-setup
-   为什么做：Monaco Editor 需要配置语言/主题/快捷键。
-   实现方法：monaco.editor.create 配置 language/theme/autocompletion，注册自定义快捷键。
-   实现效果：代码编辑器开箱即用，支持语法高亮和自动补全。
-   技术栈：monaco-editor, 语言/主题/快捷键
-   层&依赖：frontend.lib
-   细节见文档：docs/docs_refactor/frontend-arch.md → §技术栈 */
+/** monaco-setup：Monaco Editor 初始化 — worker 注册 + 默认配置 */
+import * as monaco from 'monaco-editor'
+import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
+import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
+import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker'
+import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker'
+import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
+
+self.MonacoEnvironment = {
+  getWorker(_, label) {
+    if (label === 'json') return new jsonWorker()
+    if (label === 'css' || label === 'scss' || label === 'less') return new cssWorker()
+    if (label === 'html' || label === 'handlebars' || label === 'razor') return new htmlWorker()
+    if (label === 'typescript' || label === 'javascript') return new tsWorker()
+    return new editorWorker()
+  },
+}
+
+export { monaco }

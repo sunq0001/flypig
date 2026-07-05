@@ -64,4 +64,3 @@ class MultiRoleManager:
     def reload(self) -> None:
         """清空缓存，下次 get_system_message 时重新读取文件"""
         self._cache.clear()
-

@@ -11,7 +11,9 @@ InitWizard — 工作区初始化向导
   <div class="init-wizard">
     <div class="wizard-container">
       <div class="wizard-header">
-        <div class="wizard-logo">🐷</div>
+        <div class="wizard-logo">
+          🐷
+        </div>
         <h1>欢迎使用 FlyPig Agent</h1>
         <p class="wizard-desc">
           请选择一个工作目录，AI 助手将在此目录中执行文件操作和命令。
@@ -24,7 +26,9 @@ InitWizard — 工作区初始化向导
       </div>
 
       <div class="wizard-footer">
-        <p class="hint">选择一个目录后即可开始使用</p>
+        <p class="hint">
+          选择一个目录后即可开始使用
+        </p>
       </div>
     </div>
   </div>

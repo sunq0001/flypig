@@ -11,5 +11,6 @@ from flypig.domain.event.session_created import SessionCreated
 
 class SessionCreatedHandler:
     """会话创建事件处理器"""
+
     async def handle(self, event: SessionCreated) -> None:
         """TODO: 初始化会话存储、记录日志"""

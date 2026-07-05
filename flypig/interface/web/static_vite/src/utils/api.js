@@ -40,6 +40,11 @@ export async function readFile(filePath) {
   return { type: 'text', content: data.content || '' }
 }
 
+// ── 文件 URL（用于 <img src> 等场景）──
+export function getFileUrl(path) {
+  return `/api/file?path=${encodeURIComponent(path)}`
+}
+
 // ── 文件写入 ──
 export async function writeFile(filePath, content) {
   if (isElectron) {
@@ -71,6 +76,58 @@ export async function setConfig(key, value) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ [key]: value }),
   })
+}
+
+// ── 配置（扩展） ──
+export async function updateDefaultModel(modelName) {
+  await fetch('/api/config', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ default_model: modelName }),
+  })
+}
+
+export async function saveApiKey(provider, apiKey) {
+  const res = await fetch('/api/config/apikey', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ provider, api_key: apiKey }),
+  })
+  return { ok: res.ok }
+}
+
+// ── 文件浏览 ──
+export async function browseDir(parentPath) {
+  const res = await fetch('/api/config/browse', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: parentPath }),
+  })
+  if (!res.ok) return { entries: [], parent: '', path: '' }
+  return res.json()
+}
+
+export async function mkdirDir(parentPath, name) {
+  const res = await fetch('/api/config/mkdir', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ parent: parentPath, name }),
+  })
+  return { ok: res.ok }
+}
+
+// ── 本地模型 ──
+export async function getLocalModels() {
+  const res = await fetch('/api/config/local-models')
+  if (!res.ok) return { running: false, installed: [] }
+  return res.json()
+}
+
+// ── 定价 ──
+export async function getPricing(currency) {
+  const res = await fetch(`/api/pricing?currency=${currency}`)
+  if (!res.ok) return { prices: {} }
+  return res.json()
 }
 
 function blobToBase64(blob) {

@@ -11,20 +11,29 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncGenerator
-from typing import Optional
 
-from flypig.shared.settings import AppSettings
 from flypig.domain.exceptions import ModelAPIError
 from flypig.domain.interfaces.imodel_factory import IModelFactory
 from flypig.shared.base import ApplicationService
 from flypig.shared.constants import (
-    ERROR_TRUNCATE_LENGTH,
     SSE_EVENT_ERROR as SSE_ERROR,
+)
+from flypig.shared.constants import (
     SSE_EVENT_FINISH as SSE_FINISH,
+)
+from flypig.shared.constants import (
     SSE_EVENT_TEXT_DELTA as SSE_TEXT_DELTA,
+)
+from flypig.shared.constants import (
     SSE_EVENT_TEXT_END as SSE_TEXT_END,
+)
+from flypig.shared.constants import (
     SSE_EVENT_TEXT_START as SSE_TEXT_START,
 )
+from flypig.shared.settings import AppSettings
+
+_KEY_TYPE = "type"
+_ID_TEXT = "text-1"
 
 
 class ChatApplicationService(ApplicationService):
@@ -33,7 +42,7 @@ class ChatApplicationService(ApplicationService):
     def __init__(
         self,
         model_factory: IModelFactory,
-        settings: Optional[AppSettings] = None,
+        settings: AppSettings | None = None,
     ) -> None:
         self._factory = model_factory
         self._settings = settings
@@ -59,16 +68,16 @@ class ChatApplicationService(ApplicationService):
             return
 
         try:
-            yield f"data: {json.dumps({'type': SSE_TEXT_START, 'id': 'text-1'})}\n\n"
+            yield f"data: {json.dumps({_KEY_TYPE: SSE_TEXT_START, 'id': _ID_TEXT})}\n\n"
 
             async for token in adapter.stream(messages):
                 if token:
-                    yield f"data: {json.dumps({'type': SSE_TEXT_DELTA, 'id': 'text-1', 'delta': token})}\n\n"
+                    yield f"data: {json.dumps({_KEY_TYPE: SSE_TEXT_DELTA, 'id': _ID_TEXT, 'delta': token})}\n\n"
 
-            yield f"data: {json.dumps({'type': SSE_TEXT_END, 'id': 'text-1'})}\n\n"
-            yield f"data: {json.dumps({'type': SSE_FINISH})}\n\n"
+            yield f"data: {json.dumps({_KEY_TYPE: SSE_TEXT_END, 'id': _ID_TEXT})}\n\n"
+            yield f"data: {json.dumps({_KEY_TYPE: SSE_FINISH})}\n\n"
             yield "data: [DONE]\n\n"
         except ModelAPIError as e:
-            yield f"data: {json.dumps({'type': SSE_ERROR, 'errorText': str(e)})}\n\n"
+            yield f"data: {json.dumps({_KEY_TYPE: SSE_ERROR, 'errorText': str(e)})}\n\n"
         except Exception as e:
-            yield f"data: {json.dumps({'type': SSE_ERROR, 'errorText': f'服务错误: {str(e)[:TRUNCATE_LENGTH]}'})}\n\n"
+            yield f"data: {json.dumps({_KEY_TYPE: SSE_ERROR, 'errorText': f'服务错误: {str(e)[:TRUNCATE_LENGTH]}'})}\n\n"

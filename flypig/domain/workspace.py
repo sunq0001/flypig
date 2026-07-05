@@ -11,4 +11,5 @@ from flypig.shared.base import AggregateRoot
 
 class Workspace(AggregateRoot):
     """工作区聚合根 — 管理项目/目录级别的元数据和配置"""
+
     pass

@@ -9,14 +9,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
-
-from openai import AsyncOpenAI
+from typing import Any
 
 from flypig.domain.exceptions import ModelAPIError
+from flypig.domain.interfaces.imodel import IModel
 from flypig.domain.registry import ModelRegistry
 from flypig.shared.settings import AppSettings
-from flypig.domain.interfaces.imodel import IModel
+from openai import AsyncOpenAI
 
 
 class OpenAIAdapter(IModel):
@@ -25,8 +24,8 @@ class OpenAIAdapter(IModel):
     def __init__(
         self,
         model_name: str,
-        settings: Optional[AppSettings] = None,
-        registry: Optional[ModelRegistry] = None,
+        settings: AppSettings | None = None,
+        registry: ModelRegistry | None = None,
     ):
         self._model_name = model_name
         self._registry = registry or ModelRegistry()
@@ -41,7 +40,9 @@ class OpenAIAdapter(IModel):
             local = self._registry.get_local_config()
             self._provider = local.get("provider", "Local")
             api_path = local.get("api_path", "/v1")
-            base_url = settings.ollama_base_url or local.get("default_ollama_url", "") if settings else ""
+            base_url = (
+                settings.ollama_base_url or local.get("default_ollama_url", "") if settings else ""
+            )
             self._base_url = f"{base_url}{api_path}"
             self._api_model = model_name
             is_local = True
@@ -58,7 +59,7 @@ class OpenAIAdapter(IModel):
             api_key=api_key,
         )
 
-    def _resolve_api_key(self, settings: Optional[AppSettings], provider: str) -> Optional[str]:
+    def _resolve_api_key(self, settings: AppSettings | None, provider: str) -> str | None:
         if settings is None:
             return None
         attr = self._registry.provider_key_map.get(provider, "")

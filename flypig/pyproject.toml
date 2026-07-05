@@ -4,29 +4,31 @@ version = "0.1.0"
 description = "FlyPig AI Agent - 终端+聊天 AI 助手"
 requires-python = ">=3.11"
 dependencies = [
-    "quart>=0.19.0",
-    "hypercorn>=0.17.0",
-    "httpx>=0.27.0",
-    "python-dotenv>=1.0.0",
-    "pydantic>=2.0.0",
+    "quart>=0.19.0,<1.0",
+    "hypercorn>=0.17.0,<1.0",
+    "httpx>=0.27.0,<1.0",
+    "python-dotenv>=1.0.0,<2.0",
+    "pydantic>=2.0.0,<3.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
-    "coverage>=7.0.0",
-    "ruff>=0.3.0",
-    "httpx>=0.27.0",
-    "import-linter>=2.0.0",
+    "pytest>=8.0.0,<9.0",
+    "pytest-asyncio>=0.23.0,<1.0",
+    "coverage>=7.0.0,<8.0",
+    "ruff>=0.3.0,<1.0",
+    "mypy>=1.10.0,<2.0",
+    "httpx>=0.27.0,<1.0",
+    "import-linter>=2.0.0,<3.0",
+    "pre-commit>=4.0.0,<5.0",
 ]
 web = [
-    "quart>=0.19.0",
-    "hypercorn>=0.17.0",
-    "quart-cors>=0.7.0",
+    "quart>=0.19.0,<1.0",
+    "hypercorn>=0.17.0,<1.0",
+    "quart-cors>=0.7.0,<1.0",
 ]
 mcp = [
-    "mcp>=1.0.0",
+    "mcp>=1.0.0,<2.0",
 ]
 
 [project.urls]
@@ -50,11 +52,30 @@ line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "B", "UP", "SIM", "RUF100"]
+select = [
+    "E", "F", "I", "N", "W", "B", "UP", "SIM", "RUF100",  # 基础
+    "PL",       # Pylint 重构&检查（含魔法数字 / 函数过长 / 参数过多）
+    "TRY",      # try/except 异常处理（空 except / 过于宽泛的 except）
+    "PTH",      # pathlib 路径处理
+    "C4",       # 简化写法（不必要的列表推导等）
+    "RUF",      # ruff 专属规则
+    "ASYNC",    # async 相关（await 无 await 等）
+]
+# 所有规则默认开启，逐个关闭不适用的
+ignore = [
+    "PLR0911",  # 太多 return（允许简化代码）
+    "PLR0912",  # 太多分支
+    "PLR2004",  # 魔法数字（放宽，有用例的参数不算魔法）
+    "TRY003",   # 异常消息太长
+    "C901",     # 圈复杂度（过于严格）
+    "PLR0913",  # 参数过多（放宽到实际影响）
+    "RUF001",   # 全角字符检查（中文项目用全角标点正常）
+    "RUF002",   # 同上
+    "RUF003",   # 同上
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests"]
 addopts = "-v --tb=short"
 
 [tool.importlinter]
@@ -79,6 +100,24 @@ containers = ["flypig"]
 source = ["flypig"]
 omit = ["*/tests/*", "*/__pycache__/*"]
 
+[tool.mypy]
+python_version = "3.11"
+strict = false
+check_untyped_defs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unreachable = true
+explicit_package_bases = true
+namespace_packages = true
+
+[[tool.mypy.overrides]]
+module = ["flypig.tests.*"]
+ignore_errors = true
+
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
+fail_under = 10

@@ -11,7 +11,7 @@
  */
 
 import { useChat as useAIChat } from '@ai-sdk/vue'
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 
 export function useChat() {
   const selectedModel = ref('')
@@ -23,19 +23,15 @@ export function useChat() {
     body: () => ({
       model: selectedModel.value,
     }),
-    onError: (err) => {
-      console.error('[useChat] error:', err.message)
-    },
-    onFinish: () => {
-      console.log('[useChat] response complete')
-    },
+    onError: () => {},
+    onFinish: () => {},
     sendExtraMessageFields: true,
   })
 
   const sendMessage = async (content) => {
     if (!content.trim()) return
     if (!selectedModel.value) {
-      console.warn('[useChat] no model selected')
+      // no model selected — silent return
       return
     }
     chat.append({ role: 'user', content })

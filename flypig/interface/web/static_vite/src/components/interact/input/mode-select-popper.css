@@ -1,0 +1,6 @@
+/* ModeSelect 下拉弹窗主题覆盖 */
+.mode-select-popper { background: #252526 !important; border: 1px solid #333 !important; min-width: 100px; --td-bg-color-container: #252526; --td-bg-color-container-hover: #3c3c3c; --td-bg-color-container-active: #2a2a2a; --td-text-color-primary: #e5e5e5; --td-text-color-secondary: #999; --td-component-stroke: #444; --td-border-level-1-color: #444; }
+.mode-select-popper, .mode-select-popper .t-popup__content { background: #252526 !important; }
+.mode-select-popper .t-select-dropdown__item { font-size: 12px; color: #e5e5e5 !important; background: transparent !important; }
+.mode-select-popper .t-select-dropdown__item:hover, .mode-select-popper .t-select-dropdown__item.hover { background: #3c3c3c !important; }
+.mode-select-popper .t-select-dropdown__item.is-selected, .mode-select-popper .t-option.t-is-selected, .mode-select-popper .t-select-option.t-is-selected { color: #409eff !important; background: #2a2a2a !important; }

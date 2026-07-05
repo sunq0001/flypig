@@ -7,8 +7,9 @@
 层&依赖：shared 层
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Generic, List, Optional, TypeVar
+from typing import Generic, TypeVar
 
 T = TypeVar("T")
 
@@ -26,8 +27,9 @@ class ValidationResult:
         if not result.is_valid:
             return result
     """
+
     is_valid: bool = True
-    errors: List[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
 
     def add_error(self, msg: str) -> None:
         self.is_valid = False
@@ -50,7 +52,7 @@ class Validator(Generic[T]):
     """
 
     def __init__(self) -> None:
-        self._rules: List[tuple[Callable[[T], bool], str]] = []
+        self._rules: list[tuple[Callable[[T], bool], str]] = []
 
     def add_rule(self, predicate: Callable[[T], bool], message: str) -> None:
         self._rules.append((predicate, message))

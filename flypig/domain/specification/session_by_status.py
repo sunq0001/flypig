@@ -6,12 +6,13 @@
 层&依赖：domain.specification 层，依赖 shared.Specification + domain.session
 """
 
-from flypig.shared.base import Specification
 from flypig.domain.session import Session
+from flypig.shared.base import Specification
 
 
 class SessionByStatus(Specification[Session]):
     """按会话状态过滤规格"""
+
     def is_satisfied_by(self, candidate: Session) -> bool:
         """TODO: 判断候选会话是否匹配指定状态"""
         return True

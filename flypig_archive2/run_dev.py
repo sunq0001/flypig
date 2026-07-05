@@ -3,6 +3,7 @@ python run_dev.py
 
 改 .py 文件后自动重启，无需手动操作。
 """
+
 import os
 import sys
 
@@ -13,8 +14,8 @@ if _root not in sys.path:
 import uvicorn
 
 if __name__ == "__main__":
-    print(f"  FlyPig Agent (热加载) — http://127.0.0.1:8321")
-    print(f"  改 .py 文件后自动重启")
+    print("  FlyPig Agent (热加载) — http://127.0.0.1:8321")
+    print("  改 .py 文件后自动重启")
 
     uvicorn.run(
         "asgi:app",

@@ -10,7 +10,10 @@ ViewBar：中间查看栏容器
 -->
 <template>
   <div class="view-bar">
-    <EditorArea ref="editorRef" @open-file="$emit('open-file', $event)" />
+    <EditorArea
+      ref="editorRef"
+      @open-file="$emit('open-file', $event)"
+    />
   </div>
 </template>
 <script setup>

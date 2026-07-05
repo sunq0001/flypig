@@ -12,4 +12,4 @@
 """
 
 from .config import Config
-from .model_registry import REGISTRY, resolve, known_models, providers
+from .model_registry import REGISTRY, known_models, providers, resolve

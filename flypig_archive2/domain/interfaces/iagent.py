@@ -23,7 +23,9 @@ class IAgent(ABC):
     """AI Agent 核心接口"""
 
     @abstractmethod
-    async def run(self, user_input: str, session_id: str | None = None, **kwargs) -> AsyncGenerator[dict, None]:
+    async def run(
+        self, user_input: str, session_id: str | None = None, **kwargs
+    ) -> AsyncGenerator[dict, None]:
         """处理用户输入，异步生成事件流
 
         Args:
@@ -55,4 +57,3 @@ class IAgent(ABC):
             {"running": bool, "session_id": str | None, "mode": str, ...}
         """
         ...
-

@@ -14,25 +14,39 @@ LocalModelDialog：本地模型选择弹窗
     :footer="false"
     :close-on-overlay-click="true"
     :close-btn="true"
+    :dialog-style="{ background: '#252526' }"
     @update:visible="$emit('close')"
     @close="$emit('close')"
-    :dialog-style="{ background: '#252526' }"
   >
     <!-- 状态1: Ollama 未安装 -->
-    <div v-if="!loading && !status.running" class="ld-body">
-      <div class="ld-icon-wrap">💻</div>
-      <div class="ld-title">本地模型</div>
-      <div class="ld-desc">未检测到 Ollama，本地模型需要 Ollama 支持</div>
+    <div
+      v-if="!loading && !status.running"
+      class="ld-body"
+    >
+      <div class="ld-icon-wrap">
+        💻
+      </div>
+      <div class="ld-title">
+        本地模型
+      </div>
+      <div class="ld-desc">
+        未检测到 Ollama，本地模型需要 Ollama 支持
+      </div>
       <a
         href="https://ollama.com/download"
         target="_blank"
         class="ld-btn"
       >下载 Ollama</a>
-      <div class="ld-hint">安装完成后刷新页面即可使用</div>
+      <div class="ld-hint">
+        安装完成后刷新页面即可使用
+      </div>
     </div>
 
     <!-- 状态2: Ollama 运行中，无模型 -->
-    <div v-else-if="!loading && status.running && !status.installed?.length" class="ld-body">
+    <div
+      v-else-if="!loading && status.running && !status.installed?.length"
+      class="ld-body"
+    >
       <div class="ld-status-bar">
         <span class="ld-dot ld-dot-green" />
         <span class="ld-status-text">Ollama 已就绪</span>
@@ -46,7 +60,10 @@ LocalModelDialog：本地模型选择弹窗
     </div>
 
     <!-- 状态3: Ollama 运行中，有模型 -->
-    <div v-else-if="!loading && status.running && status.installed?.length" class="ld-body">
+    <div
+      v-else-if="!loading && status.running && status.installed?.length"
+      class="ld-body"
+    >
       <div class="ld-status-bar">
         <span class="ld-dot ld-dot-green" />
         <span class="ld-status-text">已安装 {{ status.installed.length }} 个本地模型</span>
@@ -64,17 +81,24 @@ LocalModelDialog：本地模型选择弹窗
         </div>
       </div>
       <div class="ld-actions">
-        <t-button @click="$emit('close')">取消</t-button>
+        <t-button @click="$emit('close')">
+          取消
+        </t-button>
         <t-button
           theme="primary"
           :disabled="!selectedModel"
           @click="confirmSelect"
-        >确认选择</t-button>
+        >
+          确认选择
+        </t-button>
       </div>
     </div>
 
     <!-- 加载中 -->
-    <div v-else class="ld-body ld-loading">
+    <div
+      v-else
+      class="ld-body ld-loading"
+    >
       <span>检测中...</span>
     </div>
   </t-dialog>
@@ -82,6 +106,7 @@ LocalModelDialog：本地模型选择弹窗
 
 <script setup>
 import { ref, watch } from 'vue'
+import { getLocalModels } from '@/utils/api'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -92,23 +117,21 @@ const loading = ref(false)
 const status = ref({ running: false, installed: [] })
 const selectedModel = ref('')
 
-watch(() => props.visible, async (v) => {
-  if (v) {
-    loading.value = true
-    try {
-      const res = await fetch('/api/config/local-models')
-      status.value = await res.json()
-      // 默认选中第一个
-      if (status.value.installed?.length) {
-        selectedModel.value = status.value.installed[0]
-      }
-    } catch {
-      status.value = { running: false, installed: [] }
-    } finally {
-      loading.value = false
+async function _onVisibleChange(v) {
+  if (!v) return
+  loading.value = true
+  try {
+    status.value = await getLocalModels()
+    if (status.value.installed?.length) {
+      selectedModel.value = status.value.installed[0]
     }
+  } catch {
+    status.value = { running: false, installed: [] }
+  } finally {
+    loading.value = false
   }
-})
+}
+watch(() => props.visible, _onVisibleChange)
 
 function confirmSelect() {
   if (selectedModel.value) {

@@ -23,4 +23,5 @@ class ApplicationService(ABC):
         - 不含业务逻辑（业务逻辑在 DomainService 或 AggregateRoot 中）
         - 只做协调和编排
     """
+
     pass

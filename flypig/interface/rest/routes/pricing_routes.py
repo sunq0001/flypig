@@ -8,9 +8,9 @@
 """
 
 import asyncio
-from quart import Blueprint, current_app, jsonify, request
 
 from flypig.infrastructure.usage.pricing import PricingService
+from quart import Blueprint, current_app, jsonify, request
 
 pricing_bp = Blueprint("pricing", __name__)
 _refreshing = False

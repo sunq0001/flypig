@@ -11,4 +11,5 @@ from flypig.shared.base import DomainEvent
 
 class ToolCompleted(DomainEvent):
     """工具执行已完成事件"""
+
     pass

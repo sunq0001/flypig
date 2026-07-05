@@ -11,4 +11,5 @@ from flypig.shared.base import ValueObject
 
 class McpServer(ValueObject):
     """MCP 服务器配置值对象"""
+
     pass

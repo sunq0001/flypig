@@ -13,14 +13,22 @@ InteractBar：右侧交互栏容器（对话/终端标签切换）
   <div class="interact-bar">
     <div class="tabs-bar">
       <div class="tab-list">
-        <div v-for="tab in tabs" :key="tab.id" class="tab"
-          :class="{ active: activeTab === tab.id }" @click="activeTab = tab.id">
+        <div
+          v-for="tab in tabs"
+          :key="tab.id"
+          class="tab"
+          :class="{ active: activeTab === tab.id }"
+          @click="activeTab = tab.id"
+        >
           {{ tab.label }}
         </div>
       </div>
       <span class="model-name">{{ model }}</span>
     </div>
-    <ChatPanel v-show="activeTab === 'chat'" :model="model" />
+    <ChatPanel
+      v-show="activeTab === 'chat'"
+      :model="model"
+    />
     <TermBar v-show="activeTab === 'term'" />
   </div>
 </template>

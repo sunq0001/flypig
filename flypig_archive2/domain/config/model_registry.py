@@ -160,14 +160,16 @@ def get_local_models() -> list[dict]:
             name = m.get("name", "")
             if not name:
                 continue
-            result.append({
-                "name": name,
-                "provider": "Local",
-                "base_url": "http://localhost:11434/v1",
-                "api_model": name,
-                "local": True,
-                "has_key": True,
-            })
+            result.append(
+                {
+                    "name": name,
+                    "provider": "Local",
+                    "base_url": "http://localhost:11434/v1",
+                    "api_model": name,
+                    "local": True,
+                    "has_key": True,
+                }
+            )
 
         _LOCAL_CACHE["models"] = result
         _LOCAL_CACHE["ts"] = now

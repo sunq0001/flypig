@@ -11,14 +11,16 @@ from __future__ import annotations
 
 import asyncio
 import time
+from http import HTTPStatus
 
 import httpx
-
-from flypig.shared.settings import AppSettings
 from flypig.domain.interfaces.ilocal_model_service import ILocalModelService
 from flypig.domain.registry import ModelRegistry
+from flypig.shared.settings import AppSettings
 
 OLLAMA_CHECK_TIMEOUT = 2
+DEFAULT_LIST_CACHE_TTL = 30
+LIST_TIMEOUT = 2
 CACHE_KEY_MODELS = "models"
 CACHE_KEY_TS = "ts"
 
@@ -53,17 +55,15 @@ class OllamaLocalModelService(ILocalModelService):
     async def check_running(self) -> bool:
         timeout = self._local_cfg.get("check_timeout", OLLAMA_CHECK_TIMEOUT)
         try:
-            resp = await httpx.AsyncClient().get(
-                f"{self._base_url}/api/tags", timeout=timeout
-            )
-            return resp.status_code == 200
+            resp = await httpx.AsyncClient().get(f"{self._base_url}/api/tags", timeout=timeout)
+            return resp.status_code == HTTPStatus.OK
         except Exception:
             return False
 
     async def list_models(self) -> list[dict]:
         now = time.time()
-        cache_ttl = self._local_cfg.get("list_cache_ttl", 30)
-        timeout = self._local_cfg.get("list_timeout", 2)
+        cache_ttl = self._local_cfg.get("list_cache_ttl", DEFAULT_LIST_CACHE_TTL)
+        timeout = self._local_cfg.get("list_timeout", LIST_TIMEOUT)
         api_path = self._local_cfg.get("api_path", "/v1")
         provider = self._local_cfg.get("provider", "Local")
 
@@ -71,10 +71,8 @@ class OllamaLocalModelService(ILocalModelService):
             return self._cache[CACHE_KEY_MODELS]
 
         try:
-            resp = await httpx.AsyncClient().get(
-                f"{self._base_url}/api/tags", timeout=timeout
-            )
-            if resp.status_code != 200:
+            resp = await httpx.AsyncClient().get(f"{self._base_url}/api/tags", timeout=timeout)
+            if resp.status_code != HTTPStatus.OK:
                 return []
 
             result = []
@@ -82,17 +80,19 @@ class OllamaLocalModelService(ILocalModelService):
                 name = m.get("name", "")
                 if not name:
                     continue
-                result.append({
-                    "name": name,
-                    "provider": provider,
-                    "base_url": f"{self._base_url}{api_path}",
-                    "api_model": name,
-                    "local": True,
-                    "has_key": True,
-                })
+                result.append(
+                    {
+                        "name": name,
+                        "provider": provider,
+                        "base_url": f"{self._base_url}{api_path}",
+                        "api_model": name,
+                        "local": True,
+                        "has_key": True,
+                    }
+                )
 
-            self._cache["models"] = result
-            self._cache["ts"] = now
+            self._cache[CACHE_KEY_MODELS] = result
+            self._cache[CACHE_KEY_TS] = now
             return result
         except Exception:
             return []
@@ -103,7 +103,9 @@ class OllamaLocalModelService(ILocalModelService):
     async def pull_model(self, model_name: str) -> None:
         binary = self._local_cfg.get("binary", "ollama")
         proc = await asyncio.create_subprocess_exec(
-            binary, "pull", model_name,
+            binary,
+            "pull",
+            model_name,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )

@@ -15,10 +15,13 @@ R1 阶段只有 chat_node（最小可对话），后续轮次逐步添加 ask_ch
 
 from __future__ import annotations
 
-from flypig.orchestration.state import AgentState
 from flypig.domain.exceptions import ModelAPIError
 from flypig.domain.interfaces.imodel import IModel
+from flypig.orchestration.state import AgentState
 from flypig.shared.constants import ERROR_TRUNCATE_LENGTH as TRUNCATE_LENGTH
+
+_KEY_MESSAGES = "messages"
+_ROLE_KEY = "role"
 
 
 def chat_node(model: IModel) -> callable:
@@ -33,7 +36,7 @@ def chat_node(model: IModel) -> callable:
 
     async def _chat_node(state: AgentState) -> dict:
         try:
-            messages = state["messages"]
+            messages = state[_KEY_MESSAGES]
             response_content = ""
 
             async for token in model.stream(messages):
@@ -43,17 +46,19 @@ def chat_node(model: IModel) -> callable:
             new_messages.append({"role": "assistant", "content": response_content})
 
             return {
-                "messages": new_messages,
+                _KEY_MESSAGES: new_messages,
                 "turn_id": state.get("turn_id", 0) + 1,
             }
         except ModelAPIError:
             return {
-                "messages": messages + [{"role": "assistant", "content": "模型服务暂不可用，请稍后重试"}],
+                _KEY_MESSAGES: messages
+                + [{_ROLE_KEY: "assistant", "content": "模型服务暂不可用，请稍后重试"}],
                 "error": "model_api_error",
             }
         except Exception as e:
             return {
-                "messages": messages + [{"role": "assistant", "content": f"处理出错: {str(e)[:TRUNCATE_LENGTH]}"}],
+                _KEY_MESSAGES: messages
+                + [{_ROLE_KEY: "assistant", "content": f"处理出错: {str(e)[:TRUNCATE_LENGTH]}"}],
                 "error": str(e),
             }
 

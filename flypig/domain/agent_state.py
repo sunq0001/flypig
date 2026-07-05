@@ -11,4 +11,5 @@ from flypig.shared.base import ValueObject
 
 class AgentState(ValueObject):
     """Agent 运行时状态值对象"""
+
     pass

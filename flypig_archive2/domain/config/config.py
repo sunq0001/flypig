@@ -28,7 +28,7 @@ from pathlib import Path
 
 import yaml
 
-from domain.config.model_registry import REGISTRY, known_models
+from domain.config.model_registry import REGISTRY
 
 
 class Config:
@@ -72,16 +72,19 @@ class Config:
         for name, meta in REGISTRY.items():
             provider = meta["provider"]
             has_key = bool(api_keys.get(provider))
-            result.append({
-                "name": name,
-                "provider": provider,
-                "base_url": meta.get("base_url", ""),
-                "api_model": meta.get("model", ""),
-                "local": False,
-                "has_key": has_key,
-            })
+            result.append(
+                {
+                    "name": name,
+                    "provider": provider,
+                    "base_url": meta.get("base_url", ""),
+                    "api_model": meta.get("model", ""),
+                    "local": False,
+                    "has_key": has_key,
+                }
+            )
         # 追加 Ollama 本地模型（动态查询 /api/tags）
         from domain.config.model_registry import get_local_models
+
         result.extend(get_local_models())
         return result
 

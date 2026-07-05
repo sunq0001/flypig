@@ -10,7 +10,8 @@
 """
 
 from pathlib import Path
-from quart import Blueprint, request, jsonify
+
+from quart import Blueprint, jsonify, request
 
 files_bp = Blueprint("files", __name__)
 
@@ -34,20 +35,24 @@ async def tree():
                 continue
             try:
                 is_dir = entry.is_dir()
-                entries.append({
-                    "name": entry.name,
-                    "path": str(entry.resolve()),
-                    "type": "directory" if is_dir else "file",
-                })
+                entries.append(
+                    {
+                        "name": entry.name,
+                        "path": str(entry.resolve()),
+                        "type": "directory" if is_dir else "file",
+                    }
+                )
             except (PermissionError, OSError):
                 continue
     except PermissionError:
         return jsonify({"error": "无权限访问", "path": str(p)}), 403
 
-    return jsonify({
-        "path": str(p),
-        "entries": entries,
-    })
+    return jsonify(
+        {
+            "path": str(p),
+            "entries": entries,
+        }
+    )
 
 
 @files_bp.route("/api/file", methods=["GET"])
@@ -63,10 +68,12 @@ async def read_file():
 
     try:
         content = p.read_text(encoding="utf-8", errors="replace")
-        return jsonify({
-            "path": str(p),
-            "name": p.name,
-            "content": content,
-        })
+        return jsonify(
+            {
+                "path": str(p),
+                "name": p.name,
+                "content": content,
+            }
+        )
     except Exception as e:
         return jsonify({"error": str(e)}), 500

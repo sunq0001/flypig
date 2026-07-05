@@ -11,4 +11,5 @@ from flypig.shared.base import Entity
 
 class ChangeReview(Entity):
     """变更审查实体 — 每次代码修改的审查记录"""
+
     pass

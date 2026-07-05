@@ -14,14 +14,17 @@ from flypig.shared.base import AggregateRoot, ValueObject
 
 class SessionId(ValueObject):
     """会话 ID 值对象"""
+
     pass
 
 
 class SessionStatus(ValueObject):
     """会话状态值对象（active / archived / closed）"""
+
     pass
 
 
 class Session(AggregateRoot):
     """会话聚合根 — 管理消息、轮次、状态"""
+
     pass

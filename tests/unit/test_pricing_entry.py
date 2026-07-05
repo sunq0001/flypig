@@ -14,23 +14,23 @@ from flypig.domain import PricingEntry
 class TestPricingEntry:
     """定价值对象测试"""
 
-    def test_equals_by_value(self):
+    def test_equals_by_value(self) -> None:
         a = PricingEntry(input_price=1.0, output_price=2.0)
         b = PricingEntry(input_price=1.0, output_price=2.0)
         assert a == b
 
-    def test_not_equals_by_different_value(self):
+    def test_not_equals_by_different_value(self) -> None:
         a = PricingEntry(input_price=1.0, output_price=2.0)
         b = PricingEntry(input_price=2.0, output_price=2.0)
         assert a != b
 
-    def test_defaults_to_none(self):
+    def test_defaults_to_none(self) -> None:
         entry = PricingEntry()
         assert entry.input_price is None
         assert entry.output_price is None
         assert entry.input_cache_hit is None
 
-    def test_frozen(self):
+    def test_frozen(self) -> None:
         entry = PricingEntry(input_price=1.0, output_price=2.0)
         with pytest.raises(AttributeError):
             entry.input_price = 999.0

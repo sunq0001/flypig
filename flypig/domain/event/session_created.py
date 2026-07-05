@@ -12,4 +12,5 @@ from flypig.shared.base import DomainEvent
 
 class SessionCreated(DomainEvent):
     """会话已创建事件"""
+
     pass

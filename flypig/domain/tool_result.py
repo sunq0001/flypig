@@ -6,4 +6,5 @@
 
 层&依赖：domain 层
 """
+
 from flypig.domain.tool_call import ToolResult  # noqa: F401

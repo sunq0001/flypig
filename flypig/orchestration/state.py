@@ -15,21 +15,22 @@
 
 from __future__ import annotations
 
-from typing import Any, TypedDict
+from typing import TypedDict
 
 
 class AgentState(TypedDict):
     """LangGraph Agent 状态"""
-    messages: list[dict]                # 对话消息列表 [{"role": ..., "content": ...}, ...]
-    turn_id: int                        # 当前对话轮次
-    session_id: str                     # 会话 ID（关联 ConversationStore）
-    persona: str                        # developer/reviewer/tester/...
-    mode: str                           # explore / plan / execute
-    pending_approval: dict | None       # 待审批请求
-    change_review: dict | None          # 变更审查数据
-    rejected_changes: list | None       # 被用户驳回的变更
-    change_score: dict | None           # 变更评分结果
-    adversarial_suggestion: dict | None # 对抗建议卡片
-    test_results: str | None            # 测试结果
-    git_snapshot: str | None            # Git 快照
-    active_tasks: list | None           # 当前会话活跃任务列表
+
+    messages: list[dict]  # 对话消息列表 [{"role": ..., "content": ...}, ...]
+    turn_id: int  # 当前对话轮次
+    session_id: str  # 会话 ID（关联 ConversationStore）
+    persona: str  # developer/reviewer/tester/...
+    mode: str  # explore / plan / execute
+    pending_approval: dict | None  # 待审批请求
+    change_review: dict | None  # 变更审查数据
+    rejected_changes: list | None  # 被用户驳回的变更
+    change_score: dict | None  # 变更评分结果
+    adversarial_suggestion: dict | None  # 对抗建议卡片
+    test_results: str | None  # 测试结果
+    git_snapshot: str | None  # Git 快照
+    active_tasks: list | None  # 当前会话活跃任务列表

@@ -12,13 +12,18 @@ emits: update:modelValue
     <t-select
       class="modt-select"
       :model-value="modelValue"
-      @update:model-value="onSelect"
       placeholder="模型"
       size="small"
       :popup-props="{ overlayClassName: 'modt-select-popper' }"
+      @update:model-value="onSelect"
     >
       <template #prefix>
-        <Icon v-if="selectedIcon" class="selected-icon" :icon="selectedIcon" :style="{ color: selectedColor }" />
+        <Icon
+          v-if="selectedIcon"
+          class="selected-icon"
+          :icon="selectedIcon"
+          :style="{ color: selectedColor }"
+        />
       </template>
 
       <t-option
@@ -34,28 +39,23 @@ emits: update:modelValue
           :disabled="!priceMap[m.value]"
         >
           <template #content>
-            <table class="price-table">
-              <tbody>
-                <tr>
-                  <td class="pt-label">百万tokens输入（缓存未命中）</td>
-                  <td class="pt-value">{{ priceSymbol }} {{ priceMap[m.value]?.input?.toFixed(3) }}</td>
-                </tr>
-                <tr v-if="priceMap[m.value]?.input_cache_hit != null">
-                  <td class="pt-label">百万tokens输入（缓存命中）</td>
-                  <td class="pt-value">{{ priceSymbol }} {{ priceMap[m.value]?.input_cache_hit?.toFixed(4) }}</td>
-                </tr>
-                <tr>
-                  <td class="pt-label">百万tokens输出</td>
-                  <td class="pt-value">{{ priceSymbol }} {{ priceMap[m.value]?.output?.toFixed(3) }}</td>
-                </tr>
-              </tbody>
-            </table>
-            <div class="pt-date">更新于 {{ priceUpdateTime }}</div>
+            <PriceTooltip
+              :prices="priceMap[m.value]"
+              :symbol="priceSymbol"
+              :update-time="priceUpdateTime"
+            />
           </template>
           <span class="option-item">
-            <Icon class="option-icon" :icon="m.icon" :style="{ color: m.iconColor }" />
+            <Icon
+              class="option-icon"
+              :icon="m.icon"
+              :style="{ color: m.iconColor }"
+            />
             <span class="option-name">{{ m.name }}</span>
-            <span v-if="m.provider" class="option-provider">{{ m.provider }}</span>
+            <span
+              v-if="m.provider"
+              class="option-provider"
+            >{{ m.provider }}</span>
           </span>
         </t-tooltip>
       </t-option>
@@ -67,7 +67,11 @@ emits: update:modelValue
         class="local-entry"
       >
         <span class="option-item">
-          <Icon class="option-icon" icon="mdi:laptop" style="color:#888" />
+          <Icon
+            class="option-icon"
+            icon="mdi:laptop"
+            style="color:#888"
+          />
           <span class="option-name">💻 本地模型</span>
         </span>
       </t-option>
@@ -85,7 +89,10 @@ emits: update:modelValue
 import { ref, computed, onMounted } from 'vue'
 import { Icon } from '@iconify/vue'
 import { useProviderConfig } from '@/config/model-providers.js'
+import { getPricing } from '@/utils/api'
+import PriceTooltip from './PriceTooltip.vue'
 import LocalModelDialog from './LocalModelDialog.vue'
+import './model-select-popper.css'
 
 const { iconMap, colorMap, providerDisplayMap } = useProviderConfig()
 
@@ -105,8 +112,7 @@ onMounted(async () => {
   try {
     const lang = navigator.language || ''
     currency.value = lang.startsWith('zh') ? 'CNY' : 'USD'
-    const priceRes = await fetch(`/api/pricing?currency=${currency.value}`)
-    const priceData = await priceRes.json()
+    const priceData = await getPricing(currency.value)
     priceMap.value = priceData.prices || {}
     priceUpdateTime.value = priceData.update_time || ''
   } catch { /* */ }
@@ -214,139 +220,6 @@ const selectedColor = computed(() => selectedInfo.value.color)
   display: inline-flex;
   margin-right: 2px;
 }
+
 </style>
 
-<style>
-.modt-select-popper {
-  background: #252526 !important;
-  border: 1px solid #333 !important;
-  min-width: 260px !important;
-  --td-bg-color-container: #252526;
-  --td-bg-color-container-hover: #3c3c3c;
-  --td-bg-color-container-active: #2a2a2a;
-  --td-bg-color-specialcomponent: #252526;
-  --td-brand-color: #409eff;
-  --td-brand-color-light: rgba(64, 158, 255, 0.12);
-  --td-brand-color-light-hover: rgba(64, 158, 255, 0.2);
-  --td-text-color-primary: #e5e5e5;
-  --td-text-color-secondary: #999;
-  --td-component-stroke: #444;
-  --td-border-level-1-color: #444;
-  --td-font-gray-1: #eee;
-  --td-font-gray-2: #bbb;
-  --td-success-color: #52c41a;
-  --td-warning-color: #faad14;
-  --td-error-color: #ff4d4f;
-}
-.modt-select-popper .t-popup__content,
-.modt-select-popper .t-select-dropdown-inner,
-.modt-select-popper .t-select-option-list,
-.modt-select-popper .t-select-dropdown,
-.modt-select-popper .t-select__list,
-.modt-select-popper ul {
-  background: #252526 !important;
-}
-.modt-select-popper .t-select-dropdown__item {
-  padding: 2px 8px;
-  height: auto;
-  background: transparent !important;
-  color: #ccc;
-}
-.modt-select-popper .t-select-dropdown__item:hover,
-.modt-select-popper .t-select-dropdown__item.hover {
-  background: #3c3c3c !important;
-}
-.modt-select-popper .t-select-dropdown__item,
-.modt-select-popper .t-select-option {
-  color: #e5e5e5 !important;
-}
-.modt-select-popper .t-select-dropdown__item.is-selected,
-.modt-select-popper .t-option.t-is-selected,
-.modt-select-popper .t-select-option.t-is-selected {
-  color: #409eff !important;
-  background: #2a2a2a !important;
-}
-.modt-select-popper .t-popup__arrow::before {
-  background: #252526 !important;
-  border-color: #333 !important;
-}
-.modt-select-popper,
-.modt-select-popper .t-popup__content {
-  background: #252526 !important;
-}
-.option-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  width: 100%;
-}
-.option-icon {
-  font-size: 16px;
-  flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.option-name {
-  color: #eee;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.option-provider {
-  color: #666;
-  font-size: 10px;
-  margin-left: auto;
-  flex-shrink: 0;
-  padding-left: 8px;
-}
-.price-tooltip {
-  background: #2a2a2a !important;
-  border: 1px solid #444 !important;
-  padding: 6px 8px !important;
-}
-.price-tooltip .t-popup__arrow::before {
-  background: #2a2a2a !important;
-  border-color: #444 !important;
-}
-.price-table {
-  border-collapse: collapse;
-  white-space: nowrap;
-}
-.price-table td {
-  padding: 1px 4px;
-  font-size: 11px;
-  line-height: 1.6;
-}
-.pt-label {
-  color: #999;
-  padding-right: 12px;
-}
-.pt-value {
-  color: #eee;
-  font-weight: 600;
-  font-family: monospace;
-  text-align: right;
-}
-.pt-date {
-  margin-top: 3px;
-  padding-top: 3px;
-  border-top: 1px solid #3a3a3a;
-  color: #666;
-  font-size: 10px;
-  text-align: right;
-}
-/* 本地模型入口分隔样式 */
-.local-entry {
-  border-top: 1px solid #333;
-  margin-top: 2px;
-}
-.local-entry .option-name {
-  color: #888;
-  font-size: 11px;
-}
-</style>

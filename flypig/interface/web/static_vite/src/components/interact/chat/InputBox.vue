@@ -18,11 +18,22 @@ InputBox：输入框父容器
       />
 
       <div class="input-footer">
-        <ModeSelect v-model="currentMode" @update:model-value="emit('update:mode', $event)" />
+        <ModeSelect
+          v-model="currentMode"
+          @update:model-value="emit('update:mode', $event)"
+        />
         <span class="sep">|</span>
-        <ModelSelect v-model="currentModel" :options="models" @update:model-value="emit('update:model', $event)" />
+        <ModelSelect
+          v-model="currentModel"
+          :options="models"
+          @update:model-value="emit('update:model', $event)"
+        />
         <span class="spacer" />
-        <SendButton :disabled="disabled" :has-text="!!text.trim()" @click="handleSend" />
+        <SendButton
+          :disabled="disabled"
+          :has-text="!!text.trim()"
+          @click="handleSend"
+        />
       </div>
     </div>
   </div>

@@ -8,35 +8,52 @@ MainLayout：三栏布局 — TDesign Layout 组件
   <t-layout style="height:100vh">
     <!-- 主行：SideBar + panels + 底栏 -->
     <t-layout style="flex:1;min-height:0;overflow:hidden">
-      <t-aside width="48px" style="display:flex;flex-direction:column;background:#2c2c2c;overflow:hidden">
-        <SideBar :activeView="activeView" @switch="onSwitch" />
+      <t-aside
+        width="48px"
+        style="display:flex;flex-direction:column;background:#2c2c2c;overflow:hidden"
+      >
+        <SideBar
+          :active-view="activeView"
+          @switch="onSwitch"
+        />
       </t-aside>
-      <div ref="bodyRef" class="layout-body">
-        <template v-for="(p, i) in panels" :key="p.id">
-          <div class="panel" :style="panelStyle(p)" :data-panel-id="p.id">
-            <div class="pcontent">
-              <ResourceBar v-if="p.id === 'resource'" :activeView="activeView"
-                @switch-workspace="onSwitchWorkspace" @open-file="onOpenFile" />
-              <ViewerBar v-else-if="p.id === 'viewer'" :ref="el => viewerInstance = el" />
-              <InteractBar v-else-if="p.id === 'interact'" :model="defaultModel" />
-            </div>
-          </div>
-          <ResizeHandleLR v-if="i < panels.length - 1" :panels="panels" :idx="i" />
-        </template>
+      <div
+        ref="bodyRef"
+        class="layout-body"
+      >
+        <LayoutPanels
+          :panels="panels"
+          :active-view="activeView"
+          :default-model="defaultModel"
+          @switch-workspace="onSwitchWorkspace"
+          @open-file="onOpenFile"
+        />
       </div>
     </t-layout>
 
-    <t-footer height="24px" style="padding:0!important;background:#007acc">
+    <t-footer
+      height="24px"
+      style="padding:0!important;background:#007acc"
+    >
       <StatusBar :workspace="workspace" />
     </t-footer>
   </t-layout>
 
   <!-- 切换工作区弹窗（div 弹窗，修复 TDesign Dialog Teleport bug） -->
-  <div v-if="showWorkspacePicker" class="dlg-overlay" @click.self="showWorkspacePicker = false">
+  <div
+    v-if="showWorkspacePicker"
+    class="dlg-overlay"
+    @click.self="showWorkspacePicker = false"
+  >
     <div class="dlg-box">
       <div class="dlg-header">
         <span>切换工作区</span>
-        <button class="dlg-close" @click="showWorkspacePicker = false">✕</button>
+        <button
+          class="dlg-close"
+          @click="showWorkspacePicker = false"
+        >
+          ✕
+        </button>
       </div>
       <div class="dlg-body">
         <WorkspaceStep @selected="onWorkspaceChanged" />
@@ -49,14 +66,11 @@ MainLayout：三栏布局 — TDesign Layout 组件
 import { ref, reactive, onMounted, nextTick } from 'vue'
 import Sortable from 'sortablejs'
 import SideBar from './SideBar.vue'
-import ResourceBar from './ResourceBar.vue'
-import ViewerBar from './ViewerBar.vue'
-import InteractBar from './InteractBar.vue'
 import StatusBar from './StatusBar.vue'
-import ResizeHandleLR from './ResizeHandleLR.vue'
+import LayoutPanels from './LayoutPanels.vue'
 import WorkspaceStep from '../init/WorkspaceStep.vue'
 
-defineProps({ workspace: String, defaultModel: String })
+defineProps({ workspace: { type: String, default: '' }, defaultModel: { type: String, default: '' } })
 const emit = defineEmits(['workspaceChanged'])
 const activeView = ref('file')
 const showWorkspacePicker = ref(false)
@@ -66,9 +80,6 @@ function onSwitchWorkspace() {
   showWorkspacePicker.value = true
 }
 
-let viewerInstance = null
-function onOpenFile(path) { viewerInstance?.openFile(path) }
-
 function onWorkspaceChanged() {
   showWorkspacePicker.value = false
   emit('workspaceChanged')
@@ -76,15 +87,10 @@ function onWorkspaceChanged() {
 
 const bodyRef = ref(null)
 const panels = reactive([
-  { id: 'resource', w: 260 },
+  { id: 'resource', w: 260 },  // 侧栏宽度 px
   { id: 'viewer', w: 0 },
   { id: 'interact', w: 360 },
 ])
-
-function panelStyle(p) {
-  if (p.id === 'viewer' && p.w <= 0) return { flex: '1', minWidth: 80 }
-  return { width: Math.max(80, p.w) + 'px', flexShrink: 0 }
-}
 
 onMounted(() => {
   const el = bodyRef.value
@@ -106,13 +112,15 @@ onMounted(() => {
 <style scoped>
 .t-layout { background: #1e1e1e; }
 .layout-body { flex: 1; min-height: 0; min-width: 0; display: flex; overflow: hidden; align-items: stretch; }
-.panel { display: flex; min-width: 0; }
-.panel.sortable-ghost { opacity: 0.3; }
-.panel.sortable-chosen { box-shadow: 0 0 0 2px #409eff inset; }
-.pcontent { flex: 1; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 </style>
 
 <style>
+/* panel 容器 — 全局 CSS 穿透子组件 LayoutPanels */
+.panel { display: flex; flex-direction: column; min-width: 0; }
+.pcontent { flex: 1; min-width: 0; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.panel.sortable-ghost { opacity: 0.3; }
+.panel.sortable-chosen { box-shadow: 0 0 0 2px #409eff inset; }
+
 /* TDesign t-layout__content 必须溢出隐藏，否则内部 .layout-body 撑破容器 */
 .t-layout__content {
   min-height: 0 !important;

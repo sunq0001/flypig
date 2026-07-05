@@ -3,52 +3,76 @@
 通过 AST 解析，将大文件的函数/方法/类体替换为占位符，
 保留签名、导入、常量等关键结构信息，减少 Token 消耗。
 """
+
 from pathlib import Path
-from typing import Dict, List, Set, Optional
+from typing import Dict, List, Set
 
 import tree_sitter as ts
 
 
 # 文件扩展名 -> tree-sitter 语言名
 EXTENSION_MAP: Dict[str, str] = {
-    '.py': 'python',
-    '.js': 'javascript', '.jsx': 'javascript', '.mjs': 'javascript', '.cjs': 'javascript',
-    '.ts': 'typescript', '.tsx': 'typescript', '.mts': 'typescript', '.cts': 'typescript',
-    '.go': 'go',
-    '.rs': 'rust',
-    '.java': 'java',
-    '.cpp': 'cpp', '.hpp': 'cpp', '.cc': 'cpp', '.cxx': 'cpp',
-    '.c': 'c', '.h': 'c',
-    '.rb': 'ruby',
-    '.html': 'html', '.htm': 'html',
-    '.css': 'css',
-    '.json': 'json',
-    '.yaml': 'yaml', '.yml': 'yaml',
-    '.md': 'markdown', '.mdx': 'markdown',
+    ".py": "python",
+    ".js": "javascript",
+    ".jsx": "javascript",
+    ".mjs": "javascript",
+    ".cjs": "javascript",
+    ".ts": "typescript",
+    ".tsx": "typescript",
+    ".mts": "typescript",
+    ".cts": "typescript",
+    ".go": "go",
+    ".rs": "rust",
+    ".java": "java",
+    ".cpp": "cpp",
+    ".hpp": "cpp",
+    ".cc": "cpp",
+    ".cxx": "cpp",
+    ".c": "c",
+    ".h": "c",
+    ".rb": "ruby",
+    ".html": "html",
+    ".htm": "html",
+    ".css": "css",
+    ".json": "json",
+    ".yaml": "yaml",
+    ".yml": "yaml",
+    ".md": "markdown",
+    ".mdx": "markdown",
 }
 
 # 各语言中"函数/方法定义"节点的类型 — 只有这类节点的 body 才被压缩
 FUNCTION_DEF_TYPES: Dict[str, Set[str]] = {
-    'python': {'function_definition', 'lambda'},
-    'javascript': {'function_declaration', 'method_definition', 'arrow_function', 'generator_function_declaration'},
-    'typescript': {'function_declaration', 'method_definition', 'arrow_function', 'generator_function_declaration'},
-    'go': {'function_declaration', 'method_declaration', 'func_literal'},
-    'rust': {'function_item', 'closure_expression'},
-    'java': {'method_declaration', 'lambda_expression'},
-    'cpp': {'function_definition', 'lambda_expression'},
-    'c': {'function_definition'},
-    'ruby': {'method'},
+    "python": {"function_definition", "lambda"},
+    "javascript": {
+        "function_declaration",
+        "method_definition",
+        "arrow_function",
+        "generator_function_declaration",
+    },
+    "typescript": {
+        "function_declaration",
+        "method_definition",
+        "arrow_function",
+        "generator_function_declaration",
+    },
+    "go": {"function_declaration", "method_declaration", "func_literal"},
+    "rust": {"function_item", "closure_expression"},
+    "java": {"method_declaration", "lambda_expression"},
+    "cpp": {"function_definition", "lambda_expression"},
+    "c": {"function_definition"},
+    "ruby": {"method"},
 }
 
 # 各语言中表示"代码体"的 AST 节点类型
 BODY_NODE_TYPES: Set[str] = {
-    'block',           # Python, Go, Ruby, C, C++
-    'statement_block',  # JavaScript, TypeScript
-    'class_body',       # JavaScript, TypeScript, Java
-    'body',             # some grammars
-    'declaration_list',  # Rust (impl/trait items), Go
-    'module_body',      # some grammars
-    'object',           # Go type struct body
+    "block",  # Python, Go, Ruby, C, C++
+    "statement_block",  # JavaScript, TypeScript
+    "class_body",  # JavaScript, TypeScript, Java
+    "body",  # some grammars
+    "declaration_list",  # Rust (impl/trait items), Go
+    "module_body",  # some grammars
+    "object",  # Go type struct body
 }
 
 # 触发压缩的阈值（函数/类体超过多少行则压缩）
@@ -72,7 +96,8 @@ class TreeSitterCompressor:
 
         try:
             import importlib
-            module = importlib.import_module(f'tree_sitter_{lang_name}')
+
+            module = importlib.import_module(f"tree_sitter_{lang_name}")
             capsule = module.language()
             language = ts.Language(capsule)
             parser = ts.Parser(language)
@@ -83,7 +108,9 @@ class TreeSitterCompressor:
         except Exception:
             return None
 
-    def compress(self, content: str, file_path: str = "", max_chars: int = 50000) -> str:
+    def compress(
+        self, content: str, file_path: str = "", max_chars: int = 50000
+    ) -> str:
         """压缩代码内容
 
         Args:
@@ -107,8 +134,10 @@ class TreeSitterCompressor:
             return content
 
         try:
-            tree = parser.parse(bytes(content, 'utf-8'))
-            body_lines = self._find_large_bodies(tree.root_node, lang_name, BODY_LINE_THRESHOLD)
+            tree = parser.parse(bytes(content, "utf-8"))
+            body_lines = self._find_large_bodies(
+                tree.root_node, lang_name, BODY_LINE_THRESHOLD
+            )
 
             if not body_lines:
                 return content
@@ -123,7 +152,9 @@ class TreeSitterCompressor:
         except Exception:
             return content
 
-    def _find_large_bodies(self, node, lang_name: str, threshold: int, parent_is_func: bool = False) -> Set[int]:
+    def _find_large_bodies(
+        self, node, lang_name: str, threshold: int, parent_is_func: bool = False
+    ) -> Set[int]:
         """递归查找大函数/方法体内的大段代码，返回需要移除的行号集合
 
         Args:
@@ -149,15 +180,15 @@ class TreeSitterCompressor:
                     lines.update(range(child.start_point[0], child.end_point[0] + 1))
 
             # 递归：如果当前 child 是函数定义，向下传递 parent_is_func=True
-            lines.update(self._find_large_bodies(
-                child, lang_name, threshold, child_is_func
-            ))
+            lines.update(
+                self._find_large_bodies(child, lang_name, threshold, child_is_func)
+            )
 
         return lines
 
     def _collapse_lines(self, content: str, body_lines: Set[int]) -> str:
         """根据要移除的行号构建压缩后的内容"""
-        lines = content.split('\n')
+        lines = content.split("\n")
         result: List[str] = []
         i = 0
 
@@ -175,4 +206,4 @@ class TreeSitterCompressor:
                 result.append(lines[i])
                 i += 1
 
-        return '\n'.join(result)
+        return "\n".join(result)

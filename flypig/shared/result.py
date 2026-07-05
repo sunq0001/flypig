@@ -8,7 +8,7 @@
 """
 
 from dataclasses import dataclass
-from typing import Generic, Optional, TypeVar
+from typing import Generic, TypeVar
 
 T = TypeVar("T")
 E = TypeVar("E")
@@ -30,8 +30,9 @@ class Result(Generic[T, E]):
         else:
             print(result.error)
     """
-    _value: Optional[T] = None
-    _error: Optional[E] = None
+
+    _value: T | None = None
+    _error: E | None = None
 
     @property
     def is_ok(self) -> bool:
@@ -42,7 +43,7 @@ class Result(Generic[T, E]):
         return self._error is not None
 
     @property
-    def error(self) -> Optional[E]:
+    def error(self) -> E | None:
         return self._error
 
     def unwrap(self) -> T:

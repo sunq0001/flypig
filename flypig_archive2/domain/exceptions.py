@@ -15,30 +15,35 @@
 
 class FlyPigException(Exception):
     """所有 FlyPig 异常的基类"""
+
     pass
 
 
 class ConfigurationError(FlyPigException):
     """配置错误：config.yaml 缺失字段 / API Key 未配置 / 模型名不存在"""
+
     pass
 
 
 class ModelAPIError(FlyPigException):
     """模型 API 错误：认证失败 / 限流 / 服务不可用 / 上下文超长"""
+
     pass
 
 
 class ToolExecutionError(FlyPigException):
     """工具执行错误：文件不存在 / 权限不足 / 执行超时"""
+
     pass
 
 
 class SandboxError(FlyPigException):
     """沙箱错误：Docker 未运行 / 镜像拉取失败 / 沙箱超时"""
+
     pass
 
 
 class CircuitBreakerError(FlyPigException):
     """熔断错误：连续失败超过阈值，服务暂时熔断"""
-    pass
 
+    pass

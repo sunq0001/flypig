@@ -31,8 +31,8 @@ from flypig.domain.interfaces.ivector_store import IVectorStore
 from flypig.domain.interfaces.repository import Repository
 
 __all__ = [
-    "IAgent",
     "IASTParser",
+    "IAgent",
     "ICache",
     "IContextPipeline",
     "IConversationStore",

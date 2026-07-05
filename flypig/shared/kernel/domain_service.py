@@ -25,4 +25,5 @@ class DomainService(ABC):
         - 所有入参通过方法参数传递
         - 只依赖 Repository 接口和领域对象，不依赖基础设施
     """
+
     pass

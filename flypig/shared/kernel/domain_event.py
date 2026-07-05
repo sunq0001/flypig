@@ -11,8 +11,7 @@
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 from uuid import uuid4
 
 
@@ -25,6 +24,7 @@ class DomainEvent:
         occurred_at: 事件发生时间（UTC）
         aggregate_id: 所属聚合根 ID（由 AggregateRoot.record_event 自动填充）
     """
+
     event_id: str = field(default_factory=lambda: str(uuid4()))
-    occurred_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     aggregate_id: str = ""

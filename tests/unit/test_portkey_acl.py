@@ -9,13 +9,15 @@
 
 from flypig.acl.pricing import portkey_to_pricing_entry
 
+MODEL_NAME = "deepseek-chat"
+
 
 class TestPortkeyACL:
     """Portkey 定价格式转换测试"""
 
-    def test_normal_conversion(self):
+    def test_normal_conversion(self) -> None:
         raw = {
-            "deepseek-chat": {
+            MODEL_NAME: {
                 "pricing_config": {
                     "pay_as_you_go": {
                         "request_token": {"price": 0.027},
@@ -25,13 +27,13 @@ class TestPortkeyACL:
                 }
             }
         }
-        result = portkey_to_pricing_entry(raw, "deepseek-chat")
+        result = portkey_to_pricing_entry(raw, MODEL_NAME)
         assert result is not None
         assert result.input_price == 270.0
         assert result.output_price == 1100.0
         assert result.input_cache_hit == 10.0
 
-    def test_fuzzy_match(self):
+    def test_fuzzy_match(self) -> None:
         raw = {
             "azure/deepseek-chat": {
                 "pricing_config": {
@@ -42,15 +44,15 @@ class TestPortkeyACL:
                 }
             }
         }
-        result = portkey_to_pricing_entry(raw, "deepseek-chat")
+        result = portkey_to_pricing_entry(raw, MODEL_NAME)
         assert result is not None
         assert result.input_price == 300.0
 
-    def test_missing_model_returns_none(self):
+    def test_missing_model_returns_none(self) -> None:
         result = portkey_to_pricing_entry({}, "nonexistent-model")
         assert result is None
 
-    def test_missing_pricing_returns_none(self):
+    def test_missing_pricing_returns_none(self) -> None:
         raw = {"some-model": {"pricing_config": {}}}
         result = portkey_to_pricing_entry(raw, "some-model")
         assert result is None

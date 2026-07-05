@@ -1,11 +1,10 @@
 """配置加载"""
+
 import os
 import sys
 import yaml
 from pathlib import Path
 from typing import List, Optional
-
-from .model_registry import resolve as resolve_model_meta
 
 
 class Config:
@@ -25,8 +24,13 @@ class Config:
 
     def _resolve_env_vars(self):
         """解析环境变量 ${VAR_NAME}"""
+
         def resolve(value):
-            if isinstance(value, str) and value.startswith("${") and value.endswith("}"):
+            if (
+                isinstance(value, str)
+                and value.startswith("${")
+                and value.endswith("}")
+            ):
                 env_var = value[2:-1]
                 return os.environ.get(env_var, "")
             elif isinstance(value, dict):
@@ -43,15 +47,18 @@ class Config:
     def models(self) -> List[dict]:
         """返回所有已注册模型的完整配置（从 model_registry 读取，同步 config 中的 Key）"""
         from .model_registry import REGISTRY
+
         result = []
         for name, meta in REGISTRY.items():
-            result.append({
-                "name": name,
-                "provider": meta["provider"],
-                "base_url": meta["base_url"],
-                "api_key": self._get_provider_key(meta["provider"]),
-                "model": meta.get("model", name),
-            })
+            result.append(
+                {
+                    "name": name,
+                    "provider": meta["provider"],
+                    "base_url": meta["base_url"],
+                    "api_key": self._get_provider_key(meta["provider"]),
+                    "model": meta.get("model", name),
+                }
+            )
         return result
 
     @property
@@ -125,7 +132,7 @@ class Config:
 
     def prompt_workspace(self, task_mode: bool = False):
         """交互式工作区管理
-        
+
         行为：
         - headless 模式跳过
         - 每次显示候选菜单供选择
@@ -136,15 +143,28 @@ class Config:
             return
 
         cwd = Path(os.getcwd())
-        default_name = self.data.get("agent", {}).get("workspace", cwd.name or "workspace")
+        default_name = self.data.get("agent", {}).get(
+            "workspace", cwd.name or "workspace"
+        )
 
         # ── 收集候选工作区目录（排除代码/系统目录） ──
-        _EXCLUDE = {"flypig", "docs", ".git", ".vscode", "__pycache__",
-                     ".venv", "node_modules", ".codebuddy"}
-        candidates = sorted([
-            d.name for d in cwd.iterdir()
-            if d.is_dir() and not d.name.startswith(".") and d.name not in _EXCLUDE
-        ])
+        _EXCLUDE = {
+            "flypig",
+            "docs",
+            ".git",
+            ".vscode",
+            "__pycache__",
+            ".venv",
+            "node_modules",
+            ".codebuddy",
+        }
+        candidates = sorted(
+            [
+                d.name
+                for d in cwd.iterdir()
+                if d.is_dir() and not d.name.startswith(".") and d.name not in _EXCLUDE
+            ]
+        )
         if not candidates:
             candidates = [default_name]
 
@@ -208,6 +228,7 @@ class Config:
             action = input("  选择 (r/o/n): ").strip().lower()
             if action == "o":
                 import shutil
+
                 shutil.rmtree(ws)
                 ws.mkdir(parents=True, exist_ok=True)
             elif action == "n":

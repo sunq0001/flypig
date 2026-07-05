@@ -3,23 +3,57 @@ EditorPane：查看器面板 — 根据文件类型路由到对应渲染器
 -->
 
 <template>
-  <div class="editor-pane" v-if="filePath">
-    <BreadcrumbsBar :file-path="filePath" :root-path="workspace" />
-    <MonacoEditor v-if="isCodeFile" :value="content" :language="filePath" />
-    <div v-else-if="isImage" class="image-viewer">
-      <img :src="imageDataUrl || imageSrc" :alt="filePath" @load="onImageLoad" @error="onImageError" />
+  <div
+    v-if="filePath"
+    class="editor-pane"
+  >
+    <BreadcrumbsBar
+      :file-path="filePath"
+      :root-path="workspace"
+    />
+    <MonacoEditor
+      v-if="isCodeFile"
+      :value="content"
+      :language="filePath"
+    />
+    <div
+      v-else-if="isImage"
+      class="image-viewer"
+    >
+      <img
+        :src="imageDataUrl || imageSrc"
+        :alt="filePath"
+        @load="onImageLoad"
+        @error="onImageError"
+      >
     </div>
-    <div v-else-if="isSupportedDoc" class="pane-placeholder">文档预览（待实现）</div>
-    <div v-else class="pane-unsupported">暂不支持预览此文件类型</div>
+    <div
+      v-else-if="isSupportedDoc"
+      class="pane-placeholder"
+    >
+      文档预览（待实现）
+    </div>
+    <div
+      v-else
+      class="pane-unsupported"
+    >
+      暂不支持预览此文件类型
+    </div>
   </div>
-  <div v-else class="pane-placeholder">选择文件以查看</div>
+  <div
+    v-else
+    class="pane-placeholder"
+  >
+    选择文件以查看
+  </div>
 </template>
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { useConfigStore } from '../../stores/config'
-import { readFile } from '../../utils/api'
+import { useConfigStore } from '@/stores/config'
+import { readFile, getFileUrl } from '@/utils/api'
 import MonacoEditor from './MonacoEditor.vue'
 import BreadcrumbsBar from './BreadcrumbsBar.vue'
+import { CODE_EXTENSIONS, IMAGE_EXTENSIONS, DOC_EXTENSIONS } from '@/config/file-extensions'
 
 const props = defineProps({ filePath: { type: String, default: '' } })
 
@@ -30,25 +64,15 @@ const content = ref('')
 const loading = ref(false)
 const imageDataUrl = ref('')
 
-const codeExtensions = [
-  'js','ts','jsx','tsx','vue','py','json','md','html','css','scss','less',
-  'yml','yaml','toml','xml','svg','sh','bash','go','rs','java','kt',
-  'c','cpp','h','hpp','sql','rb','php','r','txt','gitignore','ini','cfg',
-  'env','bat','ps1','conf','log','yaml','dockerfile',
-]
-
-const docExtensions = ['docx','pdf','xlsx','pptx']
-const imageExtensions = ['png','jpg','jpeg','gif','svg','webp','ico','bmp']
-
 const ext = computed(() => props.filePath.split('.').pop()?.toLowerCase() || '')
-const isCodeFile = computed(() => codeExtensions.includes(ext.value))
-const isImage = computed(() => imageExtensions.includes(ext.value))
-const isSupportedDoc = computed(() => docExtensions.includes(ext.value))
+const isCodeFile = computed(() => CODE_EXTENSIONS.includes(ext.value))
+const isImage = computed(() => IMAGE_EXTENSIONS.includes(ext.value))
+const isSupportedDoc = computed(() => DOC_EXTENSIONS.includes(ext.value))
 const isElectron = typeof window !== 'undefined' && window.electronAPI
 
 const imageSrc = computed(() => {
   if (!props.filePath || !isImage.value || isElectron) return ''
-  return `/api/file?path=${encodeURIComponent(props.filePath)}`
+  return getFileUrl(props.filePath)
 })
 
 async function loadFile(path) {

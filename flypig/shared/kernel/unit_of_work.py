@@ -10,7 +10,6 @@ UnitOfWork 定义了事务边界：全部成功则 commit，任一失败则 roll
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
 
 
 class UnitOfWork(ABC):
@@ -36,9 +35,9 @@ class UnitOfWork(ABC):
     @abstractmethod
     async def __aexit__(
         self,
-        exc_type: Optional[type],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[object],
+        exc_type: type | None,
+        exc_val: BaseException | None,
+        exc_tb: object | None,
     ) -> None:
         """退出时：无异常 → commit，有异常 → rollback"""
         ...

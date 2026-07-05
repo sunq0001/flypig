@@ -12,27 +12,29 @@ const contentCache = shallowRef({})  // path → string
 const loading = ref(false)
 
 async function fetchDir(path) {
-  const res = await fetch('/api/tree', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path }),
-  })
-  if (!res.ok) return []
-  const json = await res.json()
-  return (json.entries || []).map(e => ({ ...e, children: null }))
+  try {
+    const res = await fetch('/api/tree', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path }),
+    })
+    if (!res.ok) return []
+    const json = await res.json()
+    return (json.entries || []).map(e => ({ ...e, children: null }))
+  } catch { return [] }
 }
 
 async function loadDirRecursive(path) {
-  const entries = await fetchDir(path)
-  // 先缓存当前目录
-  treeCache.value[path] = { entries, loaded: true }
-  // 递归加载所有子目录
-  for (const e of entries) {
-    if (e.type === 'directory') {
-      await loadDirRecursive(e.path)
+  try {
+    const entries = await fetchDir(path)
+    treeCache.value[path] = { entries, loaded: true }
+    for (const e of entries) {
+      if (e.type === 'directory') {
+        await loadDirRecursive(e.path)
+      }
     }
-  }
-  return entries
+    return entries
+  } catch { return [] }
 }
 
 export function useFileCache() {
@@ -41,8 +43,8 @@ export function useFileCache() {
     loading.value = true
     try {
       await loadDirRecursive(rootPath)
-    } catch (e) {
-      console.error('预加载文件树失败:', e)
+    } catch {
+      // 预加载失败不影响后续操作
     } finally {
       loading.value = false
     }
@@ -54,11 +56,13 @@ export function useFileCache() {
 
   async function getFileContent(path) {
     if (contentCache.value[path]) return contentCache.value[path]
-    const res = await fetch(`/api/file?path=${encodeURIComponent(path)}`)
-    if (!res.ok) return '无法读取文件'
-    const data = await res.json()
-    contentCache.value[path] = data.content || ''
-    return contentCache.value[path]
+    try {
+      const res = await fetch(`/api/file?path=${encodeURIComponent(path)}`)
+      if (!res.ok) return '无法读取文件'
+      const data = await res.json()
+      contentCache.value[path] = data.content || ''
+      return contentCache.value[path]
+    } catch { return '读取失败' }
   }
 
   function isLoaded(path) {

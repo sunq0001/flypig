@@ -7,7 +7,10 @@ FileTree：文件树（自定义实现，替代TDesign t-tree的渲染问题）
 
 <template>
   <div class="file-tree">
-    <div class="tree-header" @click="$emit('switch-workspace')">
+    <div
+      class="tree-header"
+      @click="$emit('switch-workspace')"
+    >
       <span class="tree-root-label">{{ rootName }}</span>
     </div>
     <div class="tree-body">
@@ -26,9 +29,10 @@ FileTree：文件树（自定义实现，替代TDesign t-tree的渲染问题）
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import TreeNode from './TreeNode.vue'
+import { readDir } from '@/utils/api'
 
 const props = defineProps({ rootPath: { type: String, default: '' } })
-const emit = defineEmits(['open-file', 'switch-workspace'])
+defineEmits(['open-file', 'switch-workspace', 'refresh'])
 
 const treeData = ref([])
 
@@ -40,14 +44,10 @@ const rootName = computed(() => {
 
 async function loadRoot() {
   if (!props.rootPath) return
-  const res = await fetch('/api/tree', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: props.rootPath }),
-  })
-  if (res.ok) {
-    const json = await res.json()
-    treeData.value = (json.entries || []).map(e => ({ ...e, children: [], loaded: false }))
+  try {
+    treeData.value = await readDir(props.rootPath)
+  } catch {
+    treeData.value = []
   }
 }
 

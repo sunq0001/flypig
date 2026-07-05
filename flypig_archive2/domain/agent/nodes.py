@@ -47,12 +47,14 @@ def chat_node(model: IModel) -> callable:
             }
         except ModelAPIError:
             return {
-                "messages": messages + [{"role": "assistant", "content": "模型服务暂不可用，请稍后重试"}],
+                "messages": messages
+                + [{"role": "assistant", "content": "模型服务暂不可用，请稍后重试"}],
                 "error": "model_api_error",
             }
         except Exception as e:
             return {
-                "messages": messages + [{"role": "assistant", "content": f"处理出错: {str(e)[:200]}"}],
+                "messages": messages
+                + [{"role": "assistant", "content": f"处理出错: {str(e)[:200]}"}],
                 "error": str(e),
             }
 

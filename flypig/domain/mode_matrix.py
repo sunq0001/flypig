@@ -12,4 +12,5 @@ from flypig.shared.base import ValueObject
 
 class ModeMatrix(ValueObject):
     """模式×权限矩阵值对象"""
+
     pass

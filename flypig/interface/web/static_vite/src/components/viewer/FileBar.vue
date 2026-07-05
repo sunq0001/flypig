@@ -12,13 +12,18 @@ FileBar：文件标签栏（类似 VS Code 多标签）
   <div class="file-bar">
     <div class="tab-list">
       <div
-        v-for="f in files" :key="f.path"
-        class="tab" :class="{ active: f.path === activeFile }"
+        v-for="f in files"
+        :key="f.path"
+        class="tab"
+        :class="{ active: f.path === activeFile }"
         @click="$emit('selectFile', f.path)"
         @mousedown.middle.prevent="$emit('closeFile', f.path)"
       >
         <span class="tab-name">{{ f.name }}</span>
-        <span class="tab-close" @click.stop="$emit('closeFile', f.path)">×</span>
+        <span
+          class="tab-close"
+          @click.stop="$emit('closeFile', f.path)"
+        >×</span>
       </div>
     </div>
   </div>

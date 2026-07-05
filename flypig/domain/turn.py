@@ -11,4 +11,5 @@ from flypig.shared.base import Entity
 
 class Turn(Entity):
     """对话轮次实体 — 记录用户↔AI 的完整一轮交互"""
+
     pass

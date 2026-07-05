@@ -1,13 +1,12 @@
 """Agent 核心"""
-import json
-import os
-from typing import List, Dict, Optional
-from pathlib import Path
-from .model import ModelAdapter
-from .cost import CostTracker
-from .tools import ToolExecutor
-from .hooks import EventHook, CostPrintHook
 
+import json
+from pathlib import Path
+
+from .cost import CostTracker
+from .hooks import CostPrintHook, EventHook
+from .model import ModelAdapter
+from .tools import ToolExecutor
 
 # ── 自愈阈值 ──
 _SELF_HEAL_THRESHOLD = 3
@@ -22,18 +21,18 @@ class Agent:
         cost_tracker: CostTracker,
         tools: ToolExecutor,
         system_prompt: str = "",
-        hooks: Optional[List[EventHook]] = None
+        hooks: list[EventHook] | None = None,
     ):
         self.model = model
         self.cost_tracker = cost_tracker
         self.tools = tools
         self.hooks = hooks or [CostPrintHook(workspace_dir=str(self.tools.workspace_dir))]
-        self.messages: List[Dict] = []
+        self.messages: list[dict] = []
         self.verbose = False
 
         # ── 自愈相关 ──
-        self.error_counter: Dict[str, int] = {}  # tool_name → count
-        self.heal_history: List[str] = []  # 自愈记录
+        self.error_counter: dict[str, int] = {}  # tool_name → count
+        self.heal_history: list[str] = []  # 自愈记录
 
         # 系统提示
         default_system = """You are FlyPig, a coding assistant.
@@ -44,7 +43,7 @@ Do NOT stop after just finding files - read them and complete the task."""
             self.messages.append({"role": "system", "content": system_prompt})
         else:
             self.messages.append({"role": "system", "content": default_system})
-    
+
     def run(self, user_input: str, max_iterations: int = 10) -> str:
         """运行 agent"""
         self.messages.append({"role": "user", "content": user_input})
@@ -63,10 +62,7 @@ Do NOT stop after just finding files - read them and complete the task."""
                 h.on_llm_start(self.messages, iteration)
 
             # 调用模型
-            response = self.model.chat(
-                messages=self.messages,
-                tools=self.tools.get_tools_schema()
-            )
+            response = self.model.chat(messages=self.messages, tools=self.tools.get_tools_schema())
 
             # 记录成本（含缓存命中统计）
             usage = response["usage"]
@@ -85,7 +81,9 @@ Do NOT stop after just finding files - read them and complete the task."""
             self.messages.append({"role": "assistant", "content": assistant_content})
 
             if self.verbose:
-                print(f"[DEBUG] Response ({len(assistant_content)} chars): {assistant_content[:200]}...")
+                print(
+                    f"[DEBUG] Response ({len(assistant_content)} chars): {assistant_content[:200]}..."
+                )
                 print(f"[DEBUG] Tool calls: {len(response['tool_calls'])}")
 
             # 处理工具调用
@@ -108,7 +106,9 @@ Do NOT stop after just finding files - read them and complete the task."""
                     result = self._execute_tool_call(tool_call)
 
                     for h in self.hooks:
-                        h.on_tool_end(tool_call["name"], result.get("output", ""), result.get("arguments", {}))
+                        h.on_tool_end(
+                            tool_call["name"], result.get("output", ""), result.get("arguments", {})
+                        )
 
                     tool_results.append(result)
 
@@ -121,7 +121,7 @@ Do NOT stop after just finding files - read them and complete the task."""
 
                 # 检测重复调用模式（含参数，避免不同命令被误判）
                 current_calls = tuple(
-                    sorted((r['name'], str(r.get('arguments', {}))) for r in tool_results)
+                    sorted((r["name"], str(r.get("arguments", {}))) for r in tool_results)
                 )
                 if current_calls == last_tool_calls:
                     if self.verbose:
@@ -143,21 +143,22 @@ Do NOT stop after just finding files - read them and complete the task."""
             continue
 
         return "Max iterations reached. Task may be incomplete."
-    
+
     def _self_heal(self, broken_tool: str) -> str:
         """自愈流程：检测工具源码中的常见问题并修复"""
-        from .tools import ToolExecutor
 
         steps = []
 
         # 1. 清 __pycache__
-        import sys
         import subprocess
+        import sys
+
         flypig_dir = Path(__file__).parent
         pycache_count = 0
         for pyc in flypig_dir.rglob("__pycache__"):
             try:
                 import shutil
+
                 shutil.rmtree(str(pyc))
                 pycache_count += 1
             except Exception:
@@ -198,8 +199,11 @@ Do NOT stop after just finding files - read them and complete the task."""
         try:
             result = subprocess.run(
                 [sys.executable, "-c", "from flypig.tools import ToolExecutor; print('OK')"],
-                capture_output=True, text=True, timeout=5,
-                cwd=str(flypig_dir.parent)
+                capture_output=True,
+                text=True,
+                timeout=5,
+                cwd=str(flypig_dir.parent),
+                check=False,
             )
             if result.returncode == 0:
                 steps.append(f"verification passed: {result.stdout.strip()}")
@@ -214,15 +218,15 @@ Do NOT stop after just finding files - read them and complete the task."""
             print(f"[HEAL] {msg}")
         return msg
 
-    def _execute_tool_call(self, tool_call: Dict) -> Dict:
+    def _execute_tool_call(self, tool_call: dict) -> dict:
         """执行工具调用"""
         name = tool_call["name"]
         arguments = json.loads(tool_call["arguments"])
         arguments = json.loads(tool_call["arguments"])
-        
+
         if self.verbose:
             print(f"[DEBUG] Executing: {name}({json.dumps(arguments)[:100]}...)")
-        
+
         output = self.tools.execute(name, arguments)
 
         # ── 终端交互模式检测（注入不等待）──
@@ -241,22 +245,17 @@ Do NOT stop after just finding files - read them and complete the task."""
             if self.error_counter[name] >= _SELF_HEAL_THRESHOLD:
                 heal_msg = self._self_heal(name)
                 # 插入自愈消息到对话，让 LLM 知道发生了什么
-                self.messages.append({
-                    "role": "user",
-                    "content": f"<system_heal>\n{heal_msg}\n</system_heal>"
-                })
+                self.messages.append(
+                    {"role": "user", "content": f"<system_heal>\n{heal_msg}\n</system_heal>"}
+                )
                 self.error_counter[name] = 0
         else:
             # 成功执行 → 重置该工具的计数器
             self.error_counter.pop(name, None)
-        
-        return {
-            "name": name,
-            "arguments": arguments,
-            "output": output
-        }
 
-    def _format_tool_results(self, results: List[Dict], calls: List[Dict]) -> str:
+        return {"name": name, "arguments": arguments, "output": output}
+
+    def _format_tool_results(self, results: list[dict], calls: list[dict]) -> str:
         """格式化工具结果"""
         parts = []
         for i, result in enumerate(results):
@@ -269,7 +268,7 @@ Do NOT stop after just finding files - read them and complete the task."""
                 f"</tool_result>"
             )
         return "\n".join(parts)
-    
+
     @property
     def bash_history(self) -> list:
         """获取 bash 命令历史（非阻塞记录）"""
@@ -287,10 +286,12 @@ Do NOT stop after just finding files - read them and complete the task."""
     def get_session_summary(self) -> str:
         """获取会话汇总"""
         return self.cost_tracker.get_summary()
-    
+
     def reset(self):
         """重置会话"""
-        system_msg = self.messages[0] if self.messages and self.messages[0]["role"] == "system" else None
+        system_msg = (
+            self.messages[0] if self.messages and self.messages[0]["role"] == "system" else None
+        )
         self.messages = []
         if system_msg:
             self.messages.append(system_msg)

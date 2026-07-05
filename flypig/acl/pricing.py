@@ -7,26 +7,45 @@
 层&依赖：acl 层，依赖 domain.pricing_entry
 """
 
-from typing import Any, Optional
+from typing import Any
 
 from flypig.domain.pricing_entry import PricingEntry
 
-
+PRICE_KEY = "price"
 PRICE_PRECISION = 4  # 价格计算保留 4 位小数
 CENTS_TO_USD_FACTOR = 10000  # cents/token → USD/1M tokens 转换系数
 
 
-def _cents_per_token_to_usd_per_1m(cents: Optional[float]) -> Optional[float]:
+def _cents_per_token_to_usd_per_1m(cents: float | None) -> float | None:
     """Portkey 的 cents/token → USD/1M tokens"""
     if cents is None:
         return None
     return round(cents * CENTS_TO_USD_FACTOR, PRICE_PRECISION)
 
 
+def _match_model_config(
+    portkey_data: dict[str, Any],
+    api_model_name: str,
+) -> dict[str, Any] | None:
+    """在 Portkey 数据中精确或模糊匹配模型配置"""
+    model_config = portkey_data.get(api_model_name)
+    if not model_config:
+        for key in portkey_data:
+            if key == api_model_name or key.endswith("/" + api_model_name) or api_model_name in key:
+                model_config = portkey_data[key]
+                break
+    return model_config
+
+
+def _extract_price_cents(payg: dict[str, Any], token_type: str) -> float | None:
+    """从 pay_as_you_go 字典中提取指定 token 类型的价格（cents）"""
+    return payg.get(token_type, {}).get(PRICE_KEY)
+
+
 def portkey_to_pricing_entry(
     portkey_data: dict[str, Any],
     api_model_name: str,
-) -> Optional[PricingEntry]:
+) -> PricingEntry | None:
     """从 Portkey 厂商定价格式提取单个模型的定价，返回领域值对象
 
     Portkey JSON 结构：
@@ -49,20 +68,14 @@ def portkey_to_pricing_entry(
     Returns:
         PricingEntry 值对象，如果找不到对应数据则返回 None
     """
-    # 先精确匹配，再模糊匹配
-    model_config = portkey_data.get(api_model_name)
+    model_config = _match_model_config(portkey_data, api_model_name)
     if not model_config:
-        for key in portkey_data:
-            if key == api_model_name or key.endswith("/" + api_model_name) or api_model_name in key:
-                model_config = portkey_data[key]
-                break
-        if not model_config:
-            return None
+        return None
 
     payg = model_config.get("pricing_config", {}).get("pay_as_you_go", {})
-    input_cents = payg.get("request_token", {}).get("price")
-    output_cents = payg.get("response_token", {}).get("price")
-    cache_read_cents = payg.get("cache_read_input_token", {}).get("price")
+    input_cents = _extract_price_cents(payg, "request_token")
+    output_cents = _extract_price_cents(payg, "response_token")
+    cache_read_cents = _extract_price_cents(payg, "cache_read_input_token")
 
     input_price = _cents_per_token_to_usd_per_1m(input_cents)
     output_price = _cents_per_token_to_usd_per_1m(output_cents)

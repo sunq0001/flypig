@@ -1,0 +1,42 @@
+repos:
+  # ── Python: ruff 自动修复 ──
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.9.0
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  # ── Python: mypy 静态类型检查 ──
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.0
+    hooks:
+      - id: mypy
+        args: [--config-file=flypig/pyproject.toml, --no-strict-optional]
+        additional_dependencies: [pydantic>=2.0]
+        files: ^flypig/(?:domain|application|acl|shared)/.*\.py$
+        pass_filenames: true
+
+  # ── 前端: ESLint 检查 ──
+  - repo: local
+    hooks:
+      - id: eslint
+        name: ESLint 前端检查
+        entry: python scripts/precommit_eslint.py
+        language: python
+        files: ^flypig/interface/web/static_vite/src/.*\.(js|vue|ts)$
+        pass_filenames: false
+        always_run: true
+
+  # ── 前端: Vitest 测试 ──
+  - repo: local
+    hooks:
+      - id: vitest
+        name: Vitest 前端测试
+        entry: npx vitest run --reporter=verbose
+        language: node
+        files: ^flypig/interface/web/static_vite/src/.*\.(js|vue)$
+        pass_filenames: false
+        always_run: true
+        additional_dependencies:
+          - vitest

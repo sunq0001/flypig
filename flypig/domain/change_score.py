@@ -8,7 +8,8 @@
 细节见文档：docs/docs_refactor/adversarial-system.md → §ChangeScore
 """
 
-from enum import auto, Enum
+from enum import Enum, auto
+
 from flypig.shared.base import ValueObject
 
 
@@ -22,4 +23,5 @@ class ChangeLevel(Enum):
 
 class ChangeScore(ValueObject):
     """变更评分值对象 — 按风险等级决定审批策略"""
+
     pass

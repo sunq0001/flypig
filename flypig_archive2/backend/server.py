@@ -12,13 +12,11 @@
 热加载验证：改此文件后 uvicorn --reload 会自动重启服务器
 """
 
-from pathlib import Path
-
 from quart import Quart
 from quart_cors import cors
 
-from domain.config.config import Config
 from core.container import AppContainer
+from domain.config.config import Config
 
 
 def create_app(config: Config | None = None) -> Quart:
@@ -45,6 +43,7 @@ def create_app(config: Config | None = None) -> Quart:
 
     # 启动生命周期：定价缓存预热 + 每日刷新
     from infrastructure.usage.pricing import start_pricing_loop
+
     start_pricing_loop(app)
 
     return app

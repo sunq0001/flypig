@@ -39,18 +39,20 @@ class SSEQueue:
             data: 事件数据
         """
         queue = self._get_queue(session_id)
-        await queue.put({
-            "event": event,
-            "data": data,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        await queue.put(
+            {
+                "event": event,
+                "data": data,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
     async def pop(self, session_id: str, timeout: float = 30) -> dict | None:
         """从指定会话队列消费事件（阻塞）"""
         queue = self._get_queue(session_id)
         try:
             return await asyncio.wait_for(queue.get(), timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None
 
     def cleanup(self, session_id: str) -> None:

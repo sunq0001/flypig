@@ -11,8 +11,11 @@ TermBar：终端面板（纯功能组件）
 -->
 <template>
   <div class="term-bar">
-    <div class="term-placeholder">终端输出将显示在这里</div>
+    <div class="term-placeholder">
+      终端输出将显示在这里
+    </div>
   </div>
+  <!-- TODO: 接入 xterm.js 实现真实终端输出 -->
 </template>
 <style scoped>
 .term-bar{flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden}

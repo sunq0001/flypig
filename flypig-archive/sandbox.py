@@ -19,7 +19,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 # ──────────────────────────────────────────────
 # SandboxConfig
@@ -59,24 +59,26 @@ class SandboxConfig:
     # 文件系统
     whitelist_readonly: List[str] = field(default_factory=list)
     whitelist_readwrite: List[str] = field(default_factory=list)
-    block_keywords: List[str] = field(default_factory=lambda: [
-        # Windows 系统路径
-        r"C:\Windows\System32",
-        r"C:\Windows\System",
-        r"C:\Windows\config",
-        r"C:\Program Files",
-        r"C:\ProgramData",
-        # Linux 系统文件
-        "/etc/shadow",
-        "/etc/passwd",
-        "/etc/sudoers",
-        "/etc/ssh/",
-        "/root",
-        "/home",
-        # macOS 系统路径
-        "/System/",
-        "/private/etc/",
-    ])
+    block_keywords: List[str] = field(
+        default_factory=lambda: [
+            # Windows 系统路径
+            r"C:\Windows\System32",
+            r"C:\Windows\System",
+            r"C:\Windows\config",
+            r"C:\Program Files",
+            r"C:\ProgramData",
+            # Linux 系统文件
+            "/etc/shadow",
+            "/etc/passwd",
+            "/etc/sudoers",
+            "/etc/ssh/",
+            "/root",
+            "/home",
+            # macOS 系统路径
+            "/System/",
+            "/private/etc/",
+        ]
+    )
 
     # 审计日志
     audit_log_path: str = os.path.expanduser("~/.flypig/audit.log")
@@ -114,8 +116,12 @@ class PathValidator:
         block_keywords: Optional[List[str]] = None,
     ):
         self.workspace_dir = Path(workspace_dir).resolve()
-        self._readonly: List[Path] = [Path(p).resolve() for p in (whitelist_readonly or []) if p]
-        self._readwrite: List[Path] = [Path(p).resolve() for p in (whitelist_readwrite or []) if p]
+        self._readonly: List[Path] = [
+            Path(p).resolve() for p in (whitelist_readonly or []) if p
+        ]
+        self._readwrite: List[Path] = [
+            Path(p).resolve() for p in (whitelist_readwrite or []) if p
+        ]
         self._block_keywords = block_keywords or []
 
         # 会话级临时白名单（运行时审批通过后加入）
@@ -123,7 +129,9 @@ class PathValidator:
 
     # ── 公开 API ──
 
-    def check_path(self, path_str: str, mode: str = "read") -> Tuple[bool, Optional[str]]:
+    def check_path(
+        self, path_str: str, mode: str = "read"
+    ) -> Tuple[bool, Optional[str]]:
         """验证路径是否允许访问
 
         Args:
@@ -262,7 +270,11 @@ class PathValidator:
         try:
             result = subprocess.run(
                 ["powershell", "-NoProfile", "-Command", ps_cmd],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
             )
             return result.stdout.strip() or "n"
         except subprocess.TimeoutExpired:
@@ -276,6 +288,7 @@ class PathValidator:
         print(prompt, end="", flush=True)
         try:
             import select
+
             ready, _, _ = select.select([sys.stdin], [], [], 30)
             if ready:
                 return sys.stdin.readline()
@@ -381,7 +394,8 @@ class SandboxManager:
             try:
                 subprocess.run(
                     ["docker", "rm", "-f", self._container_name],
-                    capture_output=True, timeout=10,
+                    capture_output=True,
+                    timeout=10,
                 )
             except Exception:
                 pass
@@ -392,9 +406,19 @@ class SandboxManager:
         """校验容器内 workdir 是否存在，不存在时返回诊断信息"""
         try:
             check = subprocess.run(
-                ["docker", "exec", self._container_name,
-                 "bash", "-c", f"test -d {shlex.quote(workdir)} && echo OK || echo MISSING"],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+                [
+                    "docker",
+                    "exec",
+                    self._container_name,
+                    "bash",
+                    "-c",
+                    f"test -d {shlex.quote(workdir)} && echo OK || echo MISSING",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
             )
             if "MISSING" in check.stdout:
                 listing = self._list_container_dir("/workspace")
@@ -414,9 +438,19 @@ class SandboxManager:
         """列出容器内指定路径的非隐藏目录"""
         try:
             result = subprocess.run(
-                ["docker", "exec", self._container_name,
-                 "bash", "-c", f"ls -1d {shlex.quote(path)}/*/ 2>/dev/null || echo '(empty)'"],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+                [
+                    "docker",
+                    "exec",
+                    self._container_name,
+                    "bash",
+                    "-c",
+                    f"ls -1d {shlex.quote(path)}/*/ 2>/dev/null || echo '(empty)'",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
             )
             items = [l.strip() for l in result.stdout.split("\n") if l.strip()]
             if not items or items == ["(empty)"]:
@@ -424,10 +458,12 @@ class SandboxManager:
             shown = items[:15]
             text = "\n" + "\n".join(f"       - {d}" for d in shown)
             if len(items) > 15:
-                text += f"\n       ... and {len(items)-15} more"
+                text += f"\n       ... and {len(items) - 15} more"
             return text
         except Exception:
-            return "\n       (unable to list, may need a moment after container creation)"
+            return (
+                "\n       (unable to list, may need a moment after container creation)"
+            )
 
     def run_command(
         self,
@@ -462,19 +498,25 @@ class SandboxManager:
         if timeout:
             full_cmd.extend(["-e", f"TIMEOUT={timeout}"])
 
-        full_cmd.extend([
-            self._container_name,
-            "timeout", str(timeout),
-            "bash", "-c",
-            f"cd {shlex.quote(workdir)} && {command}",
-        ])
+        full_cmd.extend(
+            [
+                self._container_name,
+                "timeout",
+                str(timeout),
+                "bash",
+                "-c",
+                f"cd {shlex.quote(workdir)} && {command}",
+            ]
+        )
 
         start_time = time.time()
         try:
             result = subprocess.run(
                 full_cmd,
-                capture_output=True, text=True,
-                encoding="utf-8", errors="replace",
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=timeout + 10,
             )
             elapsed = time.time() - start_time
@@ -496,7 +538,10 @@ class SandboxManager:
                         "[HINT] Retry with persist=True to run in the interactive terminal.\n"
                     )
 
-                if "no such file or directory" in error_lower or "not found" in error_lower:
+                if (
+                    "no such file or directory" in error_lower
+                    or "not found" in error_lower
+                ):
                     listing = self._list_container_dir("/workspace")
                     output += (
                         f"\n[PATH ERROR] The directory may not exist.\n"
@@ -552,7 +597,11 @@ class SandboxManager:
         try:
             result = subprocess.run(
                 ["docker", "images", "-q", self._image_name],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
             )
             return bool(result.stdout.strip())
         except Exception:
@@ -570,7 +619,8 @@ class SandboxManager:
             subprocess.run(
                 ["docker", "build", "-t", self._image_name, "-f", str(dockerfile), "."],
                 cwd=Path(__file__).parent,
-                check=True, timeout=120,
+                check=True,
+                timeout=120,
             )
             print(f"[Sandbox] Image {self._image_name} built successfully.")
         except subprocess.TimeoutExpired:
@@ -618,7 +668,11 @@ CMD ["tail", "-f", "/dev/null"]
         try:
             result = subprocess.run(
                 ["docker", "ps", "-q", "-f", f"name={self._container_name}"],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
             )
             if result.stdout.strip():
                 self._container_id = result.stdout.strip()[:12]
@@ -632,7 +686,8 @@ CMD ["tail", "-f", "/dev/null"]
         try:
             subprocess.run(
                 ["docker", "rm", "-f", self._container_name],
-                capture_output=True, timeout=10,
+                capture_output=True,
+                timeout=10,
             )
         except Exception:
             pass
@@ -640,11 +695,16 @@ CMD ["tail", "-f", "/dev/null"]
     def _create_container(self):
         """创建容器（参数硬编码，防止拼接注入）"""
         cmd = [
-            "docker", "create",
-            "--name", self._container_name,
-            "-v", f"{self.workspace_dir}:/workspace:rw",
-            "-w", "/workspace",
-            "--user", "flypig",
+            "docker",
+            "create",
+            "--name",
+            self._container_name,
+            "-v",
+            f"{self.workspace_dir}:/workspace:rw",
+            "-w",
+            "/workspace",
+            "--user",
+            "flypig",
         ]
 
         # ── 安全加固参数（硬编码） ──
@@ -657,17 +717,25 @@ CMD ["tail", "-f", "/dev/null"]
         if self.config.pids_limit:
             cmd.extend(["--pids-limit", str(self.config.pids_limit)])
 
-        cmd.extend([
-            "--ulimit", f"nproc={self.config.nproc_limit}",
-            "--ulimit", f"nofile={self.config.nofile_limit}",
-        ])
+        cmd.extend(
+            [
+                "--ulimit",
+                f"nproc={self.config.nproc_limit}",
+                "--ulimit",
+                f"nofile={self.config.nofile_limit}",
+            ]
+        )
 
         if self.config.read_only_root:
-            cmd.extend([
-                "--read-only",
-                "--tmpfs", "/tmp:size=100m,noexec,nosuid",
-                "--tmpfs", "/home/flypig/.cache:size=50m",
-            ])
+            cmd.extend(
+                [
+                    "--read-only",
+                    "--tmpfs",
+                    "/tmp:size=100m,noexec,nosuid",
+                    "--tmpfs",
+                    "/home/flypig/.cache:size=50m",
+                ]
+            )
 
         if self.config.network:
             cmd.extend(["--network", "bridge"])
@@ -687,7 +755,14 @@ CMD ["tail", "-f", "/dev/null"]
         cmd.extend(["tail", "-f", "/dev/null"])
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=30,
+            )
             if result.returncode != 0:
                 raise RuntimeError(f"Failed to create container: {result.stderr}")
             self._container_id = result.stdout.strip()[:12]
@@ -699,7 +774,9 @@ CMD ["tail", "-f", "/dev/null"]
         try:
             subprocess.run(
                 ["docker", "start", self._container_name],
-                check=True, capture_output=True, timeout=30,
+                check=True,
+                capture_output=True,
+                timeout=30,
             )
         except subprocess.TimeoutExpired:
             raise RuntimeError("Docker start timed out")
@@ -708,9 +785,18 @@ CMD ["tail", "-f", "/dev/null"]
         """启动后校验挂载列表"""
         try:
             result = subprocess.run(
-                ["docker", "inspect", self._container_name,
-                 "--format", "{{json .Mounts}}"],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
+                [
+                    "docker",
+                    "inspect",
+                    self._container_name,
+                    "--format",
+                    "{{json .Mounts}}",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=10,
             )
             if result.returncode != 0:
                 self._panic("Container verification failed: inspect error")
@@ -728,15 +814,23 @@ CMD ["tail", "-f", "/dev/null"]
             expected_count = 1 + len(self._extra_volumes)
             if len(mounts) != expected_count:
                 self._panic(
-                    f"Unexpected mount count: {len(mounts)} "
-                    f"(expected {expected_count})"
+                    f"Unexpected mount count: {len(mounts)} (expected {expected_count})"
                 )
 
             # 检查 Privileged 标志
             priv_result = subprocess.run(
-                ["docker", "inspect", self._container_name,
-                 "--format", "{{.HostConfig.Privileged}}"],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+                [
+                    "docker",
+                    "inspect",
+                    self._container_name,
+                    "--format",
+                    "{{.HostConfig.Privileged}}",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=5,
             )
             if priv_result.stdout.strip() != "false":
                 self._panic("Container has privileged access!")
@@ -750,7 +844,8 @@ CMD ["tail", "-f", "/dev/null"]
         try:
             subprocess.run(
                 ["docker", "rm", "-f", self._container_name],
-                capture_output=True, timeout=10,
+                capture_output=True,
+                timeout=10,
             )
         except Exception:
             pass
@@ -792,18 +887,23 @@ CMD ["tail", "-f", "/dev/null"]
                 escaped_prompt = prompt.replace("'", "''")
                 ps_cmd = (
                     '$host.UI.RawUI.WindowTitle = "Flypig - \u9ad8\u5371\u547d\u4ee4\u786e\u8ba4"; '
-                    f'Write-Host \'{escaped_prompt}\'; '
+                    f"Write-Host '{escaped_prompt}'; "
                     "$resp = Read-Host; "
                     "if ($resp -eq 'y') { Write-Output 'yes' } else { Write-Output 'no' }"
                 )
                 result = subprocess.run(
                     ["powershell", "-NoProfile", "-Command", ps_cmd],
-                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=30,
                 )
                 return result.stdout.strip() == "yes"
             else:
                 print(prompt, end="", flush=True)
                 import select
+
                 ready, _, _ = select.select([sys.stdin], [], [], 30)
                 if ready:
                     return sys.stdin.readline().strip().lower() == "y"
@@ -840,7 +940,8 @@ CMD ["tail", "-f", "/dev/null"]
                 try:
                     subprocess.run(
                         ["docker", "stop", self._container_name],
-                        capture_output=True, timeout=15,
+                        capture_output=True,
+                        timeout=15,
                     )
                 except Exception:
                     pass
@@ -881,17 +982,13 @@ CMD ["tail", "-f", "/dev/null"]
         script_dir = Path("/tmp/flypig")
         script_dir.mkdir(parents=True, exist_ok=True)
         script_path = script_dir / f"cmd_{int(time.time())}.sh"
-        script_path.write_text(
-            f"#!/bin/bash\n"
-            f"{cmd}\n"
-            f"echo ''\n"
-            f"exec bash\n"
-        )
+        script_path.write_text(f"#!/bin/bash\n{cmd}\necho ''\nexec bash\n")
         script_path.chmod(0o755)
 
         subprocess.Popen(
             ["code", "--command", "workbench.action.terminal.new"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
         return (
             f"[VS Code 新终端已打开 (沙箱容器)]\n"
@@ -910,10 +1007,7 @@ CMD ["tail", "-f", "/dev/null"]
             )
         else:
             shell_name = "cmd"
-            start_cmd = (
-                f'start "FlyPig (Sandbox)" cmd /k '
-                f'"{cmd} & echo. & pause"'
-            )
+            start_cmd = f'start "FlyPig (Sandbox)" cmd /k "{cmd} & echo. & pause"'
 
         subprocess.Popen(start_cmd, shell=True)
         self._update_activity()
@@ -924,21 +1018,26 @@ CMD ["tail", "-f", "/dev/null"]
         workspace = str(self.workspace_dir)
 
         terminals = [
-            ("gnome-terminal",
-             ["gnome-terminal", "--", "bash", "-c",
-              f"cd '{workspace}' && {cmd}; echo; read -p '按 Enter 关闭...'"]),
-            ("xterm",
-             ["xterm", "-hold", "-e",
-              f"cd '{workspace}' && {cmd}"]),
-            ("konsole",
-             ["konsole", "--hold", "-e",
-              f"cd '{workspace}' && {cmd}"]),
+            (
+                "gnome-terminal",
+                [
+                    "gnome-terminal",
+                    "--",
+                    "bash",
+                    "-c",
+                    f"cd '{workspace}' && {cmd}; echo; read -p '按 Enter 关闭...'",
+                ],
+            ),
+            ("xterm", ["xterm", "-hold", "-e", f"cd '{workspace}' && {cmd}"]),
+            ("konsole", ["konsole", "--hold", "-e", f"cd '{workspace}' && {cmd}"]),
         ]
 
         for term_name, term_cmd in terminals:
             try:
                 subprocess.run(["which", term_name], capture_output=True, timeout=2)
-                subprocess.Popen(term_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.Popen(
+                    term_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
                 self._update_activity()
                 return f"[Started in {term_name} (sandbox)]\n   {cmd}"
             except Exception:
@@ -948,11 +1047,7 @@ CMD ["tail", "-f", "/dev/null"]
         log_path = f"/tmp/flypig_sandbox_{int(time.time())}.log"
         bg_cmd = f"nohup bash -c 'cd {workspace} && {cmd}' > {log_path} 2>&1 &"
         subprocess.Popen(bg_cmd, shell=True)
-        return (
-            f"[Running in background (sandbox)]\n"
-            f"   {cmd}\n"
-            f"[Log] tail -f {log_path}"
-        )
+        return f"[Running in background (sandbox)]\n   {cmd}\n[Log] tail -f {log_path}"
 
 
 # ──────────────────────────────────────────────
@@ -965,7 +1060,11 @@ def is_docker_available() -> bool:
     try:
         result = subprocess.run(
             ["docker", "info", "--format", "{{.ServerVersion}}"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5,
         )
         return result.returncode == 0 and bool(result.stdout.strip())
     except (subprocess.TimeoutExpired, FileNotFoundError):
@@ -995,7 +1094,9 @@ def create_sandbox_components(
         return None, validator
 
     if not is_docker_available():
-        print("[Sandbox] Warning: Docker Desktop not running, sandbox command execution disabled")
+        print(
+            "[Sandbox] Warning: Docker Desktop not running, sandbox command execution disabled"
+        )
         print("[Sandbox]   File system access still protected by PathValidator")
         return None, validator
 

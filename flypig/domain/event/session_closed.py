@@ -11,4 +11,5 @@ from flypig.shared.base import DomainEvent
 
 class SessionClosed(DomainEvent):
     """会话已关闭事件"""
+
     pass

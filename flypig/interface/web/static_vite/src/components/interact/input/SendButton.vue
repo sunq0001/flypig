@@ -12,11 +12,31 @@ SendButton：发送 ↗ / 停止 ■
     :disabled="!disabled && !hasText"
     @click="$emit('click')"
   >
-    <svg v-if="!disabled" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-      <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+    <svg
+      v-if="!disabled"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2.5"
+    >
+      <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
     </svg>
-    <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-      <rect x="6" y="6" width="12" height="12" rx="2"/>
+    <svg
+      v-else
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+    >
+      <rect
+        x="6"
+        y="6"
+        width="12"
+        height="12"
+        rx="2"
+      />
     </svg>
   </button>
 </template>

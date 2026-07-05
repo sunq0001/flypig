@@ -13,4 +13,5 @@ from flypig.shared.base import Entity
 
 class TaskItem(Entity):
     """任务实体 — AI 拆解的每个子任务"""
+
     pass

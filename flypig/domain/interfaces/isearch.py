@@ -1,10 +1,19 @@
-"""搜索抽象接口
+"""搜索接口
 
-为什么做：代码搜索有多种方式（grep/AST/向量语义），需要统一接口便于切换和组合。
-实现方法：ISearch ABC 定义 search(query) → results 核心方法，grep AST vector 各实现。
-实现效果：上层代码不关心搜索怎么实现，换搜索方式不改调用代码。
-技术栈：ISearch ABC, grep/AST/vector 多实现
+为什么做：代码搜索/文档搜索/网络搜索需要统一入口，搜索后端可切换。
+
+实现方法：ISearch ABC 定义 search() 方法。
 
 层&依赖：domain.interfaces 层，零依赖
-细节见文档：docs/docs_refactor/tech-stack.md → §代码检索
+TODO: 骨架文件，待实现具体方法
 """
+
+from abc import ABC, abstractmethod
+from typing import Any
+
+
+class ISearch(ABC):
+    """搜索接口 — 统一搜索入口"""
+
+    @abstractmethod
+    async def search(self, query: str, source: str = "web") -> list[dict[str, Any]]: ...

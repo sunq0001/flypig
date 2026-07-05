@@ -1,6 +1,6 @@
 """模型价格自动获取与内置参考表"""
+
 import json
-import os
 import re
 import urllib.request
 from pathlib import Path
@@ -11,17 +11,15 @@ from typing import Optional, Tuple
 # ============================================================
 BUILTIN_PRICES = {
     # ── DeepSeek ──
-    "deepseek-v4-flash":   {"input": 0.14,   "output": 0.28},
-    "deepseek-v4-pro":     {"input": 0.435,  "output": 0.87},
-
+    "deepseek-v4-flash": {"input": 0.14, "output": 0.28},
+    "deepseek-v4-pro": {"input": 0.435, "output": 0.87},
     # ── OpenAI ──
-    "gpt-4o-mini":         {"input": 0.15,   "output": 0.60},
-    "gpt-4o":              {"input": 2.50,   "output": 10.00},
-
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gpt-4o": {"input": 2.50, "output": 10.00},
     # ── Anthropic ──
-    "claude-3-5-haiku":    {"input": 0.80,   "output": 4.00},
-    "claude-3-5-sonnet":   {"input": 3.00,   "output": 15.00},
-    "claude-4-opus":       {"input": 15.00,  "output": 75.00},
+    "claude-3-5-haiku": {"input": 0.80, "output": 4.00},
+    "claude-3-5-sonnet": {"input": 3.00, "output": 15.00},
+    "claude-4-opus": {"input": 15.00, "output": 75.00},
 }
 
 # 缓存文件路径（与内置表同目录）
@@ -57,13 +55,15 @@ def _save_to_cache(model_name: str, prices: dict):
 
 # 官方价格页面 URL
 PRICING_URLS = {
-    "DeepSeek":  "https://api-docs.deepseek.com/quick_start/pricing",
-    "OpenAI":    "https://openai.com/api/pricing/",
+    "DeepSeek": "https://api-docs.deepseek.com/quick_start/pricing",
+    "OpenAI": "https://openai.com/api/pricing/",
     "Anthropic": "https://www.anthropic.com/pricing",
 }
 
 
-def fetch_pricing(model_name: str, provider: str = "") -> Tuple[Optional[dict], Optional[str]]:
+def fetch_pricing(
+    model_name: str, provider: str = ""
+) -> Tuple[Optional[dict], Optional[str]]:
     """获取模型价格
 
     Returns:
@@ -101,8 +101,7 @@ def _try_web_fetch(model_name: str, provider: str) -> Optional[dict]:
 
     try:
         req = urllib.request.Request(
-            url,
-            headers={"User-Agent": "Mozilla/5.0 (compatible; FlyPig/1.0)"}
+            url, headers={"User-Agent": "Mozilla/5.0 (compatible; FlyPig/1.0)"}
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
             html = resp.read().decode("utf-8", errors="ignore")
@@ -110,7 +109,7 @@ def _try_web_fetch(model_name: str, provider: str) -> Optional[dict]:
         lines = html.split("\n")
         for i, line in enumerate(lines):
             if model_name.lower() in line.lower():
-                context = "\n".join(lines[max(0, i - 2):i + 3])
+                context = "\n".join(lines[max(0, i - 2) : i + 3])
                 prices = _extract_prices(context)
                 if prices:
                     return prices
@@ -123,7 +122,7 @@ def _try_web_fetch(model_name: str, provider: str) -> Optional[dict]:
 
 def _extract_prices(text: str) -> Optional[dict]:
     """从文本中提取 $X.XX 模式的价格"""
-    amounts = [float(x) for x in re.findall(r'\$(\d+\.?\d*)', text)]
+    amounts = [float(x) for x in re.findall(r"\$(\d+\.?\d*)", text)]
     amounts = [a for a in amounts if 0.001 < a < 500]
 
     if len(amounts) >= 2:

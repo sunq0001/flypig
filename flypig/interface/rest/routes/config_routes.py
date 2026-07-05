@@ -13,10 +13,13 @@ import asyncio
 from http import HTTPStatus
 from pathlib import Path
 
-from quart import Blueprint, current_app, jsonify, request
-
 from flypig.domain.registry import ModelRegistry
 from flypig.infrastructure.ollama.service import OllamaLocalModelService
+from quart import Blueprint, current_app, jsonify, request
+
+HTTP_BAD_REQUEST = 400
+COLOR_KEY = "color"
+DISPLAY_NAME_KEY = "display_name"
 
 config_bp = Blueprint("config", __name__, url_prefix="/api/config")
 
@@ -29,6 +32,9 @@ def _get_registry() -> ModelRegistry:
     return current_app.config["flypig_model_registry"]
 
 
+ICON_KEY = "icon"
+
+
 def _build_providers() -> dict:
     """从注册表重建厂商元数据字典（前端需要 icon/color/display_name）"""
     registry = _get_registry()
@@ -38,16 +44,16 @@ def _build_providers() -> dict:
         if not provider or provider in providers:
             continue
         providers[provider] = {
-            "icon": meta.get("icon", ""),
-            "color": meta.get("color", ""),
-            "display_name": meta.get("display_name", ""),
+            ICON_KEY: meta.get(ICON_KEY, ""),
+            COLOR_KEY: meta.get(COLOR_KEY, ""),
+            DISPLAY_NAME_KEY: meta.get(DISPLAY_NAME_KEY, ""),
         }
     # 本地厂商来自 JSON local 段
     local = registry.get_local_config()
     providers[local.get("provider", "Local")] = {
-        "icon": local.get("icon", "mdi:laptop"),
-        "color": local.get("color", "#888"),
-        "display_name": local.get("display_name", "本地"),
+        ICON_KEY: local.get(ICON_KEY, "mdi:laptop"),
+        COLOR_KEY: local.get(COLOR_KEY, "#888"),
+        DISPLAY_NAME_KEY: local.get(DISPLAY_NAME_KEY, "本地"),
     }
     return providers
 
@@ -65,27 +71,33 @@ async def get_config() -> dict:
         provider = meta["provider"]
         attr = registry.provider_key_map.get(provider, "")
         has_key = bool(getattr(cfg, attr, None))
-        models.append({
-            "name": name, "provider": provider,
-            "base_url": meta.get("base_url", ""),
-            "api_model": meta.get("api_model", ""),
-            "local": False, "has_key": has_key,
-        })
+        models.append(
+            {
+                "name": name,
+                "provider": provider,
+                "base_url": meta.get("base_url", ""),
+                "api_model": meta.get("api_model", ""),
+                "local": False,
+                "has_key": has_key,
+            }
+        )
     # 本地模型通过 OllamaLocalModelService 动态获取
     local_service = OllamaLocalModelService(cfg, registry)
     models.extend(await local_service.list_models())
 
-    return jsonify({
-        "default_model": cfg.default_model,
-        "workspace": cfg.workspace,
-        "log_level": cfg.log_level,
-        "models": models,
-        "providers": _build_providers(),
-    })
+    return jsonify(
+        {
+            "default_model": cfg.default_model,
+            "workspace": cfg.workspace,
+            "log_level": cfg.log_level,
+            "models": models,
+            "providers": _build_providers(),
+        }
+    )
 
 
 @config_bp.route("", methods=["PUT"])
-async def update_config():
+async def update_config() -> dict:
     data = await request.get_json(force=True) or {}
     cfg = _get_settings()
     if "default_model" in data:
@@ -94,7 +106,7 @@ async def update_config():
 
 
 @config_bp.route("/workspace", methods=["POST"])
-async def set_workspace():
+async def set_workspace() -> dict:  # type: ignore[misc]
     data = await request.get_json(force=True)
     path = (data or {}).get("path", "")
     if not path:
@@ -110,7 +122,7 @@ async def set_workspace():
 
 
 @config_bp.route("/apikey", methods=["POST"])
-async def save_apikey():
+async def save_apikey() -> dict:  # type: ignore[misc]
     data = await request.get_json(force=True)
     provider = (data or {}).get("provider", "")
     api_key = (data or {}).get("api_key", "")
@@ -138,16 +150,20 @@ async def browse():
     try:
         for entry in sorted(p.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
             try:
-                entries.append({
-                    "name": entry.name,
-                    "type": "directory" if entry.is_dir() else "file",
-                })
+                entries.append(
+                    {
+                        "name": entry.name,
+                        "type": "directory" if entry.is_dir() else "file",
+                    }
+                )
             except PermissionError:
                 continue
     except PermissionError:
         return jsonify({"error": "无权限访问", "path": str(p)}), HTTPStatus.FORBIDDEN
 
-    return jsonify({"path": str(p), "parent": str(p.parent) if p.parent != p else None, "entries": entries})
+    return jsonify(
+        {"path": str(p), "parent": str(p.parent) if p.parent != p else None, "entries": entries}
+    )
 
 
 @config_bp.route("/mkdir", methods=["POST"])
@@ -167,6 +183,7 @@ async def mkdir():
 
 # ── 本地模型引导 ──
 
+
 @config_bp.route("/local-models", methods=["GET"])
 async def get_local_models():
     cfg = _get_settings()
@@ -176,26 +193,31 @@ async def get_local_models():
     ollama_running = await service.check_running()
     installed = await service.list_installed_names() if ollama_running else []
 
-    return jsonify({
-        "running": ollama_running,
-        "installed": installed,
-        "ollama_base_url": cfg.ollama_base_url,
-    })
+    return jsonify(
+        {
+            "running": ollama_running,
+            "installed": installed,
+            "ollama_base_url": cfg.ollama_base_url,
+        }
+    )
 
 
 @config_bp.route("/local-models/pull", methods=["POST"])
-async def pull_local_model():
+async def pull_local_model() -> dict:  # type: ignore[misc]
     data = await request.get_json(force=True) or {}
     model = data.get("model", "")
     if not model:
-        return jsonify({"error": "model required"}), 400
+        return jsonify({"error": "model required"}), HTTP_BAD_REQUEST
 
     cfg = _get_settings()
     registry = _get_registry()
     service = OllamaLocalModelService(cfg, registry)
 
     async def _pull():
-        await service.pull_model(model)
+        try:
+            await service.pull_model(model)
+        except Exception as exc:
+            _LOG.warning("拉取本地模型失败: %s", exc)
 
     asyncio.ensure_future(_pull())
     return jsonify({"status": "pulling", "model": model})

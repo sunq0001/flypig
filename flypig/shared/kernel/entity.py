@@ -10,7 +10,7 @@ id 在首次赋值后不应修改。
 """
 
 from abc import ABC
-from typing import Any, Optional
+from typing import Any
 from uuid import uuid4
 
 
@@ -21,7 +21,7 @@ class Entity(ABC):
     id 在首次赋值后不应修改。
     """
 
-    def __init__(self, id: Optional[str] = None) -> None:
+    def __init__(self, id: str | None = None) -> None:
         self._id: str = id or str(uuid4())
 
     @property

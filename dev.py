@@ -5,25 +5,33 @@ FlyPig 开发模式 — 一键启动四个热加载服务 + 崩溃自动重启
 停止:  Ctrl+C 停止全部
 特点:  后端/前端/聊天/文档全部热加载，崩溃自动重启（最多 10 次，间隔递增）
 """
-import asyncio, sys, os, signal, time
+
+import asyncio
+import sys
 from pathlib import Path
 
 # 修复 Windows GBK 编码问题
-if sys.stdout.encoding.lower() != 'utf-8':
-    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8")
 
 ROOT = Path(__file__).parent
 PYTHON = sys.executable
 
 SERVICES = [
-    ("back",  "后端 :8320", f"{PYTHON} -m flypig --port 8320",
-     ROOT),
-    ("chat",  "聊天 :8321", f"node server.js",
-     ROOT / "flypig" / "interface" / "chat-server"),
-    ("front", "前端 :5173", "node node_modules/vite/bin/vite.js --host --force",
-     ROOT / "flypig" / "interface" / "web" / "static_vite"),
-    ("docs",  "文档 :8765", f"{PYTHON} docs/serve_docs.py --port 8765 --watch",
-     ROOT),
+    ("back", "后端 :8320", f"{PYTHON} -m flypig --port 8320", ROOT),
+    (
+        "chat",
+        "聊天 :8321",
+        "node server.js",
+        ROOT / "flypig" / "interface" / "chat-server",
+    ),
+    (
+        "front",
+        "前端 :5173",
+        "node node_modules/vite/bin/vite.js --host --force",
+        ROOT / "flypig" / "interface" / "web" / "static_vite",
+    ),
+    ("docs", "文档 :8765", f"{PYTHON} docs/serve_docs.py --port 8765 --watch", ROOT),
 ]
 
 _MAX_RETRIES = 10
@@ -34,7 +42,8 @@ async def run(tag, label, cmd, cwd):
     while retries < _MAX_RETRIES:
         try:
             proc = await asyncio.create_subprocess_shell(
-                cmd, cwd=str(cwd),
+                cmd,
+                cwd=str(cwd),
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
             )
@@ -50,12 +59,10 @@ async def run(tag, label, cmd, cwd):
         # 带超时读 stdout，防止僵死进程 hang 住 readline
         while True:
             try:
-                line = await asyncio.wait_for(
-                    proc.stdout.readline(), timeout=5
-                )
+                line = await asyncio.wait_for(proc.stdout.readline(), timeout=5)
                 if not line:
                     break
-                text = line.decode('utf-8', errors='replace').rstrip()
+                text = line.decode("utf-8", errors="replace").rstrip()
                 if text:
                     print(f"  [{tag}] {text}")
             except asyncio.TimeoutError:
@@ -100,7 +107,8 @@ async def main():
     # ── 架构合规检查 ──
     try:
         proc = await asyncio.create_subprocess_exec(
-            sys.executable, str(ROOT / "scripts" / "architecture_check.py"),
+            sys.executable,
+            str(ROOT / "scripts" / "architecture_check.py"),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
         )
@@ -121,7 +129,9 @@ async def main():
     # ── import-linter 层依赖检查 ──
     try:
         proc = await asyncio.create_subprocess_exec(
-            "lint-imports", "--config", str(ROOT / "flypig" / "pyproject.toml"),
+            "lint-imports",
+            "--config",
+            str(ROOT / "flypig" / "pyproject.toml"),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             cwd=str(ROOT),
@@ -149,8 +159,10 @@ async def main():
     print("╚══════════════════════════════════════════╝")
     print()
 
-    tasks = [asyncio.create_task(run(tag, label, cmd, cwd))
-             for tag, label, cmd, cwd in SERVICES]
+    tasks = [
+        asyncio.create_task(run(tag, label, cmd, cwd))
+        for tag, label, cmd, cwd in SERVICES
+    ]
 
     try:
         await asyncio.gather(*tasks, return_exceptions=True)

@@ -1,10 +1,19 @@
-"""多源排序接口 (P2 预留)
+"""排序器接口
 
-为什么做：grep/AST/向量/知识图谱的搜索结果需要融合排序，提供最佳结果。
-实现方法：IRanker ABC 定义 rank(results) → sorted_results 方法。
-实现效果：多源搜索结果的排序合理，用户不看遗漏。
-技术栈：IRanker ABC, FlashRank
+为什么做：搜索结果/工具建议等需要按相关性排序，不同排序策略通过统一接口切换。
+
+实现方法：IRanker ABC 定义 rank() 方法。
 
 层&依赖：domain.interfaces 层，零依赖
-细节见文档：docs/docs_refactor/tech-stack.md → §多源排序
+TODO: 骨架文件，待实现具体方法
 """
+
+from abc import ABC, abstractmethod
+from typing import Any
+
+
+class IRanker(ABC):
+    """排序器接口 — 相关性排序"""
+
+    @abstractmethod
+    async def rank(self, items: list[Any], query: str) -> list[Any]: ...

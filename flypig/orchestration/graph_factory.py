@@ -9,11 +9,10 @@
 
 from __future__ import annotations
 
-from langgraph.graph import StateGraph, START
-
-from flypig.orchestration.state import AgentState
-from flypig.orchestration.nodes.chat_node import chat_node
 from flypig.domain.interfaces.imodel import IModel
+from flypig.orchestration.nodes.chat_node import chat_node
+from flypig.orchestration.state import AgentState
+from langgraph.graph import START, StateGraph
 
 
 class GraphFactory:

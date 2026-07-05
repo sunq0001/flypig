@@ -11,14 +11,25 @@ ActivityBar：左侧活动栏图标列
 -->
 <template>
   <div class="activity-bar">
-    <div v-for="item in items" :key="item.id"
-      class="activity-item" :class="{ active: item.id === activeView }"
-      :title="item.label" @click="$emit('switch', item.id)">
+    <div
+      v-for="item in items"
+      :key="item.id"
+      class="activity-item"
+      :class="{ active: item.id === activeView }"
+      :title="item.label"
+      @click="$emit('switch', item.id)"
+    >
       {{ item.icon }}
     </div>
-    <div class="activity-spacer"></div>
-    <div class="activity-item" :class="{ active: activeView === 'settings' }"
-      title="设置" @click="$emit('switch', 'settings')">⚙</div>
+    <div class="activity-spacer" />
+    <div
+      class="activity-item"
+      :class="{ active: activeView === 'settings' }"
+      title="设置"
+      @click="$emit('switch', 'settings')"
+    >
+      ⚙
+    </div>
   </div>
 </template>
 <script setup>

@@ -1,4 +1,5 @@
 """工具执行器"""
+
 import asyncio
 import os
 import platform
@@ -11,7 +12,7 @@ from typing import Dict, Any, Optional
 
 
 # ── 多编码解码：尝试多种编码，选用替换字符最少的 ──
-def _best_decode(data: bytes, extra_enc: str = '') -> str:
+def _best_decode(data: bytes, extra_enc: str = "") -> str:
     """尝试多种编码解码 bytes，返回替换字符 '�' 最少的结果。
 
     候选编码优先级：
@@ -19,28 +20,27 @@ def _best_decode(data: bytes, extra_enc: str = '') -> str:
       2. utf-8
       3. 系统 OEM 编码（Windows chcp 命令获取）
     """
-    import locale
     candidates = []
     if extra_enc:
         candidates.append(extra_enc)
-    candidates.append('utf-8')
-    if os.name == 'nt':
+    candidates.append("utf-8")
+    if os.name == "nt":
         try:
-            r = subprocess.run(['chcp'], capture_output=True, text=True, timeout=2)
-            m = re.search(r'(\d+)', r.stdout)
+            r = subprocess.run(["chcp"], capture_output=True, text=True, timeout=2)
+            m = re.search(r"(\d+)", r.stdout)
             if m:
-                oem = f'cp{m.group(1)}'
+                oem = f"cp{m.group(1)}"
                 if oem not in candidates:
                     candidates.append(oem)
         except Exception:
             pass
 
-    best = ''
+    best = ""
     best_bad = 999999
     for enc in candidates:
         try:
-            decoded = data.decode(enc, errors='replace')
-            bad = decoded.count('\ufffd')
+            decoded = data.decode(enc, errors="replace")
+            bad = decoded.count("\ufffd")
             if bad < best_bad:
                 best = decoded
                 best_bad = bad
@@ -49,6 +49,8 @@ def _best_decode(data: bytes, extra_enc: str = '') -> str:
         except Exception:
             continue
     return best
+
+
 from .background import BackgroundTaskManager
 from .context_compressor import TreeSitterCompressor
 
@@ -56,23 +58,24 @@ from .context_compressor import TreeSitterCompressor
 # ── ANSI escape sequences 清理 ──
 _ANSI_ESC = re.compile(
     # Windows DSR mouse (ESC [[<...M/m) — 先匹配更精确的
-    r'\x1b\[\[[<][0-?]*[Mm]'
+    r"\x1b\[\[[<][0-?]*[Mm]"
     # CSI sequences (ESC [... )
-    r'|\x1b\[[0-?]*[ -/]*[@-~]'
+    r"|\x1b\[[0-?]*[ -/]*[@-~]"
     # 控制字符 (保留 \t\n\r)
-    r'|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]'
+    r"|[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]"
     # C1 控制字符
-    r'|[\x80-\x9f]'
+    r"|[\x80-\x9f]"
     # 其他 ESC + 1 字符
-    r'|\x1b.'
+    r"|\x1b."
 )
 
 # 残留序列清理（\x1b 已被 strip 但留下 [[<35;1;0M 文本）
 _ANSI_FRAGMENT = re.compile(
-    r'\[\[<\d+(?:;\d+)*[Mm]'       # DSR 鼠标残留 [[<...M/m
-    r'|\[\[\d+(?:;\d+)*[A-Za-z]'    # 其他 [[... 残留
-    r'|\[\d+(?:;\d+)*[A-Za-z]'      # 更短变种 [... 残留
+    r"\[\[<\d+(?:;\d+)*[Mm]"  # DSR 鼠标残留 [[<...M/m
+    r"|\[\[\d+(?:;\d+)*[A-Za-z]"  # 其他 [[... 残留
+    r"|\[\d+(?:;\d+)*[A-Za-z]"  # 更短变种 [... 残留
 )
+
 
 def _decode_clixml(text: str) -> str:
     """解码 PowerShell CLIXML 格式 → 纯文本
@@ -88,23 +91,23 @@ def _decode_clixml(text: str) -> str:
     无 CLIXML 时原样返回。
     """
     # 移除 UTF-8 BOM（Windows PowerShell 常输出 \ufeff）
-    if text.startswith('\ufeff'):
+    if text.startswith("\ufeff"):
         text = text[1:]
 
-    if not text.startswith('#< CLIXML'):
+    if not text.startswith("#< CLIXML"):
         return text
 
     # 跳过 #< CLIXML 头行，从下一行开始处理
-    first_nl = text.find('\n')
+    first_nl = text.find("\n")
     if first_nl == -1:
-        return ''
-    rest = text[first_nl + 1:]
+        return ""
+    rest = text[first_nl + 1 :]
 
     parts = []
     pos = 0
 
     while True:
-        objs_start = rest.find('<Objs', pos)
+        objs_start = rest.find("<Objs", pos)
         if objs_start == -1:
             # 最后剩余文本
             tail = rest[pos:].strip()
@@ -119,7 +122,7 @@ def _decode_clixml(text: str) -> str:
                 parts.append(before)
 
         # CLIXML 块结束
-        objs_end = rest.find('</Objs>', objs_start)
+        objs_end = rest.find("</Objs>", objs_start)
         if objs_end == -1:
             # 不完整块 → 保留为普通文本
             tail = rest[pos:].strip()
@@ -128,10 +131,10 @@ def _decode_clixml(text: str) -> str:
             break
 
         # 解码 CLIXML 块
-        xml_str = rest[objs_start:objs_end + 7]  # '</Objs>' is 7 chars
+        xml_str = rest[objs_start : objs_end + 7]  # '</Objs>' is 7 chars
         try:
             root = ET.fromstring(xml_str)
-            for s_elem in root.iter('S'):
+            for s_elem in root.iter("S"):
                 if s_elem.text:
                     parts.append(s_elem.text)
         except ET.ParseError:
@@ -139,31 +142,44 @@ def _decode_clixml(text: str) -> str:
 
         pos = objs_end + 7
 
-    return '\n'.join(parts) if parts else ''
+    return "\n".join(parts) if parts else ""
 
 
 def strip_ansi(text: str) -> str:
     """移除 ANSI escape sequences + 清理残留的控制序列片段 + 解码 CLIXML"""
     # 先解码 CLIXML（在 strip ANSI 之前，保留原始格式以便解析）
     text = _decode_clixml(text)
-    t = _ANSI_ESC.sub('', text)
-    t = _ANSI_FRAGMENT.sub('', t)
+    t = _ANSI_ESC.sub("", text)
+    t = _ANSI_FRAGMENT.sub("", t)
     # 统一换行符：\r\n → \n，独立 \r → \n
-    t = t.replace('\r\n', '\n').replace('\r', '\n')
+    t = t.replace("\r\n", "\n").replace("\r", "\n")
     # 压缩连续空行
-    t = re.sub(r'\n{3,}', '\n\n', t)
+    t = re.sub(r"\n{3,}", "\n\n", t)
     return t.strip()
 
 
 # ── 交互式命令识别 ──
 _INTERACTIVE_COMMANDS = {
-    'vim', 'vi', 'nano', 'emacs', 'htop', 'top', 'less', 'more',
-    'mysql', 'psql', 'sqlite3', 'redis-cli',
-    'ssh', 'telnet',
-    'bash', 'zsh', 'sh',  # new shell
+    "vim",
+    "vi",
+    "nano",
+    "emacs",
+    "htop",
+    "top",
+    "less",
+    "more",
+    "mysql",
+    "psql",
+    "sqlite3",
+    "redis-cli",
+    "ssh",
+    "telnet",
+    "bash",
+    "zsh",
+    "sh",  # new shell
 }
 # REPL 命令：带参数时非交互（如 python script.py），无参数时交互（如 python）
-_REPL_COMMANDS = {'python', 'python3', 'ipython', 'node', 'irb'}
+_REPL_COMMANDS = {"python", "python3", "ipython", "node", "irb"}
 
 
 def _guess_interactive(command: str) -> bool:
@@ -173,8 +189,9 @@ def _guess_interactive(command: str) -> bool:
     文件名含 interactive/input/prompt 时视为交互式（如 Interactive.py）
     """
     import re
+
     # 分割复合命令：&&, ||, ;, |, &
-    segments = re.split(r'\s*(?:&&|\|\||;|\||&)\s*', command.strip())
+    segments = re.split(r"\s*(?:&&|\|\||;|\||&)\s*", command.strip())
     if not segments:
         return False
 
@@ -191,8 +208,10 @@ def _guess_interactive(command: str) -> bool:
                 return True
             # 有参数：检查文件名是否暗示交互（如 Interactive.py）
             for p in parts[1:]:
-                p_lower = p.strip('\'"').lower()
-                if any(kw in p_lower for kw in ('interactive', 'input', 'prompt', 'repl')):
+                p_lower = p.strip("'\"").lower()
+                if any(
+                    kw in p_lower for kw in ("interactive", "input", "prompt", "repl")
+                ):
                     return True
             continue
 
@@ -201,7 +220,7 @@ def _guess_interactive(command: str) -> bool:
             return True
 
     # 复合命令前缀（整条命令检查）
-    if command.strip().startswith(('kubectl exec', 'docker exec -it')):
+    if command.strip().startswith(("kubectl exec", "docker exec -it")):
         return True
     return False
 
@@ -212,7 +231,7 @@ def _is_shell_repl(command: str) -> bool:
     if not parts:
         return False
     cmd = parts[0].lower()
-    if cmd in ('python', 'python3', 'ipython', 'node', 'irb'):
+    if cmd in ("python", "python3", "ipython", "node", "irb"):
         # 带参数（脚本文件或 flag）→ 非交互式
         if len(parts) > 1:
             return False
@@ -221,17 +240,18 @@ def _is_shell_repl(command: str) -> bool:
     return None  # 不确定
 
 
-
 class ToolExecutor:
     """执行各种工具操作"""
 
-    def __init__(self, workspace_dir: str = None, path_validator=None, sandbox_manager=None):
+    def __init__(
+        self, workspace_dir: str = None, path_validator=None, sandbox_manager=None
+    ):
         if workspace_dir:
             self.workspace_dir = Path(workspace_dir)
         else:
             self.workspace_dir = Path.cwd()
         self.is_windows = platform.system() == "Windows" or os.name == "nt"
-        self.is_vscode = os.environ.get('TERM_PROGRAM', '') == 'vscode'
+        self.is_vscode = os.environ.get("TERM_PROGRAM", "") == "vscode"
         self.compressor = TreeSitterCompressor()
         self.path_validator = path_validator
         self.sandbox_manager = sandbox_manager
@@ -244,7 +264,7 @@ class ToolExecutor:
         if method:
             return method(arguments)
         return f"Unknown tool: {tool_name}"
-    
+
     def tool_read_file(self, args: Dict) -> str:
         """读取文件，可选项使用 Tree-sitter 上下文压缩"""
         file_path = self._resolve_path(args.get("path", ""))
@@ -263,16 +283,17 @@ class ToolExecutor:
             max_chars = args.get("max_chars", 50000)
 
             if compress:
-                content = self.compressor.compress(
-                    content, str(file_path), max_chars
-                )
+                content = self.compressor.compress(content, str(file_path), max_chars)
 
             if len(content) > max_chars:
-                content = content[:max_chars] + f"\n... (truncated, total {len(content)} chars)"
+                content = (
+                    content[:max_chars]
+                    + f"\n... (truncated, total {len(content)} chars)"
+                )
             return content
         except Exception as e:
             return f"Error reading file: {e}"
-    
+
     def tool_write_file(self, args: Dict) -> str:
         """写入文件"""
         file_path = self._resolve_path(args.get("path", ""))
@@ -289,7 +310,7 @@ class ToolExecutor:
             return f"Successfully wrote to {file_path}"
         except Exception as e:
             return f"Error writing file: {e}"
-    
+
     def tool_edit_file(self, args: Dict) -> str:
         """编辑文件"""
         file_path = self._resolve_path(args.get("path", ""))
@@ -303,17 +324,17 @@ class ToolExecutor:
 
         if not file_path.exists():
             return f"Error: File not found: {file_path}"
-        
+
         try:
             content = file_path.read_text(encoding="utf-8")
             if old_str not in content:
-                return f"Error: String not found"
+                return "Error: String not found"
             new_content = content.replace(old_str, new_str, 1)
             file_path.write_text(new_content, encoding="utf-8")
             return f"Successfully edited {file_path}"
         except Exception as e:
             return f"Error editing file: {e}"
-    
+
     def _open_vscode_terminal(self, command: str) -> tuple:
         """在 VS Code 中打开新终端标签页，并写入临时脚本
 
@@ -339,7 +360,8 @@ class ToolExecutor:
             # 打开新 VS Code 终端标签页
             subprocess.Popen(
                 ["code", "--command", "workbench.action.terminal.new"],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
             )
             return True, (
                 f"[VS Code 新终端已打开]\n"
@@ -352,15 +374,23 @@ class ToolExecutor:
     def _is_wsl(self) -> bool:
         """检测是否在 WSL 中运行"""
         try:
-            return 'microsoft' in subprocess.run(
-                ['uname', '-r'], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=2
-            ).stdout.lower()
+            return (
+                "microsoft"
+                in subprocess.run(
+                    ["uname", "-r"],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=2,
+                ).stdout.lower()
+            )
         except Exception:
             return False
 
     def _open_new_terminal_linux(self, command: str) -> tuple:
         """在 Linux 环境打开新终端窗口运行命令
-        
+
         Returns: (success, message)
         """
         workspace = str(self.workspace_dir)
@@ -369,14 +399,18 @@ class ToolExecutor:
         if self._is_wsl():
             try:
                 win_path = subprocess.run(
-                    ['wslpath', '-w', workspace],
-                    capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=2
+                    ["wslpath", "-w", workspace],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=2,
                 ).stdout.strip()
                 # 转义双引号
                 safe_cmd = command.replace('"', '\\"')
                 subprocess.Popen(
                     f'cmd.exe /c start "FlyPig" cmd /k "cd /d {win_path} & {safe_cmd}"',
-                    shell=True
+                    shell=True,
                 )
                 return True, f"[Started in new Windows terminal] {command}"
             except Exception:
@@ -384,30 +418,31 @@ class ToolExecutor:
 
         # 2) 桌面 Linux → 尝试各种终端模拟器
         terminals = [
-            ("gnome-terminal",
-             ["gnome-terminal", "--", "bash", "-c",
-              f"cd '{workspace}' && {command}; echo; read -p '按 Enter 关闭...'"]),
-            ("xterm",
-             ["xterm", "-hold", "-e",
-              f"cd '{workspace}' && {command}"]),
-            ("konsole",
-             ["konsole", "--hold", "-e",
-              f"cd '{workspace}' && {command}"]),
-            ("xfce4-terminal",
-             ["xfce4-terminal", "--hold", "-e",
-              f"cd '{workspace}' && {command}"]),
-            ("lxterminal",
-             ["lxterminal", "-e",
-              f"cd '{workspace}' && {command}"]),
+            (
+                "gnome-terminal",
+                [
+                    "gnome-terminal",
+                    "--",
+                    "bash",
+                    "-c",
+                    f"cd '{workspace}' && {command}; echo; read -p '按 Enter 关闭...'",
+                ],
+            ),
+            ("xterm", ["xterm", "-hold", "-e", f"cd '{workspace}' && {command}"]),
+            ("konsole", ["konsole", "--hold", "-e", f"cd '{workspace}' && {command}"]),
+            (
+                "xfce4-terminal",
+                ["xfce4-terminal", "--hold", "-e", f"cd '{workspace}' && {command}"],
+            ),
+            ("lxterminal", ["lxterminal", "-e", f"cd '{workspace}' && {command}"]),
         ]
 
         for term_name, term_cmd in terminals:
             try:
-                subprocess.run(["which", term_name],
-                               capture_output=True, timeout=2)
-                subprocess.Popen(term_cmd,
-                                 stdout=subprocess.DEVNULL,
-                                 stderr=subprocess.DEVNULL)
+                subprocess.run(["which", term_name], capture_output=True, timeout=2)
+                subprocess.Popen(
+                    term_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
                 return True, f"[Started in {term_name}] {command}"
             except Exception:
                 continue
@@ -432,7 +467,11 @@ class ToolExecutor:
             return "Error: No command provided"
 
         # ── Web UI 模式：所有命令内联执行 ──
-        if self._web_mode and hasattr(self, '_terminal_push_fn') and self._terminal_push_fn:
+        if (
+            self._web_mode
+            and hasattr(self, "_terminal_push_fn")
+            and self._terminal_push_fn
+        ):
             return self._run_inline(command, timeout_val, persist=False)
 
         # ── Web UI 模式（无终端推送）：内联执行 ──
@@ -490,6 +529,7 @@ class ToolExecutor:
     async def _run_subprocess_async_core(command: str, timeout_val: int) -> str:
         """async 子进程执行核心 — 流式读 stdout/stderr，超时时保留已输出内容"""
         import locale
+
         preferred_enc = locale.getpreferredencoding()
 
         proc = await asyncio.create_subprocess_shell(
@@ -543,13 +583,10 @@ class ToolExecutor:
         stderr_str = strip_ansi(_best_decode(b"".join(stderr_parts), preferred_enc))
 
         if timed_out:
-            detail = (stdout_str[:500] if stdout_str else "")
+            detail = stdout_str[:500] if stdout_str else ""
             if stderr_str:
                 detail = (detail + "\n" + stderr_str[:500]).strip()
-            return (
-                f"[TIMEOUT] Command exceeded {timeout_val}s\n"
-                f"{detail[:2000]}"
-            )
+            return f"[TIMEOUT] Command exceeded {timeout_val}s\n{detail[:2000]}"
 
         if proc.returncode == 0:
             if stdout_str:
@@ -601,8 +638,9 @@ class ToolExecutor:
         # ── 无沙箱：走 asyncio subprocess ──
         return self._run_subprocess_sync(command, effective_timeout)
 
-    def _run_terminal_interactive(self, command: str, timeout_val: int,
-                                   interactive: bool = None) -> str:
+    def _run_terminal_interactive(
+        self, command: str, timeout_val: int, interactive: bool = None
+    ) -> str:
         """终端交互模式：注入命令到 PTY，不等待，立即返回 INJECTED 标记。
 
         interactive=True  → 不包装，无完成检测，用户手动推送
@@ -613,6 +651,7 @@ class ToolExecutor:
         独立 SSE 端点 /api/terminal-events 实时推送到前端卡片。
         """
         import uuid
+
         msg_id = str(uuid.uuid4())
 
         # 自动判断交互式
@@ -623,7 +662,7 @@ class ToolExecutor:
         wrapped_command = f'echo "###AI_START###"\r\n{command}\r\necho "###AI_END###"'
 
         # 获取共享字典（由 server.py 注入），无锁，GIL 保证原子性
-        injections = getattr(self, '_terminal_injections', {})
+        injections = getattr(self, "_terminal_injections", {})
 
         # 注册注入状态
         injections[msg_id] = {
@@ -638,15 +677,19 @@ class ToolExecutor:
         }
 
         # 推送 terminal_inject SSE 事件到前端
-        push_fn = getattr(self, '_terminal_push_fn', None)
+        push_fn = getattr(self, "_terminal_push_fn", None)
         if push_fn:
-            push_fn("terminal_inject", msgId=msg_id, command=command,
-                    wrappedCommand=wrapped_command, interactive=interactive)
+            push_fn(
+                "terminal_inject",
+                msgId=msg_id,
+                command=command,
+                wrappedCommand=wrapped_command,
+                interactive=interactive,
+            )
 
         # 立即返回，AI 线程不等待
         return f"[TERMINAL_INJECTED:{msg_id}]"
 
-    
     @staticmethod
     def _should_run_inline(command: str) -> bool:
         """判断命令是否应该在当前进程内直接执行"""
@@ -656,8 +699,20 @@ class ToolExecutor:
         first_word = stripped.split(None, 1)[0].lower()
         # 白名单命令：这些命令的 stdout 输出有价值，弹窗反而看不到
         inline_whitelist = {
-            "dir", "type", "where", "echo", "cd", "git", "python", "pip",
-            "node", "npm", "wsl", "powershell", "cmd", "findstr",
+            "dir",
+            "type",
+            "where",
+            "echo",
+            "cd",
+            "git",
+            "python",
+            "pip",
+            "node",
+            "npm",
+            "wsl",
+            "powershell",
+            "cmd",
+            "findstr",
         }
         return first_word in inline_whitelist
 
@@ -688,18 +743,18 @@ class ToolExecutor:
         # ls → dir（移除不兼容的 flag）
         if lower_word in ("ls",):
             # 去掉 -la, -l, -a, -lh 等常见 Linux ls flags
-            rest = stripped[len(first_word):].lstrip() if first_space > 0 else ""
+            rest = stripped[len(first_word) :].lstrip() if first_space > 0 else ""
             rest = self._strip_ls_flags(rest)
             return ("dir " + rest).rstrip()
 
         # cat → type
         if lower_word == "cat":
-            rest = stripped[len(first_word):].lstrip() if first_space > 0 else ""
+            rest = stripped[len(first_word) :].lstrip() if first_space > 0 else ""
             return ("type " + rest).rstrip()
 
         # rm → del
         if lower_word == "rm":
-            rest = stripped[len(first_word):].lstrip() if first_space > 0 else ""
+            rest = stripped[len(first_word) :].lstrip() if first_space > 0 else ""
             return ("del " + rest).rstrip()
 
         return command
@@ -710,12 +765,12 @@ class ToolExecutor:
         parts = args.split()
         filtered = [p for p in parts if not p.startswith("-")]
         return " ".join(filtered)
-    
+
     def tool_find_files(self, args: Dict) -> str:
         """查找文件"""
         pattern = args.get("pattern", "*")
         path_str = args.get("path", ".")
-        
+
         # 解析路径
         search_path = self._resolve_path(path_str)
 
@@ -731,14 +786,14 @@ class ToolExecutor:
             else:
                 # 简单文件名，递归搜索
                 files = list(search_path.rglob(pattern))
-            
+
             if not files:
                 # 尝试在当前目录
                 files = list(self.workspace_dir.rglob(pattern))
-            
+
             if not files:
                 return "No files found"
-            
+
             # 返回相对路径
             rel_files = []
             for f in files[:50]:
@@ -748,25 +803,25 @@ class ToolExecutor:
                         rel_files.append(str(rel))
                     except ValueError:
                         rel_files.append(str(f))
-            
+
             if not rel_files:
                 return "No files found"
 
             result = f"[Search base: {search_path}]\n"
             result += "\n".join(rel_files)
             return result
-            
+
         except Exception as e:
             return f"Error: {e}"
-    
+
     def tool_grep(self, args: Dict) -> str:
         """搜索文件内容"""
         pattern = args.get("pattern", "")
         path_str = args.get("path", ".")
-        
+
         if not pattern:
             return "Error: No pattern provided"
-        
+
         search_path = self._resolve_path(path_str)
 
         # 沙箱路径验证
@@ -777,21 +832,33 @@ class ToolExecutor:
         try:
             matches = []
             for file_path in search_path.rglob("*"):
-                if file_path.is_file() and file_path.suffix in ['.py', '.js', '.ts', '.txt', '.md', '.yaml', '.yml', '.json', '.html', '.css', '.toml']:
+                if file_path.is_file() and file_path.suffix in [
+                    ".py",
+                    ".js",
+                    ".ts",
+                    ".txt",
+                    ".md",
+                    ".yaml",
+                    ".yml",
+                    ".json",
+                    ".html",
+                    ".css",
+                    ".toml",
+                ]:
                     try:
                         content = file_path.read_text(encoding="utf-8", errors="ignore")
                         if pattern in content:
                             matches.append(str(file_path.relative_to(search_path)))
                     except:
                         pass
-            
+
             if not matches:
                 return f"No files containing '{pattern}'"
-            
+
             return "Found in:\n" + "\n".join(matches[:20])
         except Exception as e:
             return f"Error: {e}"
-    
+
     @staticmethod
     def clear_pycache(target_dir: str = None):
         """清除目录下的所有 __pycache__ 缓存"""
@@ -804,6 +871,7 @@ class ToolExecutor:
         for pyc in base.rglob("__pycache__"):
             try:
                 import shutil
+
                 shutil.rmtree(str(pyc))
                 count += 1
             except Exception:
@@ -830,8 +898,13 @@ class ToolExecutor:
         if info is None:
             return f"[Error] Task not found: {task_id}"
 
-        status_icon = {"running": ">", "completed": "OK",
-                       "failed": "ERR", "timeout": "TO", "cancelled": "X"}
+        status_icon = {
+            "running": ">",
+            "completed": "OK",
+            "failed": "ERR",
+            "timeout": "TO",
+            "cancelled": "X",
+        }
         icon = status_icon.get(info["status"], "?")
 
         lines = [
@@ -886,6 +959,7 @@ class ToolExecutor:
         elif approval == "allow_always":
             # 持久化到 config.yaml
             from .config import Config
+
             try:
                 cfg = Config()
                 cfg.save_sandbox_whitelist(str(path), mode)
@@ -899,17 +973,17 @@ class ToolExecutor:
         """解析路径"""
         if not path_str or path_str == ".":
             return self.workspace_dir
-        
+
         # 处理 Windows 绝对路径
         if len(path_str) > 1 and path_str[1] == ":":
             return Path(path_str)
-        
+
         # 处理 Unix 绝对路径
         if path_str.startswith("/"):
             return Path(path_str)
-        
+
         return self.workspace_dir / path_str
-    
+
     def get_tools_schema(self) -> list:
         """获取工具定义"""
         return [
@@ -921,12 +995,19 @@ class ToolExecutor:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "path": {"type": "string", "description": "File path (absolute or relative to current directory)"},
-                            "compress": {"type": "boolean", "description": "Enable Tree-sitter context compression to reduce token usage. Use compress=true when you only need an overview (function signatures + docstrings). Use compress=false (default) when you need the full implementation to edit or understand details.", "default": False}
+                            "path": {
+                                "type": "string",
+                                "description": "File path (absolute or relative to current directory)",
+                            },
+                            "compress": {
+                                "type": "boolean",
+                                "description": "Enable Tree-sitter context compression to reduce token usage. Use compress=true when you only need an overview (function signatures + docstrings). Use compress=false (default) when you need the full implementation to edit or understand details.",
+                                "default": False,
+                            },
                         },
-                        "required": ["path"]
-                    }
-                }
+                        "required": ["path"],
+                    },
+                },
             },
             {
                 "type": "function",
@@ -937,11 +1018,14 @@ class ToolExecutor:
                         "type": "object",
                         "properties": {
                             "path": {"type": "string", "description": "File path"},
-                            "content": {"type": "string", "description": "File content"}
+                            "content": {
+                                "type": "string",
+                                "description": "File content",
+                            },
                         },
-                        "required": ["path", "content"]
-                    }
-                }
+                        "required": ["path", "content"],
+                    },
+                },
             },
             {
                 "type": "function",
@@ -952,33 +1036,54 @@ class ToolExecutor:
                         "type": "object",
                         "properties": {
                             "path": {"type": "string", "description": "File path"},
-                            "old_str": {"type": "string", "description": "Content to replace"},
-                            "new_str": {"type": "string", "description": "Replacement content"}
+                            "old_str": {
+                                "type": "string",
+                                "description": "Content to replace",
+                            },
+                            "new_str": {
+                                "type": "string",
+                                "description": "Replacement content",
+                            },
                         },
-                        "required": ["path", "old_str", "new_str"]
-                    }
-                }
+                        "required": ["path", "old_str", "new_str"],
+                    },
+                },
             },
             {
                 "type": "function",
                 "function": {
                     "name": "bash",
                     "description": "Execute a shell command. "
-                                   "ALL commands return stdout directly (inline execution). "
-                                   "Interactive commands (vim, htop, python REPL) auto-detect and inject into the terminal. "
-                                   "For scripts with input() or interactive prompts, set interactive=true. "
-                                   "Command output appears as a card for the user to review.",
+                    "ALL commands return stdout directly (inline execution). "
+                    "Interactive commands (vim, htop, python REPL) auto-detect and inject into the terminal. "
+                    "For scripts with input() or interactive prompts, set interactive=true. "
+                    "Command output appears as a card for the user to review.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "command": {"type": "string", "description": "Shell command to execute"},
-                            "timeout": {"type": "integer", "description": "Timeout in seconds", "default": 30},
-                            "interactive": {"type": "boolean", "description": "Force terminal injection. Use true when the command needs user interaction (input(), prompts, REPL).", "default": False},
-                            "persist": {"type": "boolean", "description": "DEPRECATED in web mode. All commands execute inline by default.", "default": False}
+                            "command": {
+                                "type": "string",
+                                "description": "Shell command to execute",
+                            },
+                            "timeout": {
+                                "type": "integer",
+                                "description": "Timeout in seconds",
+                                "default": 30,
+                            },
+                            "interactive": {
+                                "type": "boolean",
+                                "description": "Force terminal injection. Use true when the command needs user interaction (input(), prompts, REPL).",
+                                "default": False,
+                            },
+                            "persist": {
+                                "type": "boolean",
+                                "description": "DEPRECATED in web mode. All commands execute inline by default.",
+                                "default": False,
+                            },
                         },
-                        "required": ["command"]
-                    }
-                }
+                        "required": ["command"],
+                    },
+                },
             },
             {
                 "type": "function",
@@ -988,12 +1093,19 @@ class ToolExecutor:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "pattern": {"type": "string", "description": "File pattern (e.g., calculator.py, *.py)"},
-                            "path": {"type": "string", "description": "Directory to search", "default": "."}
+                            "pattern": {
+                                "type": "string",
+                                "description": "File pattern (e.g., calculator.py, *.py)",
+                            },
+                            "path": {
+                                "type": "string",
+                                "description": "Directory to search",
+                                "default": ".",
+                            },
                         },
-                        "required": ["pattern"]
-                    }
-                }
+                        "required": ["pattern"],
+                    },
+                },
             },
             {
                 "type": "function",
@@ -1003,38 +1115,44 @@ class ToolExecutor:
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "pattern": {"type": "string", "description": "Text pattern to search"},
-                            "path": {"type": "string", "description": "Directory to search", "default": "."}
+                            "pattern": {
+                                "type": "string",
+                                "description": "Text pattern to search",
+                            },
+                            "path": {
+                                "type": "string",
+                                "description": "Directory to search",
+                                "default": ".",
+                            },
                         },
-                        "required": ["pattern"]
-                    }
-                }
+                        "required": ["pattern"],
+                    },
+                },
             },
             {
                 "type": "function",
                 "function": {
                     "name": "task_status",
                     "description": "Check the status and output of a background task. "
-                                   "Leave task_id empty to list all tasks.",
+                    "Leave task_id empty to list all tasks.",
                     "parameters": {
                         "type": "object",
                         "properties": {
-                            "task_id": {"type": "string", "description": "Task ID to check, or empty to list all"}
+                            "task_id": {
+                                "type": "string",
+                                "description": "Task ID to check, or empty to list all",
+                            }
                         },
-                        "required": []
-                    }
-                }
+                        "required": [],
+                    },
+                },
             },
             {
                 "type": "function",
                 "function": {
                     "name": "task_list",
                     "description": "List all background tasks with their status",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {}
-                    }
-                }
-            }
+                    "parameters": {"type": "object", "properties": {}},
+                },
+            },
         ]
-    

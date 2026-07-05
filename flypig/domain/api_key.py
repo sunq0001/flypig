@@ -11,4 +11,5 @@ from flypig.shared.base import ValueObject
 
 class ApiKey(ValueObject):
     """API Key 元数据值对象"""
+
     pass

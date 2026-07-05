@@ -13,7 +13,10 @@ BreadcrumbsBar：文件路径面包屑导航
 细节见文档：docs/docs_refactor/frontend-arch.md → §目标目录结构
 -->
 <template>
-  <div class="breadcrumbs-bar" v-if="segments.length > 0">
+  <div
+    v-if="segments.length > 0"
+    class="breadcrumbs-bar"
+  >
     <span
       v-for="(seg, i) in segments"
       :key="i"
@@ -22,7 +25,10 @@ BreadcrumbsBar：文件路径面包屑导航
       @click="onCrumbClick(i)"
     >
       <span class="crumb-text">{{ seg.name }}</span>
-      <span v-if="i < segments.length - 1" class="crumb-sep">›</span>
+      <span
+        v-if="i < segments.length - 1"
+        class="crumb-sep"
+      >›</span>
     </span>
   </div>
 </template>
@@ -35,7 +41,7 @@ const props = defineProps({
   rootPath: { type: String, default: '' },
 })
 
-const emit = defineEmits(['navigate'])
+defineEmits(['navigate'])
 
 const segments = computed(() => {
   if (!props.filePath) return []

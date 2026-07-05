@@ -1,4 +1,5 @@
 """Round 4 syntax check - ModelRegistry refactoring"""
+
 import ast
 import sys
 

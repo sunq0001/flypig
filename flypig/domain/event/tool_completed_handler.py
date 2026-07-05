@@ -11,5 +11,6 @@ from flypig.domain.event.tool_completed import ToolCompleted
 
 class ToolCompletedHandler:
     """工具执行完成事件处理器"""
+
     async def handle(self, event: ToolCompleted) -> None:
         """TODO: 记录工具执行结果、更新上下文"""

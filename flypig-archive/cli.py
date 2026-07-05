@@ -1,5 +1,5 @@
 """CLI 入口"""
-import os
+
 import sys
 
 from .config import Config
@@ -44,7 +44,9 @@ def select_model(config: Config) -> dict:
 
     while True:
         try:
-            choice = input(f"Select (1-{len(models)}) or Enter for [{default_idx}]: ").strip()
+            choice = input(
+                f"Select (1-{len(models)}) or Enter for [{default_idx}]: "
+            ).strip()
             if not choice:
                 choice = str(default_idx)
             idx = int(choice)
@@ -108,6 +110,7 @@ def main():
 
         # ── 沙箱组件初始化 ──
         from .sandbox import create_sandbox_components, PathValidator
+
         sandbox_cfg = config.build_sandbox_config()
         sandbox_mgr, path_val = create_sandbox_components(sandbox_cfg, config.workspace)
 
@@ -131,8 +134,7 @@ def main():
 
         # 获取模型价格并注入到 cost_tracker
         prices, source = fetch_pricing(
-            llm_config["name"],
-            llm_config.get("provider", "")
+            llm_config["name"], llm_config.get("provider", "")
         )
         if prices:
             # 价格同时存显示名和 API 模型名两个 key
@@ -141,11 +143,17 @@ def main():
             if api_model != llm_config["name"]:
                 cost_tracker.set_pricing(api_model, prices)
             if source == "online":
-                print(f"  [价格] ${prices['input']}/${prices['output']} 每 1M tokens (来自官方定价页)\n")
+                print(
+                    f"  [价格] ${prices['input']}/${prices['output']} 每 1M tokens (来自官方定价页)\n"
+                )
             elif source == "cached":
-                print(f"  [价格] ${prices['input']}/${prices['output']} 每 1M tokens (本地缓存)\n")
+                print(
+                    f"  [价格] ${prices['input']}/${prices['output']} 每 1M tokens (本地缓存)\n"
+                )
             else:
-                print(f"  [价格] ${prices['input']}/${prices['output']} 每 1M tokens (参考价，未查到官方数据)\n")
+                print(
+                    f"  [价格] ${prices['input']}/${prices['output']} 每 1M tokens (参考价，未查到官方数据)\n"
+                )
         else:
             print(f"  [价格] 未获取到 {llm_config['name']} 的价格信息\n")
 
@@ -154,8 +162,9 @@ def main():
             f"\n\nCurrent working directory: {config.workspace}\n"
             f"All file paths in tool results are relative to this directory.\n"
         )
-        agent = Agent(model=model, cost_tracker=cost_tracker, tools=tools,
-                      system_prompt=ws_prompt)
+        agent = Agent(
+            model=model, cost_tracker=cost_tracker, tools=tools, system_prompt=ws_prompt
+        )
 
         print("[*] Commands: /help /debug /reset /cost /model /exit")
         print()
@@ -168,7 +177,7 @@ def main():
 
                 # ── 有 bash 历史时调整提示 ──
                 bash_hint = ""
-                if hasattr(agent, 'bash_history') and agent.bash_history:
+                if hasattr(agent, "bash_history") and agent.bash_history:
                     bash_hint = " [T] 打开终端"
                 user_input = input(f"\n>{bash_hint} ").strip()
                 if not user_input:
@@ -189,7 +198,9 @@ def main():
                         try:
                             idx = int(parts[1])
                             if idx < 1 or idx > len(agent.bash_history):
-                                print(f"  [X] 无效序号，范围为 1-{len(agent.bash_history)}")
+                                print(
+                                    f"  [X] 无效序号，范围为 1-{len(agent.bash_history)}"
+                                )
                                 continue
                             agent.open_terminal(idx - 1)  # 1-based → 0-based
                             continue
@@ -233,7 +244,7 @@ def main():
                 print(f"\n[X] Error: {e}")
 
         # 清理沙箱
-        if 'sandbox_mgr' in locals() and sandbox_mgr:
+        if "sandbox_mgr" in locals() and sandbox_mgr:
             sandbox_mgr.cleanup()
     except Exception as e:
         print(f"[X] Fatal error: {e}")

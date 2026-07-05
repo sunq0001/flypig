@@ -3,11 +3,12 @@
 每个后台任务在独立线程 + 独立 asyncio 事件循环中运行。
 通过任务 ID 追踪状态、检索输出、取消任务。
 """
+
 import asyncio
 import time
 import threading
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, Dict, Optional
 
@@ -25,6 +26,7 @@ class TaskStatus(Enum):
 @dataclass
 class TaskInfo:
     """单个后台任务的信息"""
+
     id: str
     command: str
     status: TaskStatus = TaskStatus.RUNNING
@@ -45,8 +47,12 @@ class TaskInfo:
 
     @property
     def is_done(self) -> bool:
-        return self.status in (TaskStatus.COMPLETED, TaskStatus.FAILED,
-                               TaskStatus.TIMEOUT, TaskStatus.CANCELLED)
+        return self.status in (
+            TaskStatus.COMPLETED,
+            TaskStatus.FAILED,
+            TaskStatus.TIMEOUT,
+            TaskStatus.CANCELLED,
+        )
 
     def to_dict(self) -> dict:
         return {
@@ -146,9 +152,7 @@ class BackgroundTaskManager:
     def list_tasks(self) -> list[dict]:
         """列出所有未完成的活跃任务"""
         with self._lock:
-            return [
-                t.to_dict() for t in self._tasks.values()
-            ]
+            return [t.to_dict() for t in self._tasks.values()]
 
     def cancel(self, task_id: str) -> bool:
         """标记任务取消"""
@@ -169,7 +173,7 @@ class BackgroundTaskManager:
                 return
             # 按结束时间排序，删除最旧的
             done.sort(key=lambda t: t.end_time or 0)
-            for t in done[:-self.MAX_COMPLETED]:
+            for t in done[: -self.MAX_COMPLETED]:
                 self._tasks.pop(t.id, None)
             self._stats["total_completed"] += 1
 
@@ -204,6 +208,7 @@ class BackgroundTaskManager:
         async def _read_stream(stream, is_stderr: bool):
             """逐行读取流并追加到输出缓冲"""
             from .tools import strip_ansi  # 延迟导入，避免循环引用
+
             while True:
                 line = await stream.readline()
                 if not line:
@@ -240,16 +245,15 @@ class BackgroundTaskManager:
         except asyncio.TimeoutError:
             proc.kill()
             await proc.wait()
-            self._update_status(task_id, TaskStatus.TIMEOUT,
-                                exit_code=-1)
+            self._update_status(task_id, TaskStatus.TIMEOUT, exit_code=-1)
             return
 
         if proc.returncode == 0:
-            self._update_status(task_id, TaskStatus.COMPLETED,
-                                exit_code=proc.returncode)
+            self._update_status(
+                task_id, TaskStatus.COMPLETED, exit_code=proc.returncode
+            )
         else:
-            self._update_status(task_id, TaskStatus.FAILED,
-                                exit_code=proc.returncode)
+            self._update_status(task_id, TaskStatus.FAILED, exit_code=proc.returncode)
 
     # ── 内部：状态管理 ──
 
@@ -257,9 +261,13 @@ class BackgroundTaskManager:
         with self._lock:
             return self._tasks.get(task_id)
 
-    def _update_status(self, task_id: str, status: TaskStatus,
-                       exit_code: Optional[int] = None,
-                       error: Optional[str] = None):
+    def _update_status(
+        self,
+        task_id: str,
+        status: TaskStatus,
+        exit_code: Optional[int] = None,
+        error: Optional[str] = None,
+    ):
         with self._lock:
             info = self._tasks.get(task_id)
             if info is None:

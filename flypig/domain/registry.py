@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 from flypig.shared.base import DomainService
 
@@ -19,7 +18,7 @@ from flypig.shared.base import DomainService
 class ModelRegistry(DomainService):
     """模型注册表 — 封装 model_registry.json 的所有读取逻辑"""
 
-    def __init__(self, data_dir: Optional[Path] = None) -> None:
+    def __init__(self, data_dir: Path | None = None) -> None:
         self._data_dir = data_dir or Path(__file__).resolve().parent.parent / "data"
         self._path = self._data_dir / "model_registry.json"
         self._registry: dict[str, dict] = {}
@@ -52,7 +51,7 @@ class ModelRegistry(DomainService):
         """provider → key_attr 映射"""
         return dict(self._provider_key_map)
 
-    def resolve(self, name: str) -> Optional[dict]:
+    def resolve(self, name: str) -> dict | None:
         """获取单个模型元数据"""
         return self._registry.get(name)
 
@@ -60,7 +59,7 @@ class ModelRegistry(DomainService):
         """所有已注册模型名列表"""
         return list(self._registry.keys())
 
-    def get_provider_meta(self, name: str) -> Optional[dict]:
+    def get_provider_meta(self, name: str) -> dict | None:
         """获取某个模型的厂商元数据（icon/color/display_name）"""
         meta = self._registry.get(name)
         if not meta:

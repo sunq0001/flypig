@@ -26,11 +26,13 @@ def main():
 
 def _run_prod():
     """生产模式：直接 serve"""
-    from domain.config.config import Config
-    from backend.server import create_app
+    import asyncio
+
     import hypercorn.asyncio
     import hypercorn.config as hc
-    import asyncio
+
+    from backend.server import create_app
+    from domain.config.config import Config
 
     config = Config()
     app = create_app(config)
@@ -54,7 +56,7 @@ def _run_dev():
     import subprocess
     import sys
 
-    print(f"  FlyPig Agent (开发模式，热加载) — http://127.0.0.1:8321")
+    print("  FlyPig Agent (开发模式，热加载) — http://127.0.0.1:8321")
 
     env = os.environ.copy()
     root_str = str(_root)
@@ -65,7 +67,8 @@ def _run_dev():
     # 子进程运行 run_dev.py（避免 Windows multiprocessing 自举问题）
     proc = subprocess.run(
         [sys.executable, str(_root / "run_dev.py")],
-        cwd=str(_root), env=env,
+        cwd=str(_root),
+        env=env,
     )
     sys.exit(proc.returncode)
 

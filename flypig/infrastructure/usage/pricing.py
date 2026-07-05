@@ -11,21 +11,24 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import date, datetime, timezone
-from pathlib import Path
+from datetime import UTC, date, datetime
 from http import HTTPStatus
-from typing import Optional
+from pathlib import Path
 
 import httpx
+from flypig.acl.pricing import default_pricing_to_entry, portkey_to_pricing_entry
+from flypig.domain.registry import ModelRegistry
 from loguru import logger
 
-from flypig.domain.registry import ModelRegistry
-
 # ── 常量 ──
+JSON_INDENT = 2
 DEFAULT_EXCHANGE_CACHE_TTL = 3600
 EXCHANGE_RATE_TIMEOUT = 5
 DEFAULT_REFRESH_INTERVAL = 86400
 PORTKEY_REQUEST_TIMEOUT = 10
+DEFAULT_MODEL_PRICE = 7.2  # 默认 USD/CNY 汇率
+EXCHANGE_RATE_KEY = "rate"  # 汇率字典中的键名
+EXCHANGE_RATE_PRECISION = 4  # 汇率保留小数位数
 
 
 class PricingService:
@@ -34,13 +37,13 @@ class PricingService:
     def __init__(
         self,
         registry: ModelRegistry,
-        data_dir: Optional[Path] = None,
+        data_dir: Path | None = None,
     ) -> None:
         self._registry = registry
         self._data_dir = data_dir or Path(__file__).resolve().parent.parent.parent / "data"
         self._cache_file = self._data_dir / "pricing_cache.json"
-        self._exchange_rate: dict[str, float | None] = {"rate": None, "ts": 0.0}
-        self._loop_task: Optional[asyncio.Task[None]] = None
+        self._exchange_rate: dict[str, float | None] = {EXCHANGE_RATE_KEY: None, "ts": 0.0}
+        self._loop_task: asyncio.Task[None] | None = None
 
     # ── 内部辅助 ──
 
@@ -56,33 +59,33 @@ class PricingService:
         if path.exists():
             try:
                 return json.loads(path.read_text(encoding="utf-8"))
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.warning("[pricing] 缓存加载失败: {}", exc)
         return None
 
     def _save_cache(self, data: dict) -> None:
         path = self._cache_path()
         try:
             path.write_text(
-                json.dumps(data, indent=2, ensure_ascii=False),
+                json.dumps(data, indent=JSON_INDENT, ensure_ascii=False),
                 encoding="utf-8",
             )
         except OSError:
-            pass  # 缓存写入失败不影响主流程
+            logger.warning("[pricing] 缓存写入失败: {}", path)
 
     # ── 汇率 ──
 
     def _fetch_exchange_rate(self) -> float:
         now = datetime.now().timestamp()
         cache_ttl = self._pricing_cfg("exchange_rate_cache_ttl", DEFAULT_EXCHANGE_CACHE_TTL)
-        rate_val = self._exchange_rate["rate"]
+        rate_val = self._exchange_rate[EXCHANGE_RATE_KEY]
         ts_val = self._exchange_rate["ts"]
         if ts_val is not None and now - ts_val < cache_ttl and rate_val is not None:
             return rate_val  # type: ignore[return-value]
 
         api_url = self._pricing_cfg("exchange_rate_api")
         if not api_url:
-            return float(self._pricing_cfg("fallback_usd_cny", 7.2))
+            return float(self._pricing_cfg("fallback_usd_cny", DEFAULT_MODEL_PRICE))
 
         try:
             timeout = self._pricing_cfg("exchange_rate_timeout", EXCHANGE_RATE_TIMEOUT)
@@ -90,14 +93,14 @@ class PricingService:
             if resp.status_code == HTTPStatus.OK:
                 rate = resp.json().get("rates", {}).get("CNY")
                 if rate:
-                    rate = round(float(rate), 4)
-                    self._exchange_rate["rate"] = rate
+                    rate = round(float(rate), EXCHANGE_RATE_PRECISION)
+                    self._exchange_rate[EXCHANGE_RATE_KEY] = rate
                     self._exchange_rate["ts"] = now
                     return rate
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.warning("获取汇率失败: {}", exc)
 
-        return float(self._pricing_cfg("fallback_usd_cny", 7.2))
+        return float(self._pricing_cfg("fallback_usd_cny", DEFAULT_MODEL_PRICE))
 
     def _convert_to_cny(self, prices: dict) -> dict:
         rate = self._fetch_exchange_rate()
@@ -123,16 +126,14 @@ class PricingService:
         url = f"{base}/{provider_lower}.json"
         try:
             resp = httpx.get(url, timeout=timeout)
-            if resp.status_code != 200:
+            if resp.status_code != HTTPStatus.OK:
                 return {}
             return resp.json()
         except Exception:
             return {}
 
-    def _extract_model_price(self, portkey_data: dict, model_name: str) -> Optional[dict]:
+    def _extract_model_price(self, portkey_data: dict, model_name: str) -> dict | None:
         """通过 ACL 将 Portkey 格式转为 dict（向后兼容）"""
-        from flypig.acl.pricing import portkey_to_pricing_entry
-
         meta = self._registry.resolve(model_name)
         if not meta:
             return None
@@ -153,8 +154,6 @@ class PricingService:
         return result if "input" in result and "output" in result else None
 
     def _load_defaults(self) -> dict:
-        from flypig.acl.pricing import default_pricing_to_entry
-
         defaults = {}
         for name in self._registry.known_models():
             meta = self._registry.resolve(name)
@@ -199,7 +198,7 @@ class PricingService:
     def fetch_pricing(self, currency: str = "USD") -> dict:
         """获取价格数据，缓存优先"""
         today = str(date.today())
-        now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        now_iso = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         cache = self._load_cache()
         if cache and cache.get("updated") == today:
@@ -213,11 +212,13 @@ class PricingService:
                     if name not in prices:
                         prices[name] = price
 
-            self._save_cache({
-                "prices": prices,
-                "updated": today,
-                "update_time": now_iso,
-            })
+            self._save_cache(
+                {
+                    "prices": prices,
+                    "updated": today,
+                    "update_time": now_iso,
+                }
+            )
             cached_update_time = now_iso
 
         if currency.upper() == "CNY":
@@ -235,7 +236,7 @@ class PricingService:
             "source": "cached" if cache and cache.get("updated") == today else "online",
         }
 
-    def get_pricing(self, model_name: str) -> Optional[dict]:
+    def get_pricing(self, model_name: str) -> dict | None:
         """获取单个模型价格"""
         cache = self._load_cache()
         if cache:
@@ -244,6 +245,7 @@ class PricingService:
 
     def start(self) -> None:
         """启动后台定价刷新循环（每天早上 0 点自动刷新）"""
+
         async def _loop():
             refresh_interval = self._pricing_cfg("refresh_interval", DEFAULT_REFRESH_INTERVAL)
             try:
@@ -256,7 +258,7 @@ class PricingService:
                 try:
                     self.fetch_pricing()
                 except Exception:
-                    pass
+                    logger.warning("[pricing] 自动刷新失败，下次重试")
 
         self._loop_task = asyncio.create_task(_loop())
 
@@ -264,4 +266,4 @@ class PricingService:
         """停止后台循环"""
         if self._loop_task is not None:
             self._loop_task.cancel()
-            self._loop_task = None
+            self._loop_t

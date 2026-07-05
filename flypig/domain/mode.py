@@ -8,7 +8,7 @@
 细节见文档：docs/docs_refactor/mode-matrix.md → §核心矩阵
 """
 
-from enum import auto, Enum
+from enum import Enum, auto
 
 from flypig.shared.base import ValueObject
 
@@ -21,4 +21,5 @@ class ExecutionMode(Enum):
 
 class ModeConfig(ValueObject):
     """模式配置值对象 — 温度范围/可用工具列表/默认 prompt 身份"""
+
     pass

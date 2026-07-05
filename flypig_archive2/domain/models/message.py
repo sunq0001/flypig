@@ -15,19 +15,20 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass
 from typing import Any
 
 
 @dataclass
 class Message:
     """对话消息"""
+
     role: str  # user / assistant / system / tool
     content: str
     id: str = ""
     tool_calls: list[dict] | None = None  # assistant 消息的工具调用
-    tool_call_id: str | None = None       # tool 消息的关联 ID
-    name: str | None = None               # tool 消息的工具名
+    tool_call_id: str | None = None  # tool 消息的关联 ID
+    name: str | None = None  # tool 消息的工具名
 
     def to_dict(self) -> dict:
         d = {"role": self.role, "content": self.content}
@@ -43,6 +44,7 @@ class Message:
 @dataclass
 class ToolCall:
     """工具调用请求"""
+
     id: str
     name: str
     args: dict[str, Any]
@@ -51,6 +53,7 @@ class ToolCall:
 @dataclass
 class ChoiceCard:
     """选择题卡片"""
+
     question: str
     options: list[dict]  # [{"label": "...", "desc": "...", "value": "..."}, ...]
     selected: str | None = None
