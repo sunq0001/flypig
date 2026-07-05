@@ -1,30 +1,39 @@
 #!/usr/bin/env python3
 """FlyPig 前端合规检查 — ESLint 不覆盖的 FlyPig 特有项
 
-共 11 项检查：
+共 16 项检查：
 
-━━━ 一、API 规范（API Hygiene）━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  F_API      — .vue 组件应通过 utils/api.js 或 store 调用 API，而非直接 fetch
+━━━ 一、API 规范 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  F_API         — .vue 组件应通过 utils/api.js 或 store 调用 API，而非直接 fetch
 
-━━━ 二、代码质量（Code Quality）━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  F_COMPLEX  — computed / watch 回调超过 15 行，建议提取为具名函数
-  F_LONGFUNC — 函数体 > 50 行，建议拆分
-  F_RETURNS  — 函数 return 点 > 6 个，流程过于复杂
-  F_MSTR     — 魔法字符串（重复 5+ 次），建议定义为常量
-  F_COUPLE   — import 过多（> 25 条），提示高耦合
+━━━ 二、代码质量 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  F_COMPLEX     — computed / watch 回调超过 15 行，建议提取为具名函数
+  F_LONGFUNC    — 函数体 > 50 行，建议拆分
+  F_RETURNS     — 函数 return 点 > 6 个，流程过于复杂
+  F_MSTR        — 魔法字符串（重复 5+ 次），建议定义为常量
+  F_COUPLE      — import 过多（> 25 条），提示高耦合
 
-━━━ 三、健壮性（Robustness）━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  F_ROBUST   — async 函数有 await 但无 try/catch 保护
+━━━ 三、健壮性 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  F_ROBUST      — async 函数有 await 但无 try/catch 保护
 
-━━━ 四、样式规范（Style）━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  F_CSS      — style 中 !important 超过 15 个
+━━━ 四、样式规范 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  F_CSS         — .vue/.js 中 !important 超过 15 个
+  F_CSS_GLOBAL  — 全局 .css 文件中 !important 超过 15 个
+  F_CSS_ORPHAN  — 未被任何 .vue/.js import 的孤儿 .css 文件
 
-━━━ 五、文档规范（Documentation）━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  F_DOC      — .vue/.js 文件缺少文件级注释
-  F_SKEL     — 骨架文件（只有注释）缺少 TODO 标记
+━━━ 五、模板规范 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  F_TEMPLATE_DEPTH — .vue template 中 <div> 嵌套超过 4 层
+  F_PATTERN        — 手写 tabs-bar/tab-list 应使用 <t-tabs> 组件
 
-━━━ 六、数据分离（Data Separation）━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  F_DATA     — 组件内嵌大型数据对象（> 12 个键值对），应外移到 config/ 数据文件
+━━━ 六、性能 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  F_SHOWREF     — v-show 搭配重型组件应改 v-if + <KeepAlive>
+
+━━━ 七、文档规范 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  F_DOC         — .vue/.js 文件缺少文件级注释
+  F_SKEL        — 骨架文件（只有注释）缺少 TODO 标记
+
+━━━ 八、数据分离 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  F_DATA        — 组件内嵌大型数据对象（> 12 个键值对），应外移到 config/ 数据文件
 
 用法：
     python scripts/frontend_check.py
@@ -53,6 +62,61 @@ FRONTEND_SRC = (
 FRONTEND_MAX_LINES = 300
 COMPLEX_THRESHOLD = 15
 CSS_IMPORTANT_THRESHOLD = 15
+TEMPLATE_DIV_THRESHOLD = 4
+HEAVY_COMPONENT_KEYWORDS = [
+    "ChatPanel",
+    "TermBar",
+    "TerminalBar",
+    "MessageList",
+    "FileTree",
+    "DiffEditor",
+    "CodeEditor",
+]
+HANDWRITTEN_TAB_PATTERNS = [
+    "tabs-bar",
+    "tab-list",
+    "tab-bar",
+    "tab-header",
+    "tab-nav",
+    "tab-container",
+    "tab-item",
+]
+
+# ── CSS import 缓存（全局扫描一次，避免重复 I/O）──
+_css_import_cache: set[str] | None = None
+_css_import_files: list[Path] | None = None
+
+
+def _get_css_imports() -> set[str]:
+    """扫描所有 .vue/.js 中的 CSS import 引用，返回 import 路径集合"""
+    global _css_import_cache
+    if _css_import_cache is not None:
+        return _css_import_cache
+    _css_import_cache = set()
+    for ext in (".vue", ".js"):
+        for f in sorted(FRONTEND_SRC.rglob(f"*{ext}")):
+            if any(skip in f.parts for skip in ("node_modules", "dist", "assets")):
+                continue
+            try:
+                content = f.read_text(encoding="utf-8")
+            except Exception:
+                continue
+            for m in re.finditer(r"""import\s+['"]([^'"]+\.css)['"]""", content):
+                _css_import_cache.add(m.group(1))
+    return _css_import_cache
+
+
+def _get_all_css_files() -> list[Path]:
+    """返回 FRONTEND_SRC 下所有 standalone .css 文件"""
+    global _css_import_files
+    if _css_import_files is not None:
+        return _css_import_files
+    _css_import_files = [
+        f
+        for f in sorted(FRONTEND_SRC.rglob("*.css"))
+        if not any(skip in f.parts for skip in ("node_modules", "dist", "assets"))
+    ]
+    return _css_import_files
 
 
 def _in_frontend(file_path: Path) -> bool:
@@ -729,6 +793,131 @@ def check_f_data_separation(file_path: Path, rel: str) -> list[str]:
 
 
 # ══════════════════════════════════════════════════════════════
+# 新增的 5 项检查（UI 重构专项）
+# ══════════════════════════════════════════════════════════════
+
+
+def check_f_css_global_important(file_path: Path, rel: str) -> list[str]:
+    """F_CSS_GLOBAL — 检测全局 .css 文件中 !important 数量"""
+    violations: list[str] = []
+    if file_path.suffix != ".css" or not _in_frontend(file_path):
+        return violations
+    content = file_path.read_text(encoding="utf-8")
+    count = content.count("!important")
+    if count > CSS_IMPORTANT_THRESHOLD:
+        violations.append(
+            f"  {rel}:  [F_CSS_GLOBAL] {count} 个 !important"
+            f"（> {CSS_IMPORTANT_THRESHOLD}），建议从 CSS 优先级着手解决"
+        )
+    return violations
+
+
+def check_f_css_orphan(file_path: Path, rel: str) -> list[str]:
+    """F_CSS_ORPHAN — 检测未被任何 .vue/.js import 的孤儿 .css 文件"""
+    violations: list[str] = []
+    if file_path.suffix != ".css" or not _in_frontend(file_path):
+        return violations
+    css_rel = file_path.relative_to(FRONTEND_SRC)
+    css_path = f"@/{css_rel.as_posix()}"
+    css_posix = css_rel.as_posix()
+    all_imports = _get_css_imports()
+
+    # 检查 import 路径是否包含此 CSS（支持 @/、相对路径、文件名三种匹配）
+    is_imported = any(
+        css_path in imp or css_posix in imp or file_path.name in imp
+        for imp in all_imports
+    )
+    if not is_imported:
+        violations.append(
+            f"  {rel}:  [F_CSS_ORPHAN] 未被任何组件 import 的孤儿 CSS 文件，"
+            f"建议删除或确认是否仍有引用"
+        )
+    return violations
+
+
+def check_f_template_nesting(file_path: Path, rel: str) -> list[str]:
+    """F_TEMPLATE_DEPTH — 检测 .vue template 中 <div> 嵌套深度"""
+    violations: list[str] = []
+    if file_path.suffix != ".vue" or not _in_frontend(file_path):
+        return violations
+    content = file_path.read_text(encoding="utf-8")
+    template = _extract_template(content)
+    if not template:
+        return violations
+
+    # 简单 div 嵌套深度跟踪（忽略自闭合标签）
+    depth = 0
+    max_depth = 0
+    # 移除注释
+    template = re.sub(r"<!--.*?-->", "", template, flags=re.DOTALL)
+    for line in template.split("\n"):
+        stripped = line.strip()
+        if not stripped:
+            continue
+        # 跳过非 div 行
+        if "<div" not in stripped and "</div" not in stripped:
+            continue
+        # 统计行内 div 开闭（支持一行多个 div）
+        opens = len(re.findall(r"<div\b(?![^>]*?\/>)", stripped))
+        closes = stripped.count("</div>")
+        depth += opens - closes
+        max_depth = max(max_depth, depth)
+
+    if max_depth > TEMPLATE_DIV_THRESHOLD:
+        violations.append(
+            f"  {rel}:  [F_TEMPLATE_DEPTH] <div> 嵌套最深 {max_depth} 层"
+            f"（> {TEMPLATE_DIV_THRESHOLD}），建议简化 DOM 结构"
+        )
+    return violations
+
+
+def check_f_handwritten_pattern(file_path: Path, rel: str) -> list[str]:
+    """F_PATTERN — 检测手写 tabs-bar/tab-list 等应使用 <t-tabs>"""
+    violations: list[str] = []
+    if file_path.suffix != ".vue" or not _in_frontend(file_path):
+        return violations
+    content = file_path.read_text(encoding="utf-8")
+    for pattern in HANDWRITTEN_TAB_PATTERNS:
+        if pattern in content:
+            line_no = content[: content.find(pattern)].count("\n") + 1
+            violations.append(
+                f"  {rel}:  [F_PATTERN] 第 {line_no} 行：检测到手写 \"{pattern}\"，"
+                f"建议使用 TDesign <t-tabs> 组件"
+            )
+            break
+    return violations
+
+
+def check_f_vshow_heavy(file_path: Path, rel: str) -> list[str]:
+    """F_SHOWREF — 检测 v-show 搭配重型组件应改 v-if + <KeepAlive>"""
+    violations: list[str] = []
+    if file_path.suffix != ".vue" or not _in_frontend(file_path):
+        return violations
+    content = file_path.read_text(encoding="utf-8")
+    template = _extract_template(content)
+    if not template:
+        return violations
+
+    # 检查 template 中 v-show 出现在重型组件上的情况
+    for keyword in HEAVY_COMPONENT_KEYWORDS:
+        # 查找 v-show + 重型组件名的模式
+        for m in re.finditer(
+            rf'v-show\s*=\s*["\'][^"\']*["\'][^>]*{keyword}|'
+            rf'{keyword}[^>]*v-show\s*=\s*["\'][^"\']*["\']',
+            template,
+        ):
+            line_no = content[: content.find(m.group())].count("\n") + 1
+            violations.append(
+                f"  {rel}:  [F_SHOWREF] 第 {line_no} 行：{keyword} 使用了 v-show，"
+                f"建议改为 v-if + <KeepAlive> 以正确销毁/重建组件"
+            )
+            break
+        if violations:
+            break
+    return violations
+
+
+# ══════════════════════════════════════════════════════════════
 # 主函数
 # ══════════════════════════════════════════════════════════════
 
@@ -750,6 +939,13 @@ def main() -> int:
         ("f_doc", "文件级注释", check_f_doc),
         ("f_skel", "骨架文件标记", check_f_skeleton),
         ("f_data", "数据未分离", check_f_data_separation),
+        # ── 新增：CSS 专项（在 .css 循环中执行）──
+        ("f_css_global", "全局CSS-important", check_f_css_global_important),
+        ("f_css_orphan", "孤儿CSS", check_f_css_orphan),
+        # ── 新增：模板/性能规范 ──
+        ("f_template_depth", "div嵌套过深", check_f_template_nesting),
+        ("f_pattern", "手写tabs", check_f_handwritten_pattern),
+        ("f_showref", "v-show重型组件", check_f_vshow_heavy),
     ]
 
     labels = {
@@ -764,6 +960,11 @@ def main() -> int:
         "f_doc": ("F_DOC", "文件级注释"),
         "f_skel": ("F_SKEL", "骨架文件标记"),
         "f_data": ("F_DATA", "数据未分离"),
+        "f_css_global": ("F_CSS_GLOBAL", "全局CSS-important"),
+        "f_css_orphan": ("F_CSS_ORPHAN", "孤儿CSS"),
+        "f_template_depth": ("F_TEMPLATE_DEPTH", "div嵌套过深"),
+        "f_pattern": ("F_PATTERN", "手写tabs"),
+        "f_showref": ("F_SHOWREF", "v-show重型组件"),
     }
 
     results: dict[str, list[str]] = {key: [] for key, _, _ in checks}
@@ -774,6 +975,15 @@ def main() -> int:
                 continue
             rel = f.relative_to(Path(__file__).resolve().parent.parent)
             for key, _, check_fn in checks:
+                vio = check_fn(f, str(rel))
+                results[key].extend(vio)
+
+    # ── 扫描 standalone .css 文件（CSS 专项检查）──
+    css_keys = {"f_css_global", "f_css_orphan"}
+    for f in _get_all_css_files():
+        rel = f.relative_to(Path(__file__).resolve().parent.parent)
+        for key, _, check_fn in checks:
+            if key in css_keys:
                 vio = check_fn(f, str(rel))
                 results[key].extend(vio)
 

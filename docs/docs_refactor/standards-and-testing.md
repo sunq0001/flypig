@@ -1,7 +1,7 @@
 # 规范与测试 — 质量保障体系
 
 > **来源**：架构重构全流程讨论（architecture_check → pre-commit → CI → mypy → 测试）
-> **关联文档**：[architecture-guide.md](architecture-guide.md)、[backend-modules.md](backend-modules.md)、[adversarial-system.md](adversarial-system.md)、[tech-stack.md](tech-stack.md)
+> **关联文档**：[architecture-guide.md](architecture-guide.md)、[backend-modules.md](backend-modules.md)、[adversarial-system.md](adversarial-system.md)、[tech-stack.md](tech-stack.md)、[ui-refactor.md](ui-refactor.md)（自动化检查清单由 UI 审计驱动）
 
 ---
 
@@ -273,10 +273,39 @@ warn_unreachable = true
 
 配置位置：`scripts/frontend_check.py`
 
-检查前端特有的规范：
-- async 函数是否有 try/catch 保护
-- 文件操作是否有异常处理
-- 组件导入是否来自统一入口
+检查前端特有的规范（共 16 项）：
+
+**一、API 规范**
+- F_API — 禁止直接 `fetch()`，应通过 `utils/api.js` 或 store
+
+**二、代码质量**
+- F_COMPLEX — computed/watch 回调超 15 行，建议提取具名函数
+- F_LONGFUNC — 函数体 > 50 行，建议拆分
+- F_RETURNS — 函数 return 点 > 6 个，流程过于复杂
+- F_MSTR — 魔法字符串重复 5+ 次，建议定义常量
+- F_COUPLE — import 超 25 条，高耦合
+
+**三、健壮性**
+- F_ROBUST — async 函数有 await 但无 try/catch
+
+**四、样式规范**
+- F_CSS — `.vue`/`.js` 中 `!important` 超 15 个
+- F_CSS_GLOBAL — 全局 `.css` 文件中 `!important` 超 15 个
+- F_CSS_ORPHAN — 未被任何 `.vue`/`.js` import 的孤儿 `.css` 文件
+
+**五、模板规范**
+- F_TEMPLATE_DEPTH — `<div>` 嵌套超 4 层，建议简化 DOM
+- F_PATTERN — 手写 tabs-bar/tab-list 等，建议用 `<t-tabs>`
+
+**六、性能**
+- F_SHOWREF — `v-show` 搭配重型组件，建议改 `v-if` + `<KeepAlive>`
+
+**七、文档规范**
+- F_DOC — 文件缺少文件级注释
+- F_SKEL — 骨架文件缺少 TODO 标记
+
+**八、数据分离**
+- F_DATA — 组件内嵌大型数据对象（> 12 个键值对），应外移到 config/
 
 ---
 

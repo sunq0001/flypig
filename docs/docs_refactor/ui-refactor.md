@@ -1,7 +1,7 @@
 # 前端 UI 重构方案
 
 > **来源**：用户反馈"太多 div 看着不舒服"引发的前端 UI 全面审计与重构讨论
-> **关联文档**: `frontend-arch.md`（前端架构总览）、`tech-stack.md`（技术栈决策）
+> **关联文档**: `frontend-arch.md`（前端架构总览）、`tech-stack.md`（技术栈决策）、`standards-and-testing.md`（自动化检查清单）
 > 
 > 本方案涵盖：div 层级瘦身 → 嵌套组件抽取 → CSS 清理 → 性能优化，采用三阶段渐进式策略，每步可截图验证、可 git 回退。
 
@@ -330,3 +330,20 @@ import 'iconify-icon/cache-all'  // 不加载
 | 长对话列表渲染 | 全量渲染 | 仅可见区域（content-visibility） |
 | 面板切换 | 始终挂载 | v-if + KeepAlive 按需 |
 | 弹窗维护点 | 2 处重复代码 | 1 处通用组件 |
+
+---
+
+## 八、自动化检查覆盖
+
+本文档发现的 UI 问题已纳入 `scripts/frontend_check.py` 的自动化检测中（详见 [standards-and-testing.md#53-frontend_checkpy](standards-and-testing.md#53-frontend_checkpy)）：
+
+| 文档中的问题 | 自动检查 | 代号 |
+|------------|---------|------|
+| 孤儿 `mode-select-popper.css` 未被 import | 扫描所有 `.vue`/`.js` 中的 CSS import，反向匹配 `.css` 文件 | F_CSS_ORPHAN |
+| `model-select-popper.css` 全局 20+ `!important` | 扩展到扫描 standalone `.css` 文件的 `!important` 数量 | F_CSS_GLOBAL |
+| MainLayout 6 层 `<div>` 套娃 | 解析 `.vue` template 中 `<div>` 开闭标签，统计最大嵌套深度 | F_TEMPLATE_DEPTH |
+| InteractBar 手写标签栏（`tabs-bar` 类名） | 正则匹配 class 中 `tabs-bar`/`tab-list` 等关键字，提示用 `<t-tabs>` | F_PATTERN |
+| ChatPanel 用 `v-show` 切换（不销毁/重建） | 检测 `v-show` 在重型组件（ChatPanel/TermBar 等）上出现 | F_SHOWREF |
+
+> 执行：`python scripts/frontend_check.py`
+> 当前检出 9 处违规，其中 5 项来自本文档发现的问题。
