@@ -5,6 +5,7 @@ pre-commit 默认从 repo 根目录运行，vitest 找不到配置，导致 @ �
 
 此脚本负责 cd 到正确目录再调用 npx vitest。
 """
+
 from __future__ import annotations
 
 import subprocess

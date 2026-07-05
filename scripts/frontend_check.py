@@ -881,7 +881,7 @@ def check_f_handwritten_pattern(file_path: Path, rel: str) -> list[str]:
         if pattern in content:
             line_no = content[: content.find(pattern)].count("\n") + 1
             violations.append(
-                f"  {rel}:  [F_PATTERN] 第 {line_no} 行：检测到手写 \"{pattern}\"，"
+                f'  {rel}:  [F_PATTERN] 第 {line_no} 行：检测到手写 "{pattern}"，'
                 f"建议使用 TDesign <t-tabs> 组件"
             )
             break
