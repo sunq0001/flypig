@@ -9,14 +9,14 @@
     </div>
     <div class="bubble">
       <div
-        v-if="loading && !displayText"
+        v-if="showStarting && !displayText"
         class="starting"
       >
         <span class="starting-dot" />
         模型启动中…
       </div>
       <div
-        v-else
+        v-else-if="displayText"
         class="content"
       >
         {{ displayText }}
@@ -37,6 +37,7 @@ import { ref, computed, watch, onBeforeUnmount } from 'vue'
 const props = defineProps({
   message: { type: Object, required: true },
   loading: { type: Boolean, default: false },
+  showStarting: { type: Boolean, default: false },
 })
 
 function getFullText(m) {

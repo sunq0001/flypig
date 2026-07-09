@@ -17,10 +17,11 @@ MessageList：消息列表
       开始一段新对话
     </div>
     <MessageItem
-      v-for="m in messages"
+      v-for="(m, idx) in messages"
       :key="m.id"
       :message="m"
       :loading="loading && m === messages[messages.length - 1] && m.role === 'assistant'"
+      :show-starting="loading && m === messages[messages.length - 1] && m.role === 'assistant' && idx === 1"
     />
   </div>
 </template>
