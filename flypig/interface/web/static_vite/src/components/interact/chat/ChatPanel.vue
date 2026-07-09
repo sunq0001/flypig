@@ -16,13 +16,8 @@ ChatPanel：对话框面板容器
     <MessageList
       :messages="messages"
       :loading="isStreaming"
+      :status="status"
     />
-    <div
-      v-if="status === 'submitted'"
-      class="model-loading-hint"
-    >
-      <t-loading indicator size="small" /> 模型启动中，请稍候...
-    </div>
     <InputBox
       :model="currentModel"
       :models="modelList"
@@ -83,12 +78,22 @@ const props = defineProps({
 const configStore = useConfigStore()
 
 const modelList = computed(() => configStore.models)
-const currentModel = ref(props.model || configStore.default_model || '')
+
+function firstAvailableModel() {
+  // 默认模型有 Key 则用它，否则切到第一个有 Key 的（通常是本地模型）
+  const def = configStore.default_model
+  const models = configStore.models || []
+  if (def && models.some(m => m.name === def && m.has_key)) return def
+  const fallback = models.find(m => m.has_key)
+  return fallback ? fallback.name : def
+}
+
+const currentModel = ref(props.model || firstAvailableModel() || '')
 const currentMode = ref('explore')
 
 watch(() => configStore.default_model, (val) => {
   if (val && !currentModel.value) {
-    currentModel.value = val
+    currentModel.value = firstAvailableModel()
   }
 }, { immediate: true })
 
@@ -145,7 +150,10 @@ const apiKeyProvider = computed(() => {
 function modelHasKey(modelName) {
   const models = configStore.models || []
   const m = models.find(m => m.name === modelName)
-  return m ? m.has_key : false
+  if (!m) return false
+  // 本地模型永远不需要 API Key
+  if (m.local) return true
+  return m.has_key
 }
 
 // ── 发送 ──

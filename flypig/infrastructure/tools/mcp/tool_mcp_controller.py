@@ -8,3 +8,5 @@
 层&依赖：infrastructure.tools.mcp 层，依赖 tool_mcp_loader + tool_mcp_lifecycle + tool_mcp_discovery
 细节见文档：docs/docs_refactor/mcp.md → §后端 API
 """
+
+# TODO: 骨架文件占位，待具体实现

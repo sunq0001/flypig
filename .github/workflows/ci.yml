@@ -38,7 +38,7 @@ jobs:
         working-directory: ./flypig
 
       - name: mypy 静态类型检查
-        run: mypy --config-file=pyproject.toml flypig/domain flypig/application flypig/acl flypig/shared
+        run: mypy --config-file=pyproject.toml flypig/domain flypig/orchestration flypig/acl flypig/shared
         working-directory: ./flypig
 
       - name: ESLint 前端检查

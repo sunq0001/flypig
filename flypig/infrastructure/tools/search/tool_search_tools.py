@@ -8,3 +8,5 @@
 层&依赖：infrastructure.tools.search 层，依赖 ToolExecutor 注册表
 细节见文档：docs/docs_refactor/tools.md → §工具注册
 """
+
+# TODO: 骨架文件占位，待具体实现

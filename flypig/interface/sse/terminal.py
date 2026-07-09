@@ -8,3 +8,5 @@
 层&依赖：backend 层，依赖 subprocess + PTY
 细节见文档：docs/docs_refactor/subprocess.md → §用户 PTY、data-flow.md → §终端数据流
 """
+
+# TODO: 骨架文件占位，待具体实现

@@ -8,3 +8,5 @@
 层&依赖：infrastructure.usage 层，依赖 IHook + IUsageTracker
 细节见文档：docs/docs_refactor/mem_convStore_usage.md → §核心哲学
 """
+
+# TODO: 骨架文件占位，待具体实现

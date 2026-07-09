@@ -4,12 +4,15 @@
 实现方法：继承 domain/interfaces 的 ABC，方法体留空或返回默认值。
 层&依赖：infrastructure 层，依赖对应的 domain.interfaces 接口
 """
+
 from typing import Any
+
 from flypig.domain.interfaces.repository import Repository
 
 
 class RepositoryImpl(Repository):
     """领域仓库存根"""
+
     async def save(self, entity: Any) -> None:
         pass
 

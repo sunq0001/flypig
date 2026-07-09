@@ -4,11 +4,13 @@
 实现方法：继承 domain/interfaces 的 ABC，方法体留空或返回默认值。
 层&依赖：infrastructure 层，依赖对应的 domain.interfaces 接口
 """
+
 from flypig.domain.interfaces.ievent_stream import IEventStream
 
 
 class EventStream(IEventStream):
     """事件流存根"""
+
     async def push(self, session_id: str, event: str, data: dict) -> None:
         pass
 

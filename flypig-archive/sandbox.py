@@ -529,7 +529,6 @@ class SandboxManager:
             # ── 命令失败时附加诊断 ──
             if result.returncode != 0:
                 error_lower = (result.stderr or "").lower()
-                stderr_text = result.stderr or ""
 
                 # 检测交互式脚本（input() 无 stdin 导致的 EOFError）
                 if "eof" in error_lower or "eof when reading" in error_lower:

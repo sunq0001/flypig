@@ -9,11 +9,42 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import Any
 
 import yaml
 from flypig.shared.settings import AppSettings
 from pydantic_settings import BaseSettings  # noqa: F401 保持依赖
+
+
+def _load_json_config(section: str, sub_key: str | None = None, default: Any = None) -> Any:
+    """从 model_registry.json 读取指定段的值
+
+    Args:
+        section: 顶层段名，如 "local"、"models"
+        sub_key: 段内子键，为 None 则返回整个段
+        default: 缺省返回值
+
+    Returns:
+        配置值或 default
+    """
+    reg_path = (
+        Path(__file__).resolve().parent.parent.parent / "flypig" / "data" / "model_registry.json"
+    )
+    if not reg_path.exists():
+        return default
+    try:
+        with open(reg_path, encoding="utf-8") as f:
+            data: dict = json.load(f)
+    except Exception:
+        return default
+    section_data = data.get(section)
+    if section_data is None:
+        return default
+    if sub_key is None:
+        return section_data
+    return section_data.get(sub_key, default)
 
 
 def _apply_yaml_llm(settings: AppSettings, data: dict) -> None:

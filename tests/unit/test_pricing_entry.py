@@ -8,6 +8,7 @@
 """
 
 import pytest
+
 from flypig.domain import PricingEntry
 
 

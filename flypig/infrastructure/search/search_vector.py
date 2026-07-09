@@ -8,3 +8,5 @@
 层&依赖：infrastructure.search 层，实现 IVectorStore 接口
 细节见文档：docs/docs_refactor/tech-stack.md → §向量检索
 """
+
+# TODO: 骨架文件占位，待具体实现

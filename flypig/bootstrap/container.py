@@ -8,10 +8,11 @@
 """
 
 from dependency_injector import containers, providers
-from flypig.application.chat_service import ChatApplicationService
 from flypig.domain.registry import ModelRegistry
 from flypig.infrastructure.llm.model_factory import ModelFactory
+from flypig.infrastructure.tools import ToolExecutor
 from flypig.infrastructure.usage.pricing import PricingService
+from flypig.orchestration.chat_service import ChatApplicationService
 
 
 class AppContainer(containers.DeclarativeContainer):
@@ -31,10 +32,15 @@ class AppContainer(containers.DeclarativeContainer):
         PricingService,
         registry=model_registry,
     )
+    tool_executor = providers.Singleton(
+        ToolExecutor,
+        workspace_dir=config.workspace_dir,
+    )
 
     # ── 应用服务 ──
     chat_service = providers.Factory(
         ChatApplicationService,
         model_factory=model_factory,
-        settings=config,
+        tool_executor=tool_executor,
+        settings=config.app_settings,
     )

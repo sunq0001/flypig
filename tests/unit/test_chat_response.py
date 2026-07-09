@@ -83,6 +83,6 @@ class TestChatResponseSSE:
 
     def test_chinese_content(self) -> None:
         r = ChatResponse.text_delta("你好世界")
-        assert '"hello"'.encode() not in r.to_sse().encode()
+        assert b'"hello"' not in r.to_sse().encode()
         data = json.loads(r.to_sse()[len("data: ") :].strip())
         assert data == {"type": "text-delta", "delta": "你好世界"}

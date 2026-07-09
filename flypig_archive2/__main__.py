@@ -16,7 +16,7 @@ if str(_root) not in sys.path:
 
 
 def main():
-    args = [a for a in sys.argv[1:] if not a.startswith("-")]
+    [a for a in sys.argv[1:] if not a.startswith("-")]
 
     if "--dev" in sys.argv or os.environ.get("FLYPIG_DEV"):
         _run_dev()

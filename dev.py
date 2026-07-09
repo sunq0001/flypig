@@ -11,14 +11,14 @@ import sys
 from pathlib import Path
 
 # 修复 Windows GBK 编码问题
-if sys.stdout.encoding.lower() != "utf-8":
-    sys.stdout.reconfigure(encoding="utf-8")
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    sys.stdout.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
 
 ROOT = Path(__file__).parent
 PYTHON = sys.executable
 
 SERVICES = [
-    ("back", "后端 :8320", f"{PYTHON} -m flypig --port 8320", ROOT),
+    ("back", "后端 :8320", f"{PYTHON} -m flypig --port 8320 --reload", ROOT),
     (
         "chat",
         "聊天 :8321",
@@ -37,7 +37,7 @@ SERVICES = [
 _MAX_RETRIES = 10
 
 
-async def run(tag, label, cmd, cwd):
+async def run(tag: str, label: str, cmd: str, cwd: Path) -> None:
     retries = 0
     while retries < _MAX_RETRIES:
         try:
@@ -59,13 +59,15 @@ async def run(tag, label, cmd, cwd):
         # 带超时读 stdout，防止僵死进程 hang 住 readline
         while True:
             try:
+                if proc.stdout is None:
+                    break
                 line = await asyncio.wait_for(proc.stdout.readline(), timeout=5)
                 if not line:
                     break
                 text = line.decode("utf-8", errors="replace").rstrip()
                 if text:
                     print(f"  [{tag}] {text}")
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 # 5 秒无输出不代表进程已死，检查进程是否还活着
                 if proc.returncode is not None:
                     break
@@ -74,7 +76,7 @@ async def run(tag, label, cmd, cwd):
         # 进程已死，等它完全退出
         try:
             code = await asyncio.wait_for(proc.wait(), timeout=3)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             print(f"  [{tag}] 进程无响应，强制终止")
             try:
                 proc.kill()
@@ -98,7 +100,7 @@ async def run(tag, label, cmd, cwd):
 async def main():
     # 检测依赖
     try:
-        import flypig
+        import flypig  # noqa: F401  # 仅检测包是否可导入
     except ImportError:
         print("错误: flypig 包未安装。请执行:")
         print(f"  pip install -e {ROOT / 'flypig'}")
@@ -123,7 +125,7 @@ async def main():
         print(output)
     except FileNotFoundError:
         print("  [check] 架构检查脚本未找到，跳过")
-    except asyncio.TimeoutError:
+    except TimeoutError:
         print("  [check] 架构检查超时，跳过")
 
     # ── import-linter 层依赖检查 ──
@@ -147,7 +149,7 @@ async def main():
         print(output)
     except FileNotFoundError:
         print("  [lint] import-linter 未安装，跳过（pip install import-linter）")
-    except asyncio.TimeoutError:
+    except TimeoutError:
         print("  [lint] import-linter 超时，跳过")
 
     print("╔══════════════════════════════════════════╗")
@@ -159,13 +161,10 @@ async def main():
     print("╚══════════════════════════════════════════╝")
     print()
 
-    tasks = [
-        asyncio.create_task(run(tag, label, cmd, cwd))
-        for tag, label, cmd, cwd in SERVICES
-    ]
+    tasks = [asyncio.create_task(run(tag, label, cmd, cwd)) for tag, label, cmd, cwd in SERVICES]
 
     try:
-        await asyncio.gather(*tasks, return_exceptions=True)
+        _ = await asyncio.gather(*tasks, return_exceptions=True)
     except asyncio.CancelledError:
         pass
 

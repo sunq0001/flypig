@@ -8,3 +8,5 @@
 层&依赖：infrastructure.sandbox 层，零依赖
 细节见文档：docs/docs_refactor/subprocess.md → §沙箱策略
 """
+
+# TODO: 骨架文件占位，待具体实现

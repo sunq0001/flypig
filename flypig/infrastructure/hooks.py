@@ -8,3 +8,5 @@
 层&依赖：infrastructure 层，实现 domain/interfaces/ihook.py 定义的钩子系统
 细节见文档：docs/docs_refactor/resilience.md → §TurnCheckpointHook
 """
+
+# TODO: 骨架文件占位，待具体实现

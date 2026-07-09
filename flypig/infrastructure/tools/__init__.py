@@ -1,12 +1,18 @@
-"""工具执行包
+"""工具基础设施层
 
-为什么做：AI 调用的所有工具（文件/bash/git/搜索/MCP）需要统一的执行入口和注册机制。
-实现方法：ToolExecutor 调度器 + 按功能分组的工具文件（file/review/search/interact/system/mcp）+ 公共 utils。
-实现效果：加新工具只需新建工具文件并在注册表中声明，不改调度器。
-技术栈：LangGraph ToolNode, subprocess, aiofiles, Docker SDK
+为什么做：统一管理所有 AI 可调用的工具（文件操作/bash/git/搜索/MCP），
+         通过 @tool 装饰器自动注册，ToolExecutor 统一调度。
+实现方法：registry.py 提供 @tool 装饰器 + _TOOL_REGISTRY，
+         executor.py 实现 IToolExecutor 接口从注册表加载工具。
 
-层&依赖：infrastructure.tools 层，实现 IToolExecutor，依赖 domain/interfaces
-细节见文档：docs/docs_refactor/tools.md → §核心哲学
+层&依赖：infrastructure.tools 层，依赖 domain.interfaces.itool_executor
 """
 
-__all__ = []
+from flypig.infrastructure.tools.executor import ToolExecutor
+from flypig.infrastructure.tools.registry import get_registry, tool
+
+__all__ = [
+    "ToolExecutor",
+    "get_registry",
+    "tool",
+]

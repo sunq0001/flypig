@@ -8,3 +8,5 @@
 层&依赖：infrastructure.tools.system 层，依赖 IConversationStore
 细节见文档：docs/docs_refactor/mem_convStore_tasks.md → §CRUD
 """
+
+# TODO: 骨架文件占位，待具体实现

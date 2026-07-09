@@ -8,3 +8,5 @@
 层&依赖：infrastructure.tools.search 层，依赖 httpx
 细节见文档：docs/docs_refactor/tech-stack.md → §内置搜索
 """
+
+# TODO: 骨架文件占位，待具体实现

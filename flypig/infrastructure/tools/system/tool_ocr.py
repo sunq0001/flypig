@@ -7,3 +7,5 @@
 层&依赖：infrastructure.tools.system 层，依赖 PaddleOCR
 细节见文档：docs/docs_refactor/tech-stack.md → §OCR
 """
+
+# TODO: 骨架文件占位，待具体实现

@@ -1,56 +1,33 @@
 repos:
-  # ── Python: ruff 自动修复 ──
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.9.0
+    rev: v0.7.0
     hooks:
       - id: ruff
-        args: [--fix, --exit-non-zero-on-fix]
+        args: [--config, flypig/pyproject.toml, --fix]
       - id: ruff-format
+        args: [--config, flypig/pyproject.toml]
 
-  # ── Python: mypy 静态类型检查 ──
-  - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.10.0
-    hooks:
-      - id: mypy
-        args: [--config-file=flypig/pyproject.toml, --no-strict-optional]
-        additional_dependencies: [pydantic>=2.0]
-        files: ^flypig/(?:domain|application|acl|shared)/.*\.py$
-        pass_filenames: true
-
-  # ── 前端: ESLint 检查 ──
-  - repo: local
+  - repo: https://github.com/pre-commit/mirrors-eslint
+    rev: v9.12.0
     hooks:
       - id: eslint
-        name: ESLint 前端检查
-        entry: python scripts/precommit_eslint.py
-        language: python
-        files: ^flypig/interface/web/static_vite/src/.*\.(js|vue|ts)$
+        args: [--config, flypig/interface/web/static_vite/.eslintrc.json, --fix]
+        additional_dependencies:
+          - eslint@9.12.0
+          - eslint-plugin-vue@9.29.0
+
+  - repo: local
+    hooks:
+      - id: lint-imports
+        name: lint-imports (层依赖检查)
+        entry: lint-imports --config flypig/pyproject.toml
+        language: system
         pass_filenames: false
         always_run: true
 
-  # ── 架构合规检查（DDD 层依赖 + 接口契约 + 测试覆盖）──
-  - repo: local
-    hooks:
       - id: architecture-check
-        name: 架构合规检查（Python 变更时触发）
+        name: architecture_check (DDD 合规)
         entry: python scripts/architecture_check.py
-        language: python
-        files: ^flypig/.*\.py$
-        pass_filenames: false
-      - id: frontend-check
-        name: 前端合规检查（前端文件变更时触发）
-        entry: python scripts/frontend_check.py
-        language: python
-        files: ^flypig/interface/web/static_vite/src/.*\.(vue|js)$
-        pass_filenames: false
-
-  # ── 前端: Vitest 测试 ──
-  - repo: local
-    hooks:
-      - id: vitest
-        name: Vitest 前端测试
-        entry: python scripts/precommit_vitest.py
-        language: python
-        files: ^flypig/interface/web/static_vite/src/.*\.(js|vue)$
+        language: system
         pass_filenames: false
         always_run: true

@@ -1,12 +1,13 @@
-"""文件操作工具包
+"""文件操作工具
 
-为什么做：AI 读写文件需要安全可控的统一入口（路径校验/大小限制/二进制检测）。
-实现方法：实现文件 CRUD 工具（read/write/patch/delete/list_dir），走 PathValidator 路径审批。
-实现效果：AI 读写文件不会越界，大文件自动截断，二进制文件自动标记。
-技术栈：aiofiles, PathValidator
+为什么做：文件读写/编辑是 AI 最常用的操作，需支持路径验证和范围读取。
+实现方法：从旧 tools.py 提取核心逻辑，改为独立 Tool* 类 + @tool 注册。
 
-层&依赖：infrastructure.tools.file 层，依赖 PathValidator（infrastructure/sandbox）
-细节见文档：docs/docs_refactor/tools.md → §文件编辑方案
+层&依赖：infrastructure.tools.file 层
 """
 
-__all__ = []
+from flypig.infrastructure.tools.file.edit import ToolEdit
+from flypig.infrastructure.tools.file.read import ToolRead
+from flypig.infrastructure.tools.file.write import ToolWrite
+
+__all__ = ["ToolEdit", "ToolRead", "ToolWrite"]

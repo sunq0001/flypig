@@ -8,3 +8,5 @@
 层&依赖：infrastructure.tools.mcp 层，依赖 httpx（发送 HTTP 请求到 Registry）
 细节见文档：docs/docs_refactor/mcp.md → §第二层+第三层
 """
+
+# TODO: 骨架文件占位，待具体实现

@@ -161,7 +161,7 @@ function onBrowserSelect(path) {
 .section-label {
   font-size: 13px;
   font-weight: 500;
-  color: #606266;
+  color: #cfcfcf;
 }
 
 .recent-list {
@@ -183,7 +183,7 @@ function onBrowserSelect(path) {
 }
 
 .recent-item:hover {
-  background: #ecf5ff;
+  background: #2f3338;
 }
 
 .recent-icon {
@@ -195,7 +195,7 @@ function onBrowserSelect(path) {
 .recent-path {
   flex: 1;
   font-size: 13px;
-  color: #303133;
+  color: #d4d4d4;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -204,7 +204,7 @@ function onBrowserSelect(path) {
 }
 
 .recent-arrow {
-  color: #c0c4cc;
+  color: #7a7a7a;
   font-size: 14px;
   flex-shrink: 0;
 }
@@ -247,5 +247,17 @@ function onBrowserSelect(path) {
 /* 错误 */
 .error-msg {
   margin-top: 4px;
+}
+
+/* 统一 TDesign 输入框为深色，适配深色弹窗 */
+:deep(.t-input) {
+  background-color: #1e1e1e;
+  border-color: #3a3a3a;
+}
+:deep(.t-input__inner) {
+  color: #d4d4d4;
+}
+:deep(.t-input__inner::placeholder) {
+  color: #7a7a7a;
 }
 </style>

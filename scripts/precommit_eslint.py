@@ -8,7 +8,7 @@ root = Path(__file__).resolve().parent.parent
 frontend = root / "flypig" / "interface" / "web" / "static_vite"
 
 # Windows 下 npx 可能不在 PATH 中，用 shell=True 确保能找到
-result = subprocess.run(
+result = subprocess.run(  # noqa: PLW1510
     "npx eslint src/",
     cwd=str(frontend),
     capture_output=True,

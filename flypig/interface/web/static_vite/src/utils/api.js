@@ -12,14 +12,18 @@ export async function readDir(dirPath) {
   if (isElectron) {
     return window.electronAPI.readDir(dirPath)
   }
-  const res = await fetch('/api/tree', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: dirPath }),
-  })
-  if (!res.ok) return []
-  const json = await res.json()
-  return json.entries || []
+  try {
+    const res = await fetch('/api/tree', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: dirPath }),
+    })
+    if (!res.ok) return []
+    const json = await res.json()
+    return json.entries || []
+  } catch {
+    return []
+  }
 }
 
 // ── 文件读取 ──
@@ -27,17 +31,21 @@ export async function readFile(filePath) {
   if (isElectron) {
     return window.electronAPI.readFile(filePath)
   }
-  const res = await fetch(`/api/file?path=${encodeURIComponent(filePath)}`)
-  if (!res.ok) return { type: 'error', message: '读取失败' }
-  // 判断是否图片
-  const ext = filePath.split('.').pop()?.toLowerCase()
-  const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp']
-  if (imageExts.includes(ext)) {
-    const blob = await res.blob()
-    return { type: 'image', data: await blobToBase64(blob), ext }
+  try {
+    const res = await fetch(`/api/file?path=${encodeURIComponent(filePath)}`)
+    if (!res.ok) return { type: 'error', message: '读取失败' }
+    // 判断是否图片
+    const ext = filePath.split('.').pop()?.toLowerCase()
+    const imageExts = ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp', 'ico', 'bmp']
+    if (imageExts.includes(ext)) {
+      const blob = await res.blob()
+      return { type: 'image', data: await blobToBase64(blob), ext }
+    }
+    const data = await res.json()
+    return { type: 'text', content: data.content || '' }
+  } catch {
+    return { type: 'error', message: '读取失败' }
   }
-  const data = await res.json()
-  return { type: 'text', content: data.content || '' }
 }
 
 // ── 文件 URL（用于 <img src> 等场景）──
@@ -50,12 +58,16 @@ export async function writeFile(filePath, content) {
   if (isElectron) {
     return window.electronAPI.writeFile(filePath, content)
   }
-  const res = await fetch('/api/file', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: filePath, content }),
-  })
-  return { ok: res.ok }
+  try {
+    const res = await fetch('/api/file', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: filePath, content }),
+    })
+    return { ok: res.ok }
+  } catch {
+    return { ok: false }
+  }
 }
 
 // ── 配置 ──
@@ -63,71 +75,103 @@ export async function getConfig() {
   if (isElectron) {
     return window.electronAPI.getConfig()
   }
-  const res = await fetch('/api/config')
-  return res.json()
+  try {
+    const res = await fetch('/api/config')
+    return res.json()
+  } catch {
+    return {}
+  }
 }
 
 export async function setConfig(key, value) {
   if (isElectron) {
     return window.electronAPI.setConfig(key, value)
   }
-  await fetch('/api/config', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ [key]: value }),
-  })
+  try {
+    await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ [key]: value }),
+    })
+  } catch {
+    // 静默
+  }
 }
 
 // ── 配置（扩展） ──
 export async function updateDefaultModel(modelName) {
-  await fetch('/api/config', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ default_model: modelName }),
-  })
+  try {
+    await fetch('/api/config', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ default_model: modelName }),
+    })
+  } catch {
+    // 静默
+  }
 }
 
 export async function saveApiKey(provider, apiKey) {
-  const res = await fetch('/api/config/apikey', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ provider, api_key: apiKey }),
-  })
-  return { ok: res.ok }
+  try {
+    const res = await fetch('/api/config/apikey', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider, api_key: apiKey }),
+    })
+    return { ok: res.ok }
+  } catch {
+    return { ok: false }
+  }
 }
 
 // ── 文件浏览 ──
 export async function browseDir(parentPath) {
-  const res = await fetch('/api/config/browse', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path: parentPath }),
-  })
-  if (!res.ok) return { entries: [], parent: '', path: '' }
-  return res.json()
+  try {
+    const res = await fetch('/api/config/browse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: parentPath }),
+    })
+    if (!res.ok) return { entries: [], parent: '', path: '' }
+    return res.json()
+  } catch {
+    return { entries: [], parent: '', path: '' }
+  }
 }
 
 export async function mkdirDir(parentPath, name) {
-  const res = await fetch('/api/config/mkdir', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ parent: parentPath, name }),
-  })
-  return { ok: res.ok }
+  try {
+    const res = await fetch('/api/config/mkdir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ parent: parentPath, name }),
+    })
+    return { ok: res.ok }
+  } catch {
+    return { ok: false }
+  }
 }
 
 // ── 本地模型 ──
 export async function getLocalModels() {
-  const res = await fetch('/api/config/local-models')
-  if (!res.ok) return { running: false, installed: [] }
-  return res.json()
+  try {
+    const res = await fetch('/api/config/local-models')
+    if (!res.ok) return { running: false, installed: [] }
+    return res.json()
+  } catch {
+    return { running: false, installed: [] }
+  }
 }
 
 // ── 定价 ──
 export async function getPricing(currency) {
-  const res = await fetch(`/api/pricing?currency=${currency}`)
-  if (!res.ok) return { prices: {} }
-  return res.json()
+  try {
+    const res = await fetch(`/api/pricing?currency=${currency}`)
+    if (!res.ok) return { prices: {} }
+    return res.json()
+  } catch {
+    return { prices: {} }
+  }
 }
 
 function blobToBase64(blob) {

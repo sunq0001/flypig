@@ -9,6 +9,7 @@ test_health
 """
 
 import pytest
+
 from flypig.bootstrap.app_factory import create_app
 
 

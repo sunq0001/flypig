@@ -4,10 +4,12 @@
 实现方法：继承 domain/interfaces 的 ABC，方法体留空或返回默认值。
 层&依赖：infrastructure 层，依赖对应的 domain.interfaces 接口
 """
+
 from flypig.domain.interfaces.iast_parser import IASTParser
 
 
 class ASTParser(IASTParser):
     """AST 解析器存根"""
+
     async def parse_symbol(self, symbol: str) -> tuple[str, int] | None:
         return None

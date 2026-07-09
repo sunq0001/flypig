@@ -36,7 +36,7 @@ DirBrowser：工作区目录浏览器弹窗，从 WorkspaceStep 提取
             v-model="newFolderName"
             placeholder="输入文件夹名称"
             size="small"
-            @keyup.enter="createFolder"
+            @keydown.enter.prevent="createFolder"
           />
           <t-button
             theme="primary"
@@ -214,25 +214,37 @@ function pickCurrentDir() {
 .new-folder-row { display: flex; gap: 6px; margin-bottom: 8px; }
 .new-folder-row .t-input { flex: 1; }
 .browser-path {
-  padding: 6px 8px; font-size: 12px; color: #909399;
-  background: #fafafa; border: 1px solid #e4e7ed;
+  padding: 6px 8px; font-size: 12px; color: #bbbbbb;
+  background: #1e1e1e; border: 1px solid #3a3a3a;
   border-radius: 4px; margin-bottom: 4px;
   word-break: break-all; font-family: monospace;
 }
 .browser-list {
   max-height: 220px; overflow-y: auto;
-  border: 1px solid #e4e7ed; border-radius: 4px; min-height: 80px;
+  border: 1px solid #3a3a3a; border-radius: 4px; min-height: 80px;
 }
 .browser-item {
   display: flex; align-items: center; gap: 8px;
   padding: 6px 10px; cursor: default; transition: background 0.15s;
 }
 .browser-item.is-dir { cursor: pointer; }
-.browser-item.is-dir:hover { background: #ecf5ff; }
+.browser-item.is-dir:hover { background: #2f3338; }
 .item-name {
-  flex: 1; font-size: 13px; color: #303133;
+  flex: 1; font-size: 13px; color: #d4d4d4;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.item-hint { font-size: 11px; color: #c0c4cc; flex-shrink: 0; }
-.browser-empty { padding: 24px; text-align: center; color: #c0c4cc; font-size: 13px; }
+.item-hint { font-size: 11px; color: #7a7a7a; flex-shrink: 0; }
+.browser-empty { padding: 24px; text-align: center; color: #7a7a7a; font-size: 13px; }
+
+/* 统一 TDesign 输入框为深色，适配深色弹窗 */
+:deep(.t-input) {
+  background-color: #1e1e1e;
+  border-color: #3a3a3a;
+}
+:deep(.t-input__inner) {
+  color: #d4d4d4;
+}
+:deep(.t-input__inner::placeholder) {
+  color: #7a7a7a;
+}
 </style>

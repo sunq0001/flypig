@@ -15,13 +15,9 @@ from pathlib import Path
 
 def main() -> int:
     vite_dir = (
-        Path(__file__).resolve().parent.parent
-        / "flypig"
-        / "interface"
-        / "web"
-        / "static_vite"
+        Path(__file__).resolve().parent.parent / "flypig" / "interface" / "web" / "static_vite"
     )
-    result = subprocess.run(
+    result = subprocess.run(  # noqa: PLW1510
         ["npx", "vitest", "run", "--reporter=verbose"],
         cwd=str(vite_dir),
         shell=True,

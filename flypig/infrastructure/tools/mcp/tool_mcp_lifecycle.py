@@ -8,3 +8,5 @@
 层&依赖：infrastructure.tools.mcp 层，依赖 subprocess（管理 MCP 进程）
 细节见文档：docs/docs_refactor/mcp.md → §文件结构
 """
+
+# TODO: 骨架文件占位，待具体实现

@@ -8,3 +8,5 @@
 层&依赖：infrastructure.policies 层，依赖 pycasbin
 细节见文档：docs/docs_refactor/backend-modules.md → §PolicyService
 """
+
+# TODO: 骨架文件占位，待具体实现

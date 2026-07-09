@@ -15,6 +15,8 @@ from datetime import datetime
 from flypig.domain.interfaces.ievent_stream import IEventStream
 from flypig.shared.constants import MAX_QUEUE_SIZE
 
+POP_TIMEOUT = 30.0  # SSE 队列弹出超时（秒）
+
 
 class SSEQueue(IEventStream):
     """SSE 事件队列，按 session_id 隔离"""

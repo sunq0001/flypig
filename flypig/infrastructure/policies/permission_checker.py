@@ -8,3 +8,5 @@
 层&依赖：infrastructure.policies 层，依赖 casbin_setup.py + pycasbin
 细节见文档：docs/docs_refactor/mode-matrix.md → §工具可用性
 """
+
+# TODO: 骨架文件占位，待具体实现

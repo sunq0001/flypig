@@ -2,6 +2,8 @@
 
 > **来源**：架构重构全流程讨论（architecture_check → pre-commit → CI → mypy → 测试）
 > **关联文档**：[architecture-guide.md](architecture-guide.md)、[backend-modules.md](backend-modules.md)、[adversarial-system.md](adversarial-system.md)、[tech-stack.md](tech-stack.md)、[ui-refactor.md](ui-refactor.md)（自动化检查清单由 UI 审计驱动）
+>
+> **IDE 配置**：`.vscode/settings.json`、`.vscode/extensions.json`、`.vscode/tasks.json`
 
 ---
 
@@ -14,9 +16,27 @@
 
 你在 IDE 里改了 `acl/pricing.py`，新增了一个转换函数，同时不小心引入了一个 bug——忘了定义某个常量。
 
-**此时没有任何拦截**，你甚至可以先不跑任何命令，继续写下一个文件。
+**IDE 实时拦截**：
+- Ruff 扩展立即在代码上标出红色波浪线（未定义变量、格式问题）
+- ESLint 扩展在 Vue/JS 文件上同样标出波浪线
+- 保存时 ruff 自动修复可修复的问题（排序 import、格式化等）
 
-### 第 2 步：`git commit`（pre-commit 拦截）
+**通常你还没保存到文件，就已经看到错误了。** 此时不阻塞开发，你完全可以继续写，等写完了再一并修复。
+
+### 第 2 步：`python dev.py`（启动时自动检查）
+
+每次启动 dev.py 时自动运行两道检查，不过不放行：
+
+```bash
+python dev.py
+# [check] 架构合规检查 → ✅ 通过
+# [lint] 层依赖检查   → ✅ 通过
+# ╔══ 启动服务 ══╗
+```
+
+**特点**：这是第二道"不可绕过"的防线（除非不跑 dev.py），在启动服务前就排除架构违规。
+
+### 第 3 步：`git commit`（pre-commit 拦截）
 
 ```bash
 git add flypig/acl/pricing.py
@@ -26,14 +46,14 @@ git commit -m "feat: 新增定价转换函数"
 commit 时 pre-commit 自动运行 5 个 hook：
 
 ```
-ruff          → 检查你的代码风格，如果有问题自动修复
-ruff-format   → 自动格式化代码
-mypy          → ❌ 发现未定义的常量 PRICE_KEY！commit 被阻止
-ESLint        → 跳过（只扫前端文件）
-Vitest        → 跳过（只扫前端文件）
+ruff              → 检查你的代码风格，如果有问题自动修复
+ruff-format       → 自动格式化代码
+eslint            → 检查前端 Vue/JS 规范
+lint-imports      → DDD 层依赖方向检查
+architecture-check → ❌ 发现未注册新文件！commit 被阻止
 ```
 
-**失败后怎么办**：修复 mypy 报的错误 → 重新 `git add` → 重新 `git commit`
+**失败后怎么办**：修复 architecture-check 报的错误 → 重新 `git add` → 重新 `git commit`
 
 ```bash
 # 修完 bug 后重新提交
@@ -42,7 +62,7 @@ git commit -m "feat: 新增定价转换函数"
 # ✅ 这次 pre-commit 全部通过，commit 成功
 ```
 
-### 第 3 步：`git push`（CI 远程检查）
+### 第 4 步：`git push`（CI 远程检查）
 
 ```bash
 git push
@@ -64,7 +84,7 @@ git push
 
 **失败后怎么办**：修复架构检查报的问题 → 重新 `git add` `git commit`（跳过 pre-commit 可加 `--no-verify`，但不推荐）→ `git push`
 
-### 第 4 步：全部通过，合并 PR
+### 第 5 步：全部通过，合并 PR
 
 ```
 ① Ruff          → ✅
@@ -81,47 +101,111 @@ GitHub 显示 ✅ 全部通过 → 可以合并 PR 到 `main`。
 ### 流程图
 
 ```
-你写代码 ──→ git add ──→ git commit ──→ git push ──→ PR合并
-                            │                 │
-                        pre-commit          GitHub CI
-                            │                 │
-                     ┌──────┼──────┐    ┌─────┼──────┐
-                     ↓      ↓      ↓    ↓     ↓      ↓
-                   ruff  mypy  ESLint  ruff  mypy  pytest
-                   │      │     Vitest  │     │     cov
-                   └──全部通过才允许─────┘     │     │
-                                        import  Vitest
-                                        linter
-                                        └──全部通过才允许合并──┘
+你写代码 ──→ IDE实时波浪线 ──→ dev.py启动检查 ──→ git add ──→ git commit ──→ git push ──→ PR合并
+        （ruff/eslint 标注）      │       │                     │                    │
+                          architecture_check  architecture_check          GitHub CI
+                          lint-imports        lint-imports                    │
+                                          ┌──────┬──────┬──────┐    ┌──────┬──────┬──────┐
+                                          ↓      ↓      ↓      ↓    ↓      ↓      ↓      ↓
+                                        ruff  eslint  lint-  arch   ruff  mypy  eslint  pytest
+                                        +fmt          import check   │     │     vitest  cov
+                                                         └─全部通过才allow──┘     │       │
+                                                                                import  vitest
+                                                                                linter   │
+                                                                                └─全部通过才允许合并─┘
 ```
 
-### `pre-commit` 和 `CI` 的对比
+### 四层防线对比
 
-| 维度 | pre-commit | CI |
-|------|-----------|-----|
-| 触发时机 | `git commit` 时 | `git push` 后 |
-| 运行位置 | 你本地电脑 | GitHub 服务器 |
-| 扫描范围 | 只扫 staged 文件 | 全量代码 |
-| 运行时间 | <10 秒 | 3-5 分钟 |
-| 拦截效果 | 不让劣质代码进入本地仓库 | 不让劣质代码合入主分支 |
-| 能绕过吗 | `git commit --no-verify` | 不能（除非修改 CI 配置） |
+| 维度 | IDE（实时） | dev.py（启动） | pre-commit（提交） | CI（推送） |
+|------|-----------|----------------|-------------------|------------|
+| 触发时机 | 敲键盘时 | `python dev.py` | `git commit` 时 | `git push` 后 |
+| 运行位置 | 本地 IDE | 本地命令行 | 本地 git hook | GitHub 服务器 |
+| 扫描范围 | 单文件 | 全量 | 只扫 staged 文件 | 全量代码 |
+| 运行时间 | 实时 | ~5 秒 | <10 秒 | 3-5 分钟 |
+| 检查项 | ruff/eslint/mypy | architecture_check + lint-imports | ruff + eslint + lint-imports + arch_check | ruff → mypy → eslint → arch_check → lint-imports → vitest → pytest |
+| 拦截效果 | 写代码时就提醒 | 不让启动带违规服务 | 不让劣质代码进入本地仓库 | 不让劣质代码合入主分支 |
+| 能绕过吗 | 不装 VSCode 扩展 | 不跑 dev.py | `git commit --no-verify` | 不能（除非修改 CI 配置） |
 
-> **核心原则**：pre-commit 是"快捷过滤"，CI 是"最终裁决"。两者都在才能防止劣质代码流入主分支。
+> **核心原则**：越靠右越不可绕过，越靠左反馈越即时。四层都在才能防止劣质代码流入主分支。
 
 ---
 
 ## 一、总览：四道防线
 
 ```
-commit 前（pre-commit） → push 后（CI） → 部署前（门禁） → 线上（监控）
-      ↓                    ↓                 ↓               ↓
-   10秒内                3-5分钟           可配置          持续
-   本地拦截              远程全量检查       硬性门槛        渐进增强
+写代码时（IDE 实时） → 启动时（dev.py） → 提交前（pre-commit） → 推送后（CI）
+     ↓                    ↓                  ↓                    ↓
+  实时波浪线               ~5 秒             10 秒内              3-5 分钟
+  ruff/eslint/mypy       架构+层依赖        本地拦截              远程全量检查
+```
+
+| # | 防线 | 配置文件 | 检查项 | 反馈速度 |
+|---|------|---------|--------|---------|
+| 1 | **IDE 实时 linting** | `.vscode/settings.json` | ruff / eslint / mypy | **实时**（< 1 秒） |
+| 2 | **dev.py 启动检查** | `dev.py` (内嵌) | `architecture_check.py` + `lint-imports` | ~5 秒 |
+| 3 | **pre-commit hook** | `.pre-commit-config.yaml` | ruff + eslint + lint-imports + architecture_check | < 10 秒 |
+| 4 | **GitHub Actions CI** | `.github/workflows/ci.yml` | 8 项全量检查（含测试 + 覆盖率） | 3-5 分钟 |
+
+---
+
+## 二、第一道防线：IDE 实时 linting（新增）
+
+配置文件：`.vscode/settings.json`、`.vscode/extensions.json`
+
+### 前置条件
+
+安装 VSCode 推荐扩展（打开项目时会弹出提示）：
+- **Ruff** (`charliermarsh.ruff`) — Python 实时 lint + 格式化
+- **ESLint** (`dbaeumer.vscode-eslint`) — JS/Vue 实时 lint
+- **Mypy** (`matangover.mypy`) — Python 类型检查
+- **Even Better TOML** — TOML 配置高亮
+
+### 效果
+
+| 操作 | 触发行为 |
+|------|---------|
+| 敲键盘 | Ruff 实时标出语法/风格问题（红色/黄色波浪线） |
+| 保存 `.py` | Ruff 自动修复可修复问题 + 排序 import |
+| 保存 `.vue` / `.js` | ESLint 自动格式化 |
+| 鼠标悬停波浪线 | 显示错误信息和修复建议 |
+
+### 关键配置
+
+```jsonc
+{
+  "[python]": {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit",
+      "source.fixAll.ruff": "explicit"
+    },
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  },
+  "ruff.lint.run": "onType",
+  "eslint.validate": ["javascript", "vue"],
+  "eslint.workingDirectories": [{ "directory": "flypig/interface/web/static_vite", "changeProcessCWD": true }]
+}
 ```
 
 ---
 
-## 二、第一道防线：pre-commit hook
+## 三、第二道防线：dev.py 启动检查（新增）
+
+dev.py 在启动四个服务之前（第 107-151 行）会顺序跑两道检查：
+
+```python
+# ① 架构合规检查
+await asyncio.create_subprocess_exec("python", "scripts/architecture_check.py", ...)
+# ② 层依赖检查
+await asyncio.create_subprocess_exec("lint-imports", "--config", "flypig/pyproject.toml", ...)
+```
+
+任何一项未通过 → dev.py 打印错误并 `sys.exit(1)`，**服务不会启动**。这是 CI 之外本地最不可绕过的防线。
+
+---
+
+## 四、第三道防线：pre-commit hook
 
 配置文件：`.pre-commit-config.yaml`
 
@@ -131,19 +215,21 @@ commit 前（pre-commit） → push 后（CI） → 部署前（门禁） → �
 |------|---------|--------|---------|
 | `ruff` | Python 代码风格（300+ 规则） | 所有 `.py` | `--fix` 自动修复 |
 | `ruff-format` | Python 代码格式化 | 所有 `.py` | 自动格式化 |
-| `mypy` | Python 静态类型检查 | `domain/` `application/` `acl/` `shared/` | 手动修复 |
 | `eslint` | 前端 Vue/JS 规范（200+ 规则） | `static_vite/src/` | 手动修复 |
-| `vitest` | 前端单元测试 | `static_vite/src/` | 手动修复 |
+| `lint-imports` | DDD 层依赖方向 | 全量 | 手动修复 |
+| `architecture-check` | DDD 继承/注册/契约 12 项检查 | 全量 | 手动修复 |
+
+> **注意**：mypy 和 vitest 不在 pre-commit 中运行——mypy 运行较慢（全量类型推断），vitest 需要完整前端环境，两者由 CI 覆盖。IDE 中 mypy 以实时波浪线形式工作。
 
 ### 运行规则
 
-- 只在 **staged 文件** 上运行（快，<10 秒）
+- 本地 hook 只跑 staged 文件（快，<10 秒）；lint-imports 和 architecture-check 跑全量
 - 任何一个 hook 失败 → commit 被阻止
 - ruff 自动修复后文件会自动加入 staged
 
 ---
 
-## 三、第二道防线：GitHub Actions CI
+## 五、第四道防线：GitHub Actions CI
 
 配置文件：`.github/workflows/ci.yml`
 
@@ -151,13 +237,15 @@ commit 前（pre-commit） → push 后（CI） → 部署前（门禁） → �
 
 ```
 ① Ruff Python 检查        （全量，含所有规则集）
-② mypy 静态类型检查        （domain/application/acl/shared）
+② mypy 静态类型检查        （domain/orchestration/acl/shared）
 ③ ESLint 前端检查          （全部 src/）
 ④ 架构合规检查              （architecture_check.py + frontend_check.py）
 ⑤ 层依赖检查               （import-linter DDD 分层约束）
 ⑥ Vitest 前端测试          （全部 *.test.js）
 ⑦ pytest + 覆盖率           （后端单元测试，fail_under=10%）
 ```
+
+> **不可绕过**：CI 运行在 GitHub 服务器上，本地任何 bypass 操作（`--no-verify`、跳过 dev.py）都不影响 CI 执行。PR 必须全部通过才能合并。
 
 ### 触发条件
 
@@ -171,9 +259,23 @@ commit 前（pre-commit） → push 后（CI） → 部署前（门禁） → �
 
 ---
 
-## 四、检测工具详解
+## 六、检测工具详解
 
-### 4.1 ruff — Python 代码风格
+### 6.1 IDE 集成 — VSCode 配置
+
+配置文件：`.vscode/settings.json`、`.vscode/extensions.json`
+
+除 CLI 检查和 pre-commit 外，每个工具还作为 VSCode 扩展实时工作：
+
+| 工具 | VSCode 扩展 | 工作方式 | 检查范围 |
+|------|------------|---------|---------|
+| Ruff | `charliermarsh.ruff` | `onType` 实时标注 + `onSave` 自动修复 | 全部 `.py` |
+| ESLint | `dbaeumer.vscode-eslint` | 保存时格式化 + 实时标注 | `static_vite/src/` |
+| Mypy | `matangover.mypy` | 保存时检查 + 波浪线 | `domain/` `orchestration/` `acl/` `shared/` |
+
+> **即装即用**：打开项目时 VSCode 弹出提示安装推荐扩展，装好后无需额外配置。
+
+### 6.2 ruff — Python 代码风格
 
 配置位置：`flypig/pyproject.toml` → `[tool.ruff]`
 
@@ -184,7 +286,7 @@ select = ["E","F","I","N","W","B","UP","SIM","RUF100","PL","TRY","PTH","C4","RUF
 
 覆盖 300+ 条规则，用于替代 flake8 + isort + black。
 
-### 4.2 mypy — Python 静态类型检查
+### 6.3 mypy — Python 静态类型检查
 
 配置位置：`flypig/pyproject.toml` → `[tool.mypy]`
 
@@ -204,13 +306,13 @@ warn_unreachable = true
 
 > **经验教训**：此前发现 3 个 mypy 能当场抓住的 bug（`PRICE_KEY` 未定义、`_CLASS_NAME` 未定义、`DEFAULT_POP_TIMEOUT` 未定义），但在写代码时未被发现，直到运行测试才暴露。mypy 可以在编码阶段就阻止这类问题。
 
-### 4.3 ESLint — 前端代码规范
+### 6.4 ESLint — 前端代码规范
 
 配置位置：`flypig/interface/web/static_vite/.eslintrc.json`
 
 使用 `eslint:recommended` + `plugin:vue/vue3-recommended` 规则集。
 
-### 4.4 Vitest — 前端测试框架
+### 6.5 Vitest — 前端测试框架
 
 配置位置：`flypig/interface/web/static_vite/vitest.config.js`
 
@@ -218,9 +320,9 @@ warn_unreachable = true
 
 ---
 
-## 五、自定义架构检查
+## 七、自定义架构检查
 
-### 5.1 architecture_check.py
+### 7.1 architecture_check.py
 
 配置位置：`scripts/architecture_check.py`
 
@@ -243,7 +345,7 @@ warn_unreachable = true
 | I18N | 国际化就绪 | 异常 code 是否有 i18n 翻译键 |
 | TEST | 测试覆盖 | 每个业务模块是否有对应的测试文件 |
 
-### 5.2 API 契约定义
+### 7.2 API 契约定义
 
 配置位置：`flypig/data/api-contracts.json`
 
@@ -269,7 +371,7 @@ warn_unreachable = true
 - 前后端联调时，前端可以直接读 JSON 了解 API 结构
 - 新加路由必须先在 JSON 中声明
 
-### 5.3 frontend_check.py
+### 7.3 frontend_check.py
 
 配置位置：`scripts/frontend_check.py`
 
@@ -309,9 +411,9 @@ warn_unreachable = true
 
 ---
 
-## 六、测试体系
+## 八、测试体系
 
-### 6.1 测试金字塔
+### 8.1 测试金字塔
 
 ```
          ╱─ E2E（端到端）─╲        ← 慢、贵、少（5%）
@@ -319,7 +421,7 @@ warn_unreachable = true
        ╱   单元测试     ╲         ← 快、便宜、多（60%）
 ```
 
-### 6.2 测试类型
+### 8.2 测试类型
 
 | 类型 | 测什么 | 特点 | 存放位置 |
 |------|--------|------|---------|
@@ -328,13 +430,13 @@ warn_unreachable = true
 | **E2E 测试** | 完整业务流程（启动服务→用户操作→验证结果） | 分钟级，最脆弱 | `tests/e2e/` |
 | **快照测试** | 前端 UI 渲染结果对比 | 用于防意外变更 | `src/**/__tests__/` |
 
-### 6.3 测试覆盖率
+### 8.3 测试覆盖率
 
 - 当前阈值：`fail_under = 10%`
 - 统计范围：`flypig/` 包（排除 `tests/` 和 `__pycache__/`）
 - 随着项目成熟逐步提高：10% → 30% → 60%
 
-### 6.4 编写规则
+### 8.4 编写规则
 
 **一个函数 = 一组测试，不是一条**：
 
@@ -349,7 +451,7 @@ warn_unreachable = true
 - 后端：`tests/unit/test_{module_name}.py`
 - 前端：`src/{module}/__tests__/{filename}.test.js`
 
-### 6.5 现有测试（截至 2026-07-04）
+### 8.5 现有测试（截至 2026-07-04）
 
 | 文件 | 数量 | 覆盖内容 |
 |------|------|---------|
@@ -362,21 +464,21 @@ warn_unreachable = true
 
 **小计：55 个测试，全部通过**
 
-### 6.6 优先补测顺序
+### 8.6 优先补测顺序
 
 ```
 第 1 优先级：acl/ 层（格式转换、外部系统适配）
 第 2 优先级：domain/ 层（值对象、实体、异常体系）
-第 3 优先级：application/ 层（DTO、编排逻辑）
+第 3 优先级：orchestration/ 层（DTO、编排逻辑）
 第 4 优先级：API 路由（集成测试、响应结构锁定）
 第 5 优先级：infrastructure/ 层（需要 mock 外部依赖）
 ```
 
 ---
 
-## 七、AI 编程协作规则
+## 九、AI 编程协作规则
 
-### 7.1 写测试的时机
+### 9.1 写测试的时机
 
 **不搞 TDD，先实现后立刻补测**：
 
@@ -384,14 +486,14 @@ warn_unreachable = true
 你描述功能 → AI 写实现代码 → 你确认接口 → AI 补测试 → 跑通 → 下一个
 ```
 
-### 7.2 什么时候用 TDD
+### 9.2 什么时候用 TDD
 
 只在以下场景值得：
 - 计算公式 / 算法类（行为非常确定）
 - 安全校验（要"锁死"行为）
 - 重构旧代码（先写测试锁住行为再改）
 
-### 7.3 共同的坑
+### 9.3 共同的坑
 
 | 问题 | 原因 | 解决方法 |
 |------|------|---------|
@@ -401,32 +503,46 @@ warn_unreachable = true
 
 ---
 
-## 八、防止 AI 写出"一坨代码"的关键机制
+## 十、防止 AI 写出"一坨代码"的关键机制
 
 ```
-ruff       → 风格一致，不能乱缩进/命名
-mypy       → 类型安全，不能有未定义变量/未判空
-architecture_check → 架构约束，不能跨层依赖/不注册
-pre-commit → 不让劣质代码进入仓库
-CI         → 不让劣质代码合入主分支
-coverage   → 不能不写测试
-API 契约   → 不能乱改接口
+IDE ruff/eslint → 写代码时实时红/黄波浪线，不等提交
+dev.py 启动检查  → architecture_check + lint-imports，不过不放行服务
+pre-commit       → ruff + eslint + lint-imports + arch_check，不让劣质代码进入仓库
+CI               → 8 项全量检查，不让劣质代码合入主分支
+coverage         → 不能不写测试
+API 契约         → 不能乱改接口
 ```
 
-**任何一个机制失效 → 有问题的代码会被拦截。**
+**任何一个机制失效 → 有问题的代码会被拦截。越靠近左侧的防线反馈越快。**
 
 ---
 
-## 九、常见操作
+## 十一、常见操作
+
+### 安装 IDE 扩展
+
+```bash
+# 打开项目 VSCode 会自动弹出推荐扩展
+# 或手动安装：Ruff、ESLint、Mypy、Even Better TOML
+```
+
+### 安装 pre-commit hooks
+
+```bash
+pre-commit install    # 安装 git hooks
+pre-commit run --all-files  # 手动触发全部检查
+```
 
 ### 运行全部检查
 
 ```bash
 # 本地
-pre-commit run --all-files     # 跑全部 pre-commit hook
-python -m pytest tests/ -v     # 跑全部后端测试
-python scripts/architecture_check.py  # 架构合规
-mypy --config-file=flypig/pyproject.toml flypig/domain flypig/application flypig/acl flypig/shared
+python dev.py                                            # 启动时自动跑架构+层依赖检查
+pre-commit run --all-files                               # 跑全部 pre-commit hook
+python -m pytest tests/ -v                               # 跑全部后端测试
+python scripts/architecture_check.py                     # 架构合规
+mypy --config-file=flypig/pyproject.toml flypig/domain flypig/orchestration flypig/acl flypig/shared
 
 # 前端
 cd flypig/interface/web/static_vite

@@ -8,3 +8,5 @@
 层&依赖：infrastructure.tools.review 层，依赖 domain/models/change_score.py
 细节见文档：docs/docs_refactor/adversarial-system.md → §ChangeScore
 """
+
+# TODO: 骨架文件占位，待具体实现

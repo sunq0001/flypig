@@ -45,6 +45,7 @@ __all__ = [
     "IMapper",
     "IModel",
     "IModelFactory",
+    "IModelPolicy",
     "IRanker",
     "ISearch",
     "IToolExecutor",

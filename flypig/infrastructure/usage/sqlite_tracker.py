@@ -8,3 +8,5 @@
 层&依赖：infrastructure.usage 层，实现 IUsageTracker，依赖 SQLAlchemy
 细节见文档：docs/docs_refactor/mem_convStore_usage.md → §数据模型
 """
+
+# TODO: 骨架文件占位，待具体实现

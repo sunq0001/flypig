@@ -8,3 +8,5 @@
 层&依赖：infrastructure.sandbox 层，依赖 pathlib
 细节见文档：docs/docs_refactor/subprocess.md → §沙箱路径验证
 """
+
+# TODO: 骨架文件占位，待具体实现

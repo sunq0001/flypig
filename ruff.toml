@@ -1,0 +1,21 @@
+# Ruff 根配置 - 主配置在 flypig/pyproject.toml
+# 此文件仅用于处理根目录下的非项目文件
+
+extend = "flypig/pyproject.toml"
+
+exclude = [
+    # 归档代码（旧版本，不检查）
+    "flypig-archive/",
+    "flypig_archive2/",
+    # pyright 自动生成的类型存根
+    "typings/",
+    # 根目录临时/辅助脚本
+    "check_log.py",
+    "check_skeleton.py",
+    "_check_round4.py",
+    "check_output.txt",
+    "check_result2.txt",
+    "domain_details.txt",
+    # 文档构建脚本
+    "docs/serve_docs.py",
+]

@@ -8,3 +8,5 @@
 层&依赖：infrastructure.tools.system 层，依赖 subprocess + ProcessManager
 细节见文档：docs/docs_refactor/tech-stack.md → §后台任务
 """
+
+# TODO: 骨架文件占位，待具体实现

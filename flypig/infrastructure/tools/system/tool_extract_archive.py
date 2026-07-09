@@ -8,3 +8,5 @@
 层&依赖：infrastructure.tools.system 层，依赖标准库
 细节见文档：docs/docs_refactor/tech-stack.md → §压缩解压、tools.md → §安全
 """
+
+# TODO: 骨架文件占位，待具体实现

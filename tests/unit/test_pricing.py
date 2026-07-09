@@ -91,9 +91,7 @@ class TestDefaultPricingToEntry:
     """default_pricing_to_entry 单元测试"""
 
     def test_all_fields(self) -> None:
-        entry = default_pricing_to_entry(
-            {"input": 0.14, "output": 0.28, "input_cache_hit": 0.0028}
-        )
+        entry = default_pricing_to_entry({"input": 0.14, "output": 0.28, "input_cache_hit": 0.0028})
         assert entry.input_price == 0.14
         assert entry.output_price == 0.28
         assert entry.input_cache_hit == 0.0028

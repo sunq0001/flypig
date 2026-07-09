@@ -8,10 +8,23 @@
       {{ message.role === 'user' ? '🧑' : '🤖' }}
     </div>
     <div class="bubble">
-      <div class="content">
+      <div
+        v-if="loading && !displayText"
+        class="starting"
+      >
+        <span class="starting-dot" />
+        模型启动中…
+      </div>
+      <div
+        v-else
+        class="content"
+      >
         {{ displayText }}
       </div>
-      <div class="time">
+      <div
+        v-if="time"
+        class="time"
+      >
         {{ time }}
       </div>
     </div>
@@ -68,10 +81,19 @@ onBeforeUnmount(() => {
   if (dataTimer) clearInterval(dataTimer)
 })
 
-const time = computed(() => {
-  const d = new Date()
-  return d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-})
+// 时间戳：用户消息立即显示；AI 消息等流式结束（内容输完）后才显示，
+// 避免“内容还没出来、时间先冒出来”的错位感
+const time = ref('')
+function formatNow() {
+  return new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+}
+if (isUser.value) {
+  time.value = formatNow()
+}
+watch(() => props.loading, (v) => {
+  if (isUser.value) return
+  if (!v) time.value = formatNow()
+}, { immediate: true })
 </script>
 
 <style scoped>
@@ -83,4 +105,23 @@ const time = computed(() => {
 .assistant .bubble { background: #1e1e1e; color: #d4d4d4; border: 1px solid #333; border-bottom-left-radius: 2px; }
 .content { white-space: pre-wrap; }
 .time { font-size: 10px; color: #555; margin-top: 2px; text-align: right; }
+.starting {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #888;
+  font-size: 13px;
+  padding: 2px 0;
+}
+.starting-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #409eff;
+  animation: pulse 1.2s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
 </style>

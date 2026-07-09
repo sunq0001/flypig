@@ -8,3 +8,5 @@
 层&依赖：infrastructure.tools.interact 层，零依赖
 细节见文档：docs/docs_refactor/langgraph-graph.md → §Explore 模式、mode-matrix.md → §工具可用性
 """
+
+# TODO: 骨架文件占位，待具体实现

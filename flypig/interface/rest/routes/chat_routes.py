@@ -11,10 +11,26 @@ from __future__ import annotations
 
 from http import HTTPStatus
 
-from flypig.application.chat_service import ChatApplicationService
+from flypig.orchestration.chat_service import ChatApplicationService
 from quart import Blueprint, Response, current_app, jsonify, request
 
 chat_bp = Blueprint("chat", __name__, url_prefix="/api")
+
+
+def _normalize_messages(messages: list[dict]) -> list[dict]:
+    """将前端 AI SDK parts 格式转为 LLM 标准 content 格式。
+
+    前端 @ai-sdk/vue useChat 发送 {"parts": [{"type":"text","text":"..."}], "role":"user"}
+    LLM 需要 {"role": "user", "content": "..."}
+    """
+    normalized = []
+    for m in messages:
+        content = m.get("content", "")
+        if not content:
+            parts = m.get("parts", [])
+            content = "".join(p.get("text", "") for p in parts if p.get("type") == "text")
+        normalized.append({"role": m.get("role", "user"), "content": content})
+    return normalized
 
 
 @chat_bp.route("/chat", methods=["POST"])
@@ -27,6 +43,9 @@ async def chat() -> Response:
         return jsonify({"error": "messages 不能为空"}), HTTPStatus.BAD_REQUEST
     if not model_name:
         return jsonify({"error": "model 不能为空"}), HTTPStatus.BAD_REQUEST
+
+    # 转换 AI SDK parts 格式 → LLM content 格式
+    messages = _normalize_messages(messages)
 
     service: ChatApplicationService = current_app.config["flypig_chat_service"]
 

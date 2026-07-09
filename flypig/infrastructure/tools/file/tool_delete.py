@@ -8,3 +8,5 @@
 层&依赖：infrastructure.tools.file 层，依赖 PathValidator + PolicyService
 细节见文档：docs/docs_refactor/tools.md → §文件编辑方案
 """
+
+# TODO: 骨架文件占位，待具体实现

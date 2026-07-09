@@ -15,6 +15,7 @@ from pathlib import Path
 
 from flypig.domain.registry import ModelRegistry
 from flypig.infrastructure.ollama.service import OllamaLocalModelService
+from loguru import logger
 from quart import Blueprint, current_app, jsonify, request
 
 HTTP_BAD_REQUEST = 400
@@ -217,7 +218,7 @@ async def pull_local_model() -> dict:  # type: ignore[misc]
         try:
             await service.pull_model(model)
         except Exception as exc:
-            _LOG.warning("拉取本地模型失败: %s", exc)
+            logger.warning("拉取本地模型失败: %s", exc)
 
     asyncio.ensure_future(_pull())
     return jsonify({"status": "pulling", "model": model})

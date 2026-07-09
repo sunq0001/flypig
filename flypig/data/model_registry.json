@@ -1,5 +1,16 @@
 {
-  "_updated": "2026-07-03",
+  "_updated": "2026-07-07",
+  "mcp": {
+    "protocol_version": "2025-03-26",
+    "client_info": {
+      "name": "flypig",
+      "version": "0.1.0"
+    },
+    "handshake_timeout": 15,
+    "tool_call_timeout": 60,
+    "tool_name_prefix": "mcp",
+    "servers": {}
+  },
   "pricing": {
     "portkey_base": "https://configs.portkey.ai/pricing",
     "exchange_rate_api": "https://open.er-api.com/v6/latest/USD",

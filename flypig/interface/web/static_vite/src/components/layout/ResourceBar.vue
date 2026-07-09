@@ -48,8 +48,8 @@ const activeLabel = computed(() => ({ file:'文件资源管理器', mcp:'能力'
 </script>
 <style scoped>
 .resource-bar{width:100%;height:100%;background:#252526;color:#ccc;display:flex;flex-direction:column;border-right:1px solid #1e1e1e}
-.bar-header{height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 12px 0 16px;font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #1e1e1e;flex-shrink:0}
-.btn-workspace{background:none;border:none;color:#666;cursor:pointer;font-size:14px;padding:2px 4px;border-radius:3px;line-height:1}
-.btn-workspace:hover{color:#ccc;background:#3c3c3c}
+.bar-header{height:36px;display:flex;align-items:center;justify-content:space-between;padding:0 12px 0 16px;font-size:12px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid #1e1e1e;flex-shrink:0}
+.btn-workspace{background:none;border:none;color:#aaa;cursor:pointer;font-size:14px;padding:2px 4px;border-radius:3px;line-height:1}
+.btn-workspace:hover{color:#e0e0e0;background:#3c3c3c}
 .bar-body{flex:1;overflow-y:auto}
 </style>

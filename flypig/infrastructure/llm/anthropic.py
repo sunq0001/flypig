@@ -8,3 +8,5 @@
 层&依赖：infrastructure.llm 层，实现 IModel，依赖 anthropic
 细节见文档：docs/docs_refactor/backend-modules.md → §模型适配
 """
+
+# TODO: 骨架文件占位，待具体实现

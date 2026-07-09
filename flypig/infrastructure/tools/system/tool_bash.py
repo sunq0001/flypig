@@ -8,3 +8,5 @@
 层&依赖：infrastructure.tools.system 层，依赖 subprocess + sandbox（沙箱降级）
 细节见文档：docs/docs_refactor/subprocess.md → §执行策略
 """
+
+# TODO: 骨架文件占位，待具体实现
