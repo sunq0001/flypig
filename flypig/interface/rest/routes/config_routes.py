@@ -10,13 +10,16 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import sys
 from http import HTTPStatus
 from pathlib import Path
 
-from flypig.domain.registry import ModelRegistry
-from flypig.infrastructure.ollama.service import OllamaLocalModelService
 from loguru import logger
 from quart import Blueprint, current_app, jsonify, request
+
+from flypig.domain.registry import ModelRegistry
+from flypig.infrastructure.ollama.service import OllamaLocalModelService
 
 HTTP_BAD_REQUEST = 400
 COLOR_KEY = "color"
@@ -40,7 +43,7 @@ def _build_providers() -> dict:
     """从注册表重建厂商元数据字典（前端需要 icon/color/display_name）"""
     registry = _get_registry()
     providers: dict[str, dict] = {}
-    for name, meta in registry.all_models.items():
+    for meta in registry.all_models.values():
         provider = meta.get("provider", "")
         if not provider or provider in providers:
             continue
@@ -60,7 +63,7 @@ def _build_providers() -> dict:
 
 
 @config_bp.route("", methods=["GET"])
-async def get_config() -> dict:
+async def get_config():
     cfg = _get_settings()
     registry = _get_registry()
 
@@ -93,17 +96,63 @@ async def get_config() -> dict:
             "log_level": cfg.log_level,
             "models": models,
             "providers": _build_providers(),
+            "recent_workspaces": _load_recent(),
         }
     )
 
 
 @config_bp.route("", methods=["PUT"])
-async def update_config() -> dict:
+async def update_config():
     data = await request.get_json(force=True) or {}
     cfg = _get_settings()
     if "default_model" in data:
         cfg.default_model = data["default_model"]
     return jsonify({"ok": True})
+
+
+_RECENT_FILE = Path(__file__).resolve().parent.parent.parent / "flypig" / "data" / "recent_workspaces.json"
+_MAX_RECENT = 8
+
+
+def _load_recent() -> list[str]:
+    if not _RECENT_FILE.exists():
+        return []
+    try:
+        with open(_RECENT_FILE, encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def _save_recent(workspaces: list[str]) -> None:
+    _RECENT_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(_RECENT_FILE, "w", encoding="utf-8") as f:
+        json.dump(workspaces, f, ensure_ascii=False, indent=2)
+
+
+def _normalize_path(raw: str) -> str:
+    """统一路径：根据运行环境自动转换路径格式
+
+    - Windows 上：`C:\foo` → `C:\foo`（保持原样）
+    - Linux/WSL 上：`C:\foo` → `/mnt/c/foo`，`/mnt/c/foo` 保留原样
+
+    返回 Path.resolve() 后的绝对路径，可直接比较是否指向同一目录。
+    """
+    if sys.platform == "win32":
+        return raw
+
+    raw = raw.strip().replace("\\", "/").rstrip("/")
+    if len(raw) >= 2 and raw[1] == ":":
+        drive = raw[0].lower()
+        rest = raw[3:] if raw[2] in "/\\" else raw[2:]
+        raw = f"/mnt/{drive}/{rest}"
+
+    # 用 Path.resolve() 消除多层嵌套垃圾（如 /mnt/c/x/C:/y/...）
+    # Path 在 Linux 上看到 C:/ 会视为相对路径，resolve() 会塌缩到 ./
+    try:
+        return str(Path(raw).resolve())
+    except Exception:
+        return raw
 
 
 @config_bp.route("/workspace", methods=["POST"])
@@ -113,13 +162,43 @@ async def set_workspace() -> dict:  # type: ignore[misc]
     if not path:
         return jsonify({"error": "path required"}), HTTPStatus.BAD_REQUEST
 
-    p = Path(path).resolve()
+    # 统一转 WSL 路径（Linux 下 C:\ 不被视为绝对路径）
+    converted = _normalize_path(path)
+    p = Path(converted).resolve()
     if not p.exists():
         p.mkdir(parents=True, exist_ok=True)
 
     cfg = _get_settings()
     cfg.workspace = str(p)
+
+    # 更新最近工作区（去重 + 移到最前 + 截断）
+    recent = _load_recent()
+    # 标准化所有旧条目 + 当前路径，路径相同的视为重复
+    normalized_p = _normalize_path(str(p))
+    seen: set[str] = {normalized_p}
+    cleaned: list[str] = [str(p)]
+    for r in recent:
+        r_norm = _normalize_path(r)
+        # 跳过指向不存在目录的旧垃圾条目
+        try:
+            if not Path(r_norm).exists():
+                continue
+        except Exception:
+            continue
+        if r_norm in seen:
+            continue
+        seen.add(r_norm)
+        cleaned.append(r)
+    _save_recent(cleaned[:_MAX_RECENT])
+
     return jsonify({"workspace": str(p)})
+
+
+@config_bp.route("/workspace/recent", methods=["DELETE"])
+async def clear_recent():
+    """清除最近工作区记录"""
+    _save_recent([])
+    return jsonify({"ok": True})
 
 
 @config_bp.route("/apikey", methods=["POST"])
@@ -130,12 +209,25 @@ async def save_apikey() -> dict:  # type: ignore[misc]
     if not provider or not api_key:
         return jsonify({"error": "provider and api_key required"}), HTTPStatus.BAD_REQUEST
 
-    cfg = _get_settings()
-    registry = _get_registry()
+    container = current_app.config.get("flypig_container")
+    if not container:
+        return jsonify({"error": "服务未就绪"}), HTTPStatus.INTERNAL_SERVER_ERROR
+
+    service = container.api_key_service()
+    result = await service.validate_and_save(provider, api_key)
+
+    if not result.valid:
+        return jsonify({"error": result.message}), HTTPStatus.BAD_REQUEST
+
+    # 同步到内存 settings（供当前请求后续使用）
+    registry: ModelRegistry = _get_registry()
     attr = registry.provider_key_map.get(provider, "")
-    if hasattr(cfg, attr):
-        setattr(cfg, attr, api_key)
-    return jsonify({"ok": True})
+    if attr:
+        cfg = _get_settings()
+        if hasattr(cfg, attr):
+            setattr(cfg, attr, api_key)
+
+    return jsonify({"ok": True, "message": result.message})
 
 
 @config_bp.route("/browse", methods=["POST"])
@@ -204,7 +296,7 @@ async def get_local_models():
 
 
 @config_bp.route("/local-models/pull", methods=["POST"])
-async def pull_local_model() -> dict:  # type: ignore[misc]
+async def pull_local_model():  # type: ignore[misc]
     data = await request.get_json(force=True) or {}
     model = data.get("model", "")
     if not model:

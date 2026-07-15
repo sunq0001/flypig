@@ -1,6 +1,6 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.7.0
+    rev: v0.15.18
     hooks:
       - id: ruff
         args: [--config, flypig/pyproject.toml, --fix]
@@ -21,6 +21,13 @@ repos:
       - id: lint-imports
         name: lint-imports (层依赖检查)
         entry: lint-imports --config flypig/pyproject.toml
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: bandit
+        name: bandit (安全扫描)
+        entry: bandit -c .bandit -r flypig
         language: system
         pass_filenames: false
         always_run: true

@@ -7,6 +7,8 @@
 层&依赖：interface.rest.routes 层
 """
 
+import re
+import sys
 from http import HTTPStatus
 from pathlib import Path
 
@@ -17,17 +19,35 @@ HTTP_NOT_FOUND = 404
 HTTP_FORBIDDEN = 403
 PATH_KEY = "path"
 
+# Windows 盘符正则: 匹配 "C:\..." 或 "C:/..."
+_WIN_DRIVE_RE = re.compile(r"^([A-Za-z]):[/\\]")
+
 files_bp = Blueprint("files", __name__)
 
 
+def _to_wsl_path(p: str) -> str:
+    """转换路径格式：Windows 上保持原样，Linux/WSL 上将 C:\... 转为 /mnt/c/..."""
+    if sys.platform == "win32":
+        return p
+    m = _WIN_DRIVE_RE.match(p)
+    if m:
+        return "/mnt/" + m.group(1).lower() + "/" + p[m.end() :].replace("\\", "/")
+    return p
+
+
+def _resolve_path(path_str: str) -> Path:
+    """解析路径，自动转换 Windows 盘符为 WSL /mnt/ 路径"""
+    return Path(_to_wsl_path(path_str)).resolve()
+
+
 @files_bp.route("/api/tree", methods=["POST"])
-async def tree() -> dict:
+async def tree():
     data = await request.get_json(force=True)
     path_str = (data or {}).get(PATH_KEY, "")
     if not path_str:
         return jsonify({"error": "path required"}), HTTPStatus.BAD_REQUEST
 
-    p = Path(path_str).resolve()
+    p = _resolve_path(path_str)
     if not p.exists() or not p.is_dir():
         return jsonify({"error": "目录不存在", PATH_KEY: str(p)}), HTTPStatus.NOT_FOUND
 
@@ -74,12 +94,12 @@ async def _read_text_file(p: Path):
 
 
 @files_bp.route("/api/file", methods=["GET"])
-async def read_file() -> dict:  # type: ignore[misc]
+async def read_file():  # type: ignore[misc]
     file_path = request.args.get(PATH_KEY, "")
     if not file_path:
         return jsonify({"error": "path required"}), HTTP_BAD_REQUEST
 
-    p = Path(file_path).resolve()
+    p = _resolve_path(file_path)
     if not p.exists() or not p.is_file():
         return jsonify({"error": "文件不存在", PATH_KEY: str(p)}), HTTP_NOT_FOUND
 
