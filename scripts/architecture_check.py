@@ -399,8 +399,7 @@ def _module_key(file_path: Path, base_dir: Path) -> str | None:
         rel = file_path.relative_to(base_dir.parent)
         parts = list(rel.parts)
         # 去掉 .py 后缀
-        if parts[-1].endswith(".py"):
-            parts[-1] = parts[-1][:-3]
+        parts[-1] = parts[-1].removesuffix(".py")
         # __init__.py → 包名
         if parts[-1] == "__init__":
             parts = parts[:-1]
@@ -463,7 +462,7 @@ def check_circular(py_files: list[Path], base_dir: Path) -> list[str]:
             if color.get(neighbor) == GRAY:
                 # 找到环
                 cycle_start = path.index(neighbor)
-                cycle = path[cycle_start:] + [neighbor]
+                cycle = [*path[cycle_start:], neighbor]
                 violations.append(f"  [CIRCULAR] {' → '.join(cycle)}")
                 return True
             if color.get(neighbor) == WHITE and dfs(neighbor, path):
@@ -1761,6 +1760,175 @@ def check_api_contract(base_dir: Path) -> list[str]:
 
 
 # ══════════════════════════════════════════════════════════════
+# 死代码检测
+# ══════════════════════════════════════════════════════════════
+
+
+def check_dead_code(base_dir: Path) -> list[str]:
+    """检查死代码：Vulture 扫描未使用的函数、类、变量
+
+    只报告置信度 >= 60 的结果。排除 node_modules/。
+    Vulture 未安装时静默跳过。
+
+    已知误报（不报）：
+    - 路由函数（Flask/Quart 装饰器绑定，Vulture 看不到）
+    - ABC 接口抽象方法
+    - *_stub.py 桩文件（预留实现）
+    - shared/kernel/ DDD 基建
+    - graph_routes.py 中 return 后的 yield（类型签名需要）
+    """
+    violations: list[str] = []
+    try:
+        if subprocess.run(["which", "vulture"], capture_output=True).returncode != 0:
+            return violations
+    except Exception:
+        return violations
+
+    flypig_dir = base_dir / "flypig"
+    if not flypig_dir.exists():
+        return violations
+
+    try:
+        result = subprocess.run(
+            ["vulture", str(flypig_dir), "--min-confidence", "60",
+             "--exclude", "*node_modules*"],
+            capture_output=True, text=True, timeout=60,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return violations
+
+    output = result.stdout.strip()
+    if not output:
+        return violations
+
+    # 白名单：已知 Vulture 误报的模式
+    known_false_positives = [
+        "flypig/interface/rest/routes/",  # 路由函数（装饰器绑定）
+        "flypig/domain/interfaces/",       # ABC 抽象接口
+        "/stub.py",                        # 桩文件（未来实现占位）
+        "flypig/shared/kernel/",           # DDD 基建
+        "flypig/shared/specification.py",  # 规格模式
+        "flypig/shared/validation.py",     # 校验框架
+        "flypig/shared/result.py",         # Result 类型
+        "graph_routes.py:48",              # 类型签名 yield
+        "graph_routes.py:58",              # 类型签名 yield
+        "graph_routes.py:60",              # get_model_name 被使用
+        "flypig/interface/sse/",           # SSE 队列（被 SSE 路由引用）
+        "flypig/domain/prompts/multirole_manager.py",  # 未来预留
+        "flypig/domain/change_score.py",   # 未来预留（对抗系统）
+        "flypig/domain/mode.py",           # 未来预留（模式枚举）
+        "flypig/domain/agent_state.py",    # LangGraph 状态定义
+    ]
+
+    lines = output.split("\n")
+    real_dead_code = []
+    for line in lines:
+        if not line.strip():
+            continue
+        if any(fp in line for fp in known_false_positives):
+            continue
+        real_dead_code.append(line)
+
+    if real_dead_code:
+        violations.append("  [DEADCODE] 检测到死代码（已过滤已知误报）：")
+        for line in real_dead_code[:30]:
+            violations.append(f"    {line}")
+        if len(real_dead_code) > 30:
+            violations.append(f"    ... 还有 {len(real_dead_code) - 30} 条")
+
+    return violations
+
+
+# ══════════════════════════════════════════════════════════════
+# 新增检查：ACL 边界 — infrastructure 调外部 HTTP API 必须走 ACL
+# ══════════════════════════════════════════════════════════════
+
+_HTTP_CLIENTS = {"httpx", "aiohttp", "urllib3", "requests", "urllib.request"}
+"""外部 HTTP 客户端库名"""
+
+_KNOWN_EXTERNAL_SYSTEMS: dict[str, str] = {
+    "ollama": "acl/ollama.py",       # Ollama HTTP API
+    "openai": "acl/openai.py",       # OpenAI 兼容 API
+    "anthropic": "acl/anthropic.py", # Anthropic API
+    "docker": "acl/docker.py",       # Docker SDK
+    "mcp": "acl/mcp.py",             # MCP 协议
+}
+"""已知外部系统 → 对应的 ACL 适配器"""
+
+
+def _detect_external_system(file_path: Path) -> str | None:
+    """从文件路径/内容推断对应的外部系统名"""
+    parts = "/".join(file_path.parts).lower()
+    for name in ["ollama", "openai", "docker", "mcp", "git", "license"]:
+        if name in parts:
+            return name
+    return None
+
+
+def _has_acl_import(file_path: Path) -> bool:
+    """检查文件是否 import 了对应的 ACL 适配器"""
+    content = file_path.read_text(encoding="utf-8", errors="ignore")
+    return "from flypig.acl" in content or "import flypig.acl" in content
+
+
+def check_acl_boundary(file_path: Path) -> list[str]:
+    """检查 infrastructure 层调外部 HTTP API 是否走 ACL
+
+    如果 infrastructure 文件：
+      1. 使用了 HTTP 客户端库（httpx/requests/aiohttp）
+      2. 对应已知的外部系统（ollama/openai/docker）
+      3. 但没有 import 任何 ACL 适配器
+    → 违规
+    """
+    violations: list[str] = []
+    parts = file_path.parts
+
+    # 只检查 infrastructure 层
+    if "infrastructure" not in parts:
+        return violations
+    # __init__ 免检
+    if file_path.name == "__init__.py":
+        return violations
+
+    tree = read_tree(file_path)
+    if tree is None:
+        return violations
+
+    # 1. 检查是否使用了 HTTP 客户端
+    uses_http = False
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            names = [alias.name for alias in node.names] if isinstance(node, ast.Import) else []
+            if isinstance(node, ast.ImportFrom) and node.module:
+                names.append(node.module)
+            for name in names:
+                for client in _HTTP_CLIENTS:
+                    if client in name:
+                        uses_http = True
+                        break
+        if uses_http:
+            break
+
+    if not uses_http:
+        return violations
+
+    # 2. 推断对应的外部系统
+    external = _detect_external_system(file_path)
+    if external is None:
+        return violations
+
+    # 3. 检查是否走了 ACL
+    if not _has_acl_import(file_path):
+        expected = _KNOWN_EXTERNAL_SYSTEMS.get(external, f"acl/{external}.py")
+        violations.append(
+            f"  [ACL] {file_path.name} 直接调 {external} HTTP API，"
+            f"应通过 {expected} 做格式翻译"
+        )
+
+    return violations
+
+
+# ══════════════════════════════════════════════════════════════
 # 主函数
 # ══════════════════════════════════════════════════════════════
 
@@ -1783,6 +1951,31 @@ def main() -> int:  # noqa: PLR0915
         ("skel", "骨架文件标记", check_skeleton_marker),
         ("couplepkg", "包耦合度过高", check_couple_pkg),
         ("docq", "docstring质量", check_docstring_quality),
+        # ── 已实现但之前未注册的检查（2026-07-14 激活） ──
+        ("wild", "通配导入", check_wildcard),
+        ("bareexc", "裸异常", check_bare_exception),
+        ("filesize", "文件过大", check_file_size),
+        ("couple", "import 过多", check_coupling),
+        ("params", "参数过多", check_params),
+        ("hardcode", "硬编码", check_hardcode),
+        ("nesting", "嵌套过深", check_nesting),
+        ("magicnum", "魔法数字", check_magic_numbers),
+        ("emptyexc", "空 Except", check_empty_except),
+        ("longfunc", "函数过长", check_long_function),
+        ("todo", "遗留 TODO", check_todo_left),
+        ("print", "生产代码 print", check_print),
+        ("assert", "生产代码 assert", check_assert),
+        ("magicstr", "重复字符串", check_magic_strings),
+        ("returns", "多 return", check_many_returns),
+        ("class", "类过大", check_large_class),
+        ("abc", "ABC 无抽象方法", check_abc_without_abstract),
+        ("rettype", "类型注解缺失", check_return_type),
+        ("robustasync", "async 健壮性", check_robust_async),
+        ("robustio", "文件 IO 健壮性", check_robust_fileio),
+        ("perfimport", "函数内 import", check_perf_import),
+        ("naming", "命名规范", check_naming_convention),
+        ("security", "安全审计", check_security),
+        ("acl", "ACL 边界", check_acl_boundary),
     ]
 
     results: dict[str, list[str]] = {key: [] for key, _, _ in checks}
@@ -1792,6 +1985,7 @@ def main() -> int:  # noqa: PLR0915
     results["config"] = []
     results["i18n"] = []
     results["test"] = []
+    results["deadcode"] = []
 
     py_files = sorted(base_dir.rglob("*.py"))
 
@@ -1827,9 +2021,10 @@ def main() -> int:  # noqa: PLR0915
     results["contract"] = check_interface_contract(filted_files, base_dir.parent)
 
     # ── 依赖安全检查（全局） ──
-    # TODO: 遗留问题，修复后取消注释
-    # if not dev_mode:
-    #     results["depsec"] = check_dependency_security(base_dir.parent)
+    try:
+        results["depsec"] = check_dependency_security(base_dir.parent)
+    except Exception:
+        results["depsec"] = ["  [DEPSEC] check_dependency_security 执行异常"]
 
     # ── 配置规范检查（全局） ──
     try:
@@ -1840,20 +2035,25 @@ def main() -> int:  # noqa: PLR0915
         ]
 
     # ── 国际化就绪检查（全局） ──
-    # TODO: 遗留问题，修复后取消注释
-    # if not dev_mode:
-    #     results["i18n"] = check_i18n_readiness(filted_files)
+    try:
+        results["i18n"] = check_i18n_readiness(filted_files)
+    except Exception:
+        results["i18n"] = ["  [I18N] check_i18n_readiness 执行异常"]
 
     # ── 测试覆盖检查（全局） ──
-    # TODO: 遗留问题，修复后取消注释
-    # if not dev_mode:
-    #     results["test"] = check_test_coverage(filted_files, base_dir.parent)
+    try:
+        results["test"] = check_test_coverage(filted_files, base_dir.parent)
+    except Exception:
+        results["test"] = ["  [TEST] check_test_coverage 执行异常"]
 
     # ── 新文件注册检查（全局） ──
     results["register"] = check_file_registration(filted_files, base_dir.parent)
 
     # ── API 契约检查（全局） ──
     results["apicontract"] = check_api_contract(base_dir.parent)
+
+    # ── 死代码检测（全局） ──
+    results["deadcode"] = check_dead_code(base_dir.parent)
 
     # ── 输出 ──
     total = sum(len(v) for v in results.values())
@@ -1882,6 +2082,7 @@ def main() -> int:  # noqa: PLR0915
         "test": ("TEST", "测试覆盖"),
         "register": ("REGISTER", "新文件注册"),
         "apicontract": ("APICONTRACT", "API 契约"),
+        "deadcode": ("DEADCODE", "死代码检测"),
     }
 
     for key, violations in results.items():
