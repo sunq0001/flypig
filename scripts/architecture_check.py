@@ -1947,11 +1947,44 @@ _SKIP_METHODS = {"__init__", "__str__", "__repr__", "__eq__", "__hash__",
 """这些不算业务方法"""
 
 
-def check_anemic_model(py_files: list[Path], base_dir: Path) -> list[str]:
-    """检查 domain 层是否存在贫血模型
+def _is_stub_body(method: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """判断方法体是否只有 TODO 占位（... 或 pass）"""
+    body = method.body
+    if not body:
+        return True
+    # 只有单个 ...
+    if len(body) == 1:
+        if isinstance(body[0], ast.Pass):
+            return True
+        if isinstance(body[0], ast.Expr):
+            v = body[0].value
+            # Python 3.8+: ast.Constant(value=Ellipsis) 或 ast.Constant(value=None)
+            if isinstance(v, ast.Constant) and (v.value is Ellipsis or v.value is None):
+                return True
+            # 旧版: ast.Ellipsis
+            if isinstance(v, ast.Ellipsis):
+                return True
+    # 只有 docstring + ...
+    if (
+        len(body) == 2
+        and isinstance(body[0], ast.Expr)
+        and isinstance(body[0].value, ast.Constant)
+        and isinstance(body[0].value.value, str)
+        and isinstance(body[1], ast.Expr)
+        and isinstance(body[1].value, ast.Constant)
+        and (body[1].value.value is Ellipsis or body[1].value.value is None)
+    ):
+        return True
+    return False
 
-    规则：Entity/ValueObject/AggregateRoot 如果没有任何业务方法
-    （只含 __init__ 等 dunder），就是贫血模型，业务逻辑被"抽"到了 service 层。
+
+def check_anemic_model(py_files: list[Path], base_dir: Path) -> list[str]:
+    """检查 domain 层是否存在贫血/骨架模型
+
+    三级判定：
+    - "贫血"：没有业务方法（只有 __init__ 等 dunder）→ 业务逻辑全在 service 层
+    - "骨架"：有方法但全是 TODO 占位（`...` 或 `pass`）→ 已知未完成
+    - 通过：有真实实现逻辑
     """
     violations: list[str] = []
     flypig_dir = base_dir / "flypig"
@@ -1969,23 +2002,22 @@ def check_anemic_model(py_files: list[Path], base_dir: Path) -> list[str]:
         for node in ast.walk(tree):
             if not isinstance(node, ast.ClassDef):
                 continue
-            # 是否继承 DDD 基类
-            is_ddd = any(
-                isinstance(b, ast.Name) and b.id in _DDD_CLASSES
-                for b in node.bases
-            )
-            if not is_ddd:
+            if not any(isinstance(b, ast.Name) and b.id in _DDD_CLASSES for b in node.bases):
                 continue
-            # 统计业务方法
+
             biz_methods = [
-                m.name for m in node.body
+                m for m in node.body
                 if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))
                 and m.name not in _SKIP_METHODS
             ]
+
             if not biz_methods:
                 violations.append(
-                    f"  [ANEMIC] {rel}:{node.name} 是贫血模型，"
-                    f"业务逻辑应封装在 domain 类内部"
+                    f"  [ANEMIC] {rel}:{node.name} 贫血，无业务方法"
+                )
+            elif all(_is_stub_body(m) for m in biz_methods):
+                violations.append(
+                    f"  [STUB]   {rel}:{node.name} 骨架，方法待实现（{', '.join(m.name for m in biz_methods)}）"
                 )
 
     return violations
@@ -2305,7 +2337,7 @@ def main() -> int:  # noqa: PLR0915
         "apicontract": ("APICONTRACT", "API 契约"),
         "deadcode": ("DEADCODE", "死代码检测"),
         "hex": ("HEX", "六边形架构完整性"),
-        "anemic": ("ANEMIC", "贫血模型"),
+        "anemic": ("ANEMIC/STUB", "贫血/骨架模型"),
     }
 
     for key, violations in results.items():
