@@ -1840,45 +1840,46 @@ def check_dead_code(base_dir: Path) -> list[str]:
 
 
 # ══════════════════════════════════════════════════════════════
-# 新增检查：ACL 边界 — infrastructure 调外部 HTTP API 必须走 ACL
+# ACL 边界 — infrastructure 层调外部 HTTP API 必须走 ACL
 # ══════════════════════════════════════════════════════════════
 
 _HTTP_CLIENTS = {"httpx", "aiohttp", "urllib3", "requests", "urllib.request"}
 """外部 HTTP 客户端库名"""
 
-_KNOWN_EXTERNAL_SYSTEMS: dict[str, str] = {
-    "ollama": "acl/ollama.py",       # Ollama HTTP API
-    "openai": "acl/openai.py",       # OpenAI 兼容 API
-    "anthropic": "acl/anthropic.py", # Anthropic API
-    "docker": "acl/docker.py",       # Docker SDK
-    "mcp": "acl/mcp.py",             # MCP 协议
-}
-"""已知外部系统 → 对应的 ACL 适配器"""
+# 白名单：已知的"内部 HTTP 调用"文件（不强制走 ACL）
+_ACL_SKIP_FILES: set[str] = set()
+"""一些文件虽用 httpx 但调的是内部服务/自建网关，可免检"""
 
 
-def _detect_external_system(file_path: Path) -> str | None:
-    """从文件路径/内容推断对应的外部系统名"""
-    parts = "/".join(file_path.parts).lower()
-    for name in ["ollama", "openai", "docker", "mcp", "git", "license"]:
-        if name in parts:
-            return name
-    return None
+def _uses_http_client(tree: ast.AST) -> bool:
+    """检查 AST 树中是否 import 了 HTTP 客户端库"""
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            names: list[str] = []
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
+            for name in names:
+                for client in _HTTP_CLIENTS:
+                    if client in name:
+                        return True
+    return False
 
 
-def _has_acl_import(file_path: Path) -> bool:
-    """检查文件是否 import 了对应的 ACL 适配器"""
-    content = file_path.read_text(encoding="utf-8", errors="ignore")
+def _imports_acl(content: str) -> bool:
+    """检查内容中是否引用了 flypig.acl"""
     return "from flypig.acl" in content or "import flypig.acl" in content
 
 
 def check_acl_boundary(file_path: Path) -> list[str]:
     """检查 infrastructure 层调外部 HTTP API 是否走 ACL
 
-    如果 infrastructure 文件：
-      1. 使用了 HTTP 客户端库（httpx/requests/aiohttp）
-      2. 对应已知的外部系统（ollama/openai/docker）
-      3. 但没有 import 任何 ACL 适配器
-    → 违规
+    核心逻辑：infrastructure 下的文件如果 import 了 HTTP 客户端库
+    （httpx/aiohttp/requests/urllib3），就必须也 import ACL 适配器
+    来完成外部格式 → 领域对象的翻译。
+
+    exceptions: _ACL_SKIP_FILES 白名单（内部 HTTP 调用）
     """
     violations: list[str] = []
     parts = file_path.parts
@@ -1886,46 +1887,51 @@ def check_acl_boundary(file_path: Path) -> list[str]:
     # 只检查 infrastructure 层
     if "infrastructure" not in parts:
         return violations
-    # __init__ 免检
     if file_path.name == "__init__.py":
         return violations
 
+    # 跳过白名单
+    if file_path.name in _ACL_SKIP_FILES:
+        return violations
+
+    content = file_path.read_text(encoding="utf-8", errors="ignore")
     tree = read_tree(file_path)
     if tree is None:
         return violations
 
-    # 1. 检查是否使用了 HTTP 客户端
-    uses_http = False
+    # 没用 HTTP 客户端 → 不涉及外部 API 调用
+    if not _uses_http_client(tree):
+        return violations
+
+    # 已经走了 ACL → 合规
+    if _imports_acl(content):
+        return violations
+
+    # 走到这里：用了 HTTP 客户端但没走 ACL
+    violations.append(
+        f"  [ACL] {file_path.name} 直接调 HTTP API（{_fmt_clients(tree)}），"
+        f"应通过对应的 acl/*.py 做格式翻译"
+    )
+    return violations
+
+
+def _fmt_clients(tree: ast.AST) -> str:
+    """提取文件中使用的 HTTP 客户端列表"""
+    found: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, (ast.Import, ast.ImportFrom)):
-            names = [alias.name for alias in node.names] if isinstance(node, ast.Import) else []
-            if isinstance(node, ast.ImportFrom) and node.module:
-                names.append(node.module)
+            names: list[str] = []
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                names = [node.module]
             for name in names:
                 for client in _HTTP_CLIENTS:
                     if client in name:
-                        uses_http = True
-                        break
-        if uses_http:
+                        found.add(client.replace("urllib.request", "urllib"))
+        if len(found) == len(_HTTP_CLIENTS):
             break
-
-    if not uses_http:
-        return violations
-
-    # 2. 推断对应的外部系统
-    external = _detect_external_system(file_path)
-    if external is None:
-        return violations
-
-    # 3. 检查是否走了 ACL
-    if not _has_acl_import(file_path):
-        expected = _KNOWN_EXTERNAL_SYSTEMS.get(external, f"acl/{external}.py")
-        violations.append(
-            f"  [ACL] {file_path.name} 直接调 {external} HTTP API，"
-            f"应通过 {expected} 做格式翻译"
-        )
-
-    return violations
+    return ", ".join(sorted(found))
 
 
 # ══════════════════════════════════════════════════════════════
