@@ -1935,6 +1935,151 @@ def _fmt_clients(tree: ast.AST) -> str:
 
 
 # ══════════════════════════════════════════════════════════════
+# 六边形架构完整性 — Port-Adapter 映射 + DDD 模式连通性
+# ══════════════════════════════════════════════════════════════
+
+_ABC_PREFIX = "I"
+"""domain/interfaces/ 中接口命名前缀惯例 I"""
+
+
+def _scan_interfaces(interfaces_dir: Path) -> dict[str, Path]:
+    """扫描 domain/interfaces/ 下的 ABC 接口"""
+    interfaces: dict[str, Path] = {}
+    if not interfaces_dir.exists():
+        return interfaces
+    for f in sorted(interfaces_dir.rglob("*.py")):
+        if f.name == "__init__.py":
+            continue
+        tree = read_tree(f)
+        if tree is None:
+            continue
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                # 检查是否继承 abc.ABC 或 ABC
+                is_abc = any(
+                    isinstance(b, ast.Name) and b.id == "ABC"
+                    or isinstance(b, ast.Attribute) and b.attr == "ABC"
+                    for b in node.bases
+                )
+                if is_abc:
+                    interfaces[node.name] = f
+    return interfaces
+
+
+def _scan_implementations(infra_dir: Path, iface_name: str) -> list[str]:
+    """在 infrastructure 中查找实现了指定接口的类"""
+    impls: list[str] = []
+    for f in sorted(infra_dir.rglob("*.py")):
+        if f.name == "__init__.py":
+            continue
+        content = f.read_text(encoding="utf-8", errors="ignore")
+        if iface_name in content:
+            impls.append(str(f.relative_to(infra_dir.parent)))
+    return impls
+
+
+def check_hexagonal(py_files: list[Path], base_dir: Path) -> list[str]:
+    """检查六边形架构完整性
+
+    1. Port-Adapter 映射: domain/interfaces/ 每个 ABC 应在 infra 有实现
+    2. 领域事件连通: domain/event/ 下的事件应在业务代码中被发布
+    3. UoW 实现: shared/kernel/unit_of_work.py 应在 infra 有实现
+    """
+    violations: list[str] = []
+    flypig_dir = base_dir / "flypig"
+    if not flypig_dir.exists():
+        return violations
+
+    interfaces_dir = flypig_dir / "domain" / "interfaces"
+    infra_dir = flypig_dir / "infrastructure"
+    event_dir = flypig_dir / "domain" / "event"
+
+    # 1. Port-Adapter 映射
+    interfaces = _scan_interfaces(interfaces_dir)
+    for iface_name, iface_file in sorted(interfaces.items()):
+        impls = _scan_implementations(infra_dir, iface_name)
+        if not impls:
+            rel = iface_file.relative_to(flypig_dir.parent)
+            violations.append(
+                f"  [HEX] 接口 {iface_name} 在 {rel} 中定义，"
+                f"但 infrastructure 中没有任何实现"
+            )
+
+    # 2. 领域事件连通性
+    if event_dir.exists():
+        event_files = [f for f in event_dir.rglob("*.py") if f.name != "__init__.py"]
+        # 收集领域事件类名
+        event_classes: set[str] = set()
+        for ef in event_files:
+            tree = read_tree(ef)
+            if tree is None:
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef):
+                    for base in node.bases:
+                        if isinstance(base, ast.Name) and base.id in (
+                            "DomainEvent",
+                            "ABC",
+                        ):
+                            event_classes.add(node.name)
+        # 检查事件是否被业务代码引用
+        if event_classes:
+            all_code = ""
+            for f in py_files:
+                try:
+                    all_code += f.read_text(encoding="utf-8", errors="ignore")
+                except Exception:
+                    continue
+            for ev in sorted(event_classes):
+                # 事件自身定义文件不计入"引用"
+                own_file = event_dir / f"{_to_snake(ev)}.py"
+                usage_count = all_code.count(ev)
+                if own_file.exists():
+                    usage_count -= own_file.read_text(encoding="utf-8").count(ev)
+                if usage_count < 2:
+                    violations.append(
+                        f"  [HEX] 领域事件 {ev} 已定义但未被业务代码发布"
+                    )
+
+    # 3. UoW 实现检查
+    uow_file = flypig_dir / "shared" / "kernel" / "unit_of_work.py"
+    if uow_file.exists():
+        for f in sorted(flypig_dir.rglob("*.py")):
+            if f.name == "__init__.py":
+                continue
+            content = f.read_text(encoding="utf-8", errors="ignore")
+            if "UnitOfWork" in content and "from flypig.shared.kernel.unit_of_work" not in content:
+                continue
+            # 检查是否有实现 UnitOfWork 的类
+            tree = read_tree(f)
+            if tree is None:
+                continue
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef):
+                    for base in node.bases:
+                        if isinstance(base, ast.Name) and base.id == "UnitOfWork":
+                            break
+                    else:
+                        continue
+                    break  # 找到了实现
+            else:
+                continue
+            break  # 找到至少一个实现
+        else:
+            violations.append(
+                "  [HEX] UnitOfWork 接口已定义但没有任何实现"
+            )
+
+    return violations
+
+
+def _to_snake(name: str) -> str:
+    """PascalCase → snake_case"""
+    import re
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+
+
+# ══════════════════════════════════════════════════════════════
 # 主函数
 # ══════════════════════════════════════════════════════════════
 
@@ -1992,6 +2137,7 @@ def main() -> int:  # noqa: PLR0915
     results["i18n"] = []
     results["test"] = []
     results["deadcode"] = []
+    results["hex"] = []
 
     py_files = sorted(base_dir.rglob("*.py"))
 
@@ -2061,6 +2207,12 @@ def main() -> int:  # noqa: PLR0915
     # ── 死代码检测（全局） ──
     results["deadcode"] = check_dead_code(base_dir.parent)
 
+    # ── 六边形架构完整性检查（全局） ──
+    try:
+        results["hex"] = check_hexagonal(filted_files, base_dir.parent)
+    except Exception as e:
+        results["hex"] = [f"  [HEX] check_hexagonal 执行异常: {e}"]
+
     # ── 输出 ──
     total = sum(len(v) for v in results.values())
     has_error = total > 0
@@ -2089,6 +2241,7 @@ def main() -> int:  # noqa: PLR0915
         "register": ("REGISTER", "新文件注册"),
         "apicontract": ("APICONTRACT", "API 契约"),
         "deadcode": ("DEADCODE", "死代码检测"),
+        "hex": ("HEX", "六边形架构完整性"),
     }
 
     for key, violations in results.items():
