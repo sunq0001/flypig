@@ -1935,11 +1935,67 @@ def _fmt_clients(tree: ast.AST) -> str:
 
 
 # ══════════════════════════════════════════════════════════════
+# 贫血模型检测 — domain 层 Entity/ValueObject 必须有业务方法
+# ══════════════════════════════════════════════════════════════
+
+_DDD_CLASSES = {"Entity", "ValueObject", "AggregateRoot", "DomainEvent"}
+"""需要检查贫血的 DDD 基类（DomainService 本身就是服务，免检）"""
+
+_SKIP_METHODS = {"__init__", "__str__", "__repr__", "__eq__", "__hash__",
+                 "__lt__", "__ne__", "__getattr__", "__setattr__",
+                 "__delattr__", "__contains__"}
+"""这些不算业务方法"""
+
+
+def check_anemic_model(py_files: list[Path], base_dir: Path) -> list[str]:
+    """检查 domain 层是否存在贫血模型
+
+    规则：Entity/ValueObject/AggregateRoot 如果没有任何业务方法
+    （只含 __init__ 等 dunder），就是贫血模型，业务逻辑被"抽"到了 service 层。
+    """
+    violations: list[str] = []
+    flypig_dir = base_dir / "flypig"
+    domain_dir = flypig_dir / "domain"
+    if not domain_dir.exists():
+        return violations
+
+    for f in sorted(domain_dir.rglob("*.py")):
+        if f.name == "__init__.py":
+            continue
+        tree = read_tree(f)
+        if tree is None:
+            continue
+        rel = f.relative_to(flypig_dir)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            # 是否继承 DDD 基类
+            is_ddd = any(
+                isinstance(b, ast.Name) and b.id in _DDD_CLASSES
+                for b in node.bases
+            )
+            if not is_ddd:
+                continue
+            # 统计业务方法
+            biz_methods = [
+                m.name for m in node.body
+                if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))
+                and m.name not in _SKIP_METHODS
+            ]
+            if not biz_methods:
+                violations.append(
+                    f"  [ANEMIC] {rel}:{node.name} 是贫血模型，"
+                    f"业务逻辑应封装在 domain 类内部"
+                )
+
+    return violations
+
+
+# ══════════════════════════════════════════════════════════════
 # 六边形架构完整性 — Port-Adapter 映射 + DDD 模式连通性
 # ══════════════════════════════════════════════════════════════
 
 _ABC_PREFIX = "I"
-"""domain/interfaces/ 中接口命名前缀惯例 I"""
 
 
 def _scan_interfaces(interfaces_dir: Path) -> dict[str, Path]:
@@ -2138,6 +2194,7 @@ def main() -> int:  # noqa: PLR0915
     results["test"] = []
     results["deadcode"] = []
     results["hex"] = []
+    results["anemic"] = []
 
     py_files = sorted(base_dir.rglob("*.py"))
 
@@ -2213,6 +2270,12 @@ def main() -> int:  # noqa: PLR0915
     except Exception as e:
         results["hex"] = [f"  [HEX] check_hexagonal 执行异常: {e}"]
 
+    # ── 贫血模型检查（全局） ──
+    try:
+        results["anemic"] = check_anemic_model(filted_files, base_dir.parent)
+    except Exception as e:
+        results["anemic"] = [f"  [ANEMIC] check_anemic_model 执行异常: {e}"]
+
     # ── 输出 ──
     total = sum(len(v) for v in results.values())
     has_error = total > 0
@@ -2242,6 +2305,7 @@ def main() -> int:  # noqa: PLR0915
         "apicontract": ("APICONTRACT", "API 契约"),
         "deadcode": ("DEADCODE", "死代码检测"),
         "hex": ("HEX", "六边形架构完整性"),
+        "anemic": ("ANEMIC", "贫血模型"),
     }
 
     for key, violations in results.items():
