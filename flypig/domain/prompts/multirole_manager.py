@@ -26,7 +26,7 @@ class MultiRoleManager:
     """
 
     _ROLES_DIR = Path(__file__).resolve().parent / "roles"
-    _cache: dict[str, str] = {}
+    _cache: dict[str, str] = {}  # noqa: RUF012
 
     def get_system_message(self, persona: str = "developer", mode: str = "explore") -> str:
         """获取指定角色的系统提示词

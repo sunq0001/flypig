@@ -8,6 +8,8 @@
 """
 
 from flypig.domain.interfaces.iagent import IAgent
+from flypig.domain.interfaces.iapikey_repository import IApiKeyRepository
+from flypig.domain.interfaces.iapikey_validator import IApiKeyValidator, KeyValidationResult
 from flypig.domain.interfaces.iast_parser import IASTParser
 from flypig.domain.interfaces.icache import ICache
 from flypig.domain.interfaces.icontext_pipeline import IContextPipeline
@@ -33,6 +35,8 @@ from flypig.domain.interfaces.repository import Repository
 __all__ = [
     "IASTParser",
     "IAgent",
+    "IApiKeyRepository",
+    "IApiKeyValidator",
     "ICache",
     "IContextPipeline",
     "IConversationStore",
@@ -52,5 +56,6 @@ __all__ = [
     "IUpdateService",
     "IUsageTracker",
     "IVectorStore",
+    "KeyValidationResult",
     "Repository",
 ]

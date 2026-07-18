@@ -3,6 +3,8 @@
 为什么做：每个模型有 input/output/cache_hit 单价，统一为 PricingEntry 值对象避免散落各处。
 实现方法：PricingEntry(ValueObject) @dataclass(frozen=True)。
 
+TODO: 填充业务方法后移除 __init__ 中字段定义
+
 层&依赖：domain 层，依赖 shared
 """
 
@@ -24,3 +26,15 @@ class PricingEntry(ValueObject):
     input_price: float | None = None
     output_price: float | None = None
     input_cache_hit: float | None = None
+
+    def total_cost(self, input_tokens: int, output_tokens: int) -> float:
+        """TODO: 计算总费用"""
+        return 0.0
+
+    def to_display(self) -> str:
+        """TODO: 格式化为显示文本"""
+        return ""
+
+    def currency_symbol(self) -> str:
+        """TODO: 返回货币符号"""
+        return "$"

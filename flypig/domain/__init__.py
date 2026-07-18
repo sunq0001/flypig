@@ -8,10 +8,11 @@
 """
 
 from flypig.domain.agent_state import AgentState
-from flypig.domain.api_key import ApiKey
-from flypig.domain.change_review import ChangeReview
-from flypig.domain.change_score import ChangeLevel, ChangeScore
-from flypig.domain.chat_context import ChatContext
+from flypig.domain.agent_state import AgentState
+from flypig.domain.api_key_value import ApiKey
+from flypig.domain.change_review_entity import ChangeReview
+from flypig.domain.change_score_value import ChangeLevel, ChangeScore
+from flypig.domain.chat_context_value import ChatContext
 from flypig.domain.exceptions import (
     CircuitBreakerError,
     ConfigurationError,
@@ -24,19 +25,20 @@ from flypig.domain.exceptions import (
     SessionClosedError,
     ToolExecutionError,
 )
-from flypig.domain.graph_spec import GraphSpec
-from flypig.domain.mcp_server import McpServer
-from flypig.domain.message import Message, MessageId
-from flypig.domain.mode import ExecutionMode, ModeConfig
-from flypig.domain.mode_matrix import ModeMatrix
-from flypig.domain.persona import Persona
-from flypig.domain.pricing_entry import PricingEntry
+from flypig.domain.graph_spec_value import GraphSpec
+from flypig.domain.mcp_server_value import McpServer
+from flypig.domain.message_entity import Message, MessageId
+from flypig.domain.mode_value import ExecutionMode, ModeConfig
+from flypig.domain.mode_matrix_value import ModeMatrix
+from flypig.domain.persona_value import Persona
+from flypig.domain.pricing_entry_value import PricingEntry
 from flypig.domain.registry import ModelRegistry
-from flypig.domain.session import Session, SessionId, SessionStatus
-from flypig.domain.task_item import TaskItem
-from flypig.domain.tool_call import ToolCall, ToolDef, ToolResult
-from flypig.domain.turn import Turn
-from flypig.domain.workspace import Workspace
+from flypig.domain.session_aggregate import Session, SessionId, SessionStatus
+from flypig.domain.suggestion_card_value import SuggestionCard
+from flypig.domain.task_item_entity import TaskItem
+from flypig.domain.tool_call_value import ToolCall, ToolDef, ToolResult
+from flypig.domain.turn_entity import Turn
+from flypig.domain.workspace_aggregate import Workspace
 
 __all__ = [
     "AgentState",

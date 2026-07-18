@@ -18,6 +18,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 
+from flypig.domain.interfaces.chat_chunk import ChatChunk
+
 
 class IModel(ABC):
     """LLM 模型适配接口"""
@@ -36,6 +38,31 @@ class IModel(ABC):
 
         Yields:
             每个 token 的文本片段，由 chat_service 逐片推 SSE
+
+        Raises:
+            ModelAPIError: API 认证失败、限流、服务不可用
+        """
+        ...
+
+    @abstractmethod
+    async def stream_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        **kwargs,
+    ) -> AsyncGenerator[ChatChunk, None]:
+        """带工具调用的流式生成
+
+        当 LLM 决定调用工具时，流的末尾会产出一个带有 tool_calls 的 ChatChunk；
+        当 LLM 选择直接回答时，逐 token 产出 text ChatChunk。
+
+        Args:
+            messages: 对话消息列表
+            tools: OpenAI function calling 格式的工具 schema 列表
+            **kwargs: 额外参数（temperature / max_tokens 等）
+
+        Yields:
+            ChatChunk，可能含 text 或 tool_calls（或两者同时）
 
         Raises:
             ModelAPIError: API 认证失败、限流、服务不可用

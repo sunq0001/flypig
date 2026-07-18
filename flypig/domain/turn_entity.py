@@ -9,7 +9,7 @@ TODO: 填充业务方法后移除 __init__ 中的字段直接赋值
 """
 
 from flypig.shared.base import Entity
-from flypig.shared.kernel.message_id import MessageId
+from flypig.domain.message_entity import MessageId
 
 
 class Turn(Entity):

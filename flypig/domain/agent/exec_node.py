@@ -39,14 +39,16 @@ def execute_node(tool_executor: IToolExecutor):
         if not tool_calls:
             return {**state, "messages": messages, "turn_id": state.get("turn_id", 0) + 1}
 
-        results = []
         for tc in tool_calls:
             name = tc.get("name", "")
             args = tc.get("arguments", {})
+            tool_call_id = tc.get("id", "")
             result = await tool_executor.execute(name, args)
-            results.append({"name": name, "result": result})
-
-        messages.append({"role": "tool", "content": str(results)})
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "content": str(result),
+            })
         return {**state, "messages": messages, "turn_id": state.get("turn_id", 0) + 1}
 
     from flypig.domain.agent.nodes import safe_node

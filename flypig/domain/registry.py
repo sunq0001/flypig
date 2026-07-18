@@ -32,7 +32,7 @@ class ModelRegistry(DomainService):
         models_raw = raw.get("models", {})
         self._registry = dict(models_raw)
         self._provider_key_map = {}
-        for name, meta in models_raw.items():
+        for meta in models_raw.values():
             provider = meta.get("provider", "")
             key_attr = meta.get("key_attr", "")
             if provider and key_attr:

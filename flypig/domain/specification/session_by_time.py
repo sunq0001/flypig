@@ -6,7 +6,7 @@
 层&依赖：domain.specification 层，依赖 shared.Specification + domain.session
 """
 
-from flypig.domain.session import Session
+from flypig.domain.session_aggregate import Session
 from flypig.shared.base import Specification
 
 
