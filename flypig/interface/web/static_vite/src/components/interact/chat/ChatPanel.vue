@@ -18,7 +18,11 @@ ChatPanel：对话框面板容器
       :loading="isStreaming"
       :status="status"
     />
+    <div v-if="!workspace" class="no-workspace-hint">
+      <span>请先选择工作区后再开始对话</span>
+    </div>
     <InputBox
+      v-else
       :model="currentModel"
       :models="modelList"
       :mode="currentMode"
@@ -78,6 +82,7 @@ const props = defineProps({
 const configStore = useConfigStore()
 
 const modelList = computed(() => configStore.models)
+const workspace = computed(() => configStore.workspace)
 
 function firstAvailableModel() {
   // 默认模型有 Key 则用它，否则切到第一个有 Key 的（通常是本地模型）
@@ -207,6 +212,19 @@ async function saveApiKey() {
 </style>
 
 <style>
+/* 无工作区提示 */
+.no-workspace-hint {
+  flex-shrink: 0;
+  padding: 12px;
+  margin: 0 12px 8px;
+  border-radius: 8px;
+  background: #252526;
+  border: 1px solid #555;
+  text-align: center;
+  color: #888;
+  font-size: 13px;
+}
+
 /* 消息列表滚动条 */
 .message-list::-webkit-scrollbar { width: 6px; }
 .message-list::-webkit-scrollbar-track { background: transparent; }

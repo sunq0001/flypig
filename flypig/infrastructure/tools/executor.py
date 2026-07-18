@@ -22,7 +22,7 @@ from flypig.infrastructure.tools.registry import get_registry
 class ToolExecutor(IToolExecutor):
     """工具执行器 — 加载注册表 + 统一调度 + schema 生成"""
 
-    def __init__(self, workspace_dir: Path) -> None:
+    def __init__(self, workspace_dir: Path | None) -> None:
         self._instances: dict[str, Any] = {}
         self._loaded = False
         self._workspace_dir = workspace_dir

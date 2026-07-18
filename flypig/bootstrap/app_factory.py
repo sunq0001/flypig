@@ -43,7 +43,7 @@ def _register_blueprints(app: Quart) -> None:
 
 def _init_container(app: Quart, container: AppContainer, settings: AppSettings) -> None:
     """初始化 DI 容器并挂载到 app config"""
-    workspace_dir = Path(settings.workspace) if settings.workspace else Path.cwd()
+    workspace_dir = Path(settings.workspace) if settings.workspace else None
 
     # 将 AppSettings 转为 dict 注入 config（pydantic 对象不支持 .get()）
     config_dict = settings.model_dump()
@@ -97,6 +97,25 @@ def _register_lifecycle(app: Quart, pricing_service) -> None:
         await events.fire_shutdown()
 
 
+def _load_recent_workspace() -> str | None:
+    """从 recent_workspaces.json 读取最近使用的工作区"""
+    import json
+
+    recent_file = (
+        Path(__file__).resolve().parent.parent
+        / "interface" / "flypig" / "data" / "recent_workspaces.json"
+    )
+    if not recent_file.exists():
+        return None
+    try:
+        data = json.loads(recent_file.read_text(encoding="utf-8"))
+        if data and isinstance(data, list) and len(data) > 0:
+            return data[0]
+    except Exception:
+        pass
+    return None
+
+
 def create_app(
     config_path: str | Path | None = None,
     settings: AppSettings | None = None,
@@ -104,6 +123,12 @@ def create_app(
     """创建并配置 Quart 应用实例"""
     if settings is None:
         settings = load_config(config_path)
+
+    # 启动时自动恢复最近使用的工作区
+    if not settings.workspace:
+        recent = _load_recent_workspace()
+        if recent:
+            settings.workspace = recent
 
     init_logging(level=settings.log_level)
     init_otel()  # 全链路追踪（Jaeger 不可用时自动降级为 noop）

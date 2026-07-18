@@ -1,12 +1,61 @@
-"""安全文件读取工具
+"""ToolRead — 读文件工具
 
-为什么做：AI 读文件时不能裸读磁盘，没有边界保护的话恶意链接或超大文件会拖垮体验。
-实现方法：PathValidator 白名单校验 → 按上限截断大文件 → magic bytes 检测二进制。支持 start/end 范围和 symbol 符号定位。
-实现效果：读到恶意路径时弹出 SuggestionCard 让用户选择；大文件不会卡死 UI；二进制文件直接标出。
-技术栈：aiofiles, start/end 范围, symbol 符号定位, magic bytes 检测
+为什么做：AI 需要读取文件内容，支持按行范围读取避免全量 token 消耗。
+实现方法：@tool 注册，支持 start/end 行范围参数 + 大文件截断。
+         工作区未设置时提示用户先选择工作区。
 
-层&依赖：infrastructure.tools.file 层，依赖 PathValidator
-细节见文档：docs/docs_refactor/tools.md → §文件编辑方案
+层&依赖：infrastructure.tools.file 层，依赖 pathlib
 """
 
-# TODO: 骨架文件占位，待具体实现
+from __future__ import annotations
+
+from pathlib import Path
+
+from flypig.infrastructure.tools.registry import tool
+
+
+@tool(name="read_file", category="file", description="Read file content, optionally by line range")
+class ToolRead:
+    """读取文件内容，支持按行范围读取"""
+
+    def __init__(self, workspace_dir: Path | None) -> None:
+        self.workspace_dir = workspace_dir
+
+    async def __call__(
+        self,
+        path: str,
+        start: int | None = None,
+        end: int | None = None,
+        max_chars: int = 50000,
+    ) -> str:
+        ws_msg = self._check_workspace()
+        if ws_msg:
+            return ws_msg
+
+        file_path = self._resolve(path)
+        if not file_path.exists():
+            return f"Error: File not found: {file_path}"
+
+        content = file_path.read_text(encoding="utf-8")
+
+        if start is not None:
+            lines = content.splitlines(keepends=True)
+            content = "".join(lines[start - 1 : end])
+
+        if len(content) > max_chars:
+            content = content[:max_chars] + f"\n... (truncated, total {len(content)} chars)"
+
+        return content
+
+    def _check_workspace(self) -> str | None:
+        if self.workspace_dir is None or not str(self.workspace_dir):
+            return "请先选择工作区后再操作。"
+        return None
+
+    def _resolve(self, path_str: str) -> Path:
+        p = Path(path_str)
+        if p.is_absolute():
+            return p
+        if self.workspace_dir is None:
+            return p
+        return self.workspace_dir / p
