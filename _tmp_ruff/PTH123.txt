@@ -1,0 +1,9 @@
+flypig\bootstrap\settings.py:39:14: PTH123 `open()` should be replaced by `Path.open()`
+flypig\bootstrap\settings.py:136:10: PTH123 `open()` should be replaced by `Path.open()`
+flypig\infrastructure\persistence\api_key_file_repo.py:38:14: PTH123 `open()` should be replaced by `Path.open()`
+flypig\infrastructure\persistence\api_key_file_repo.py:57:18: PTH123 `open()` should be replaced by `Path.open()`
+flypig\infrastructure\persistence\api_key_file_repo.py:66:14: PTH123 `open()` should be replaced by `Path.open()`
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:37:14: PTH123 `open()` should be replaced by `Path.open()`
+flypig\interface\rest\routes\config_routes.py:120:14: PTH123 `open()` should be replaced by `Path.open()`
+flypig\interface\rest\routes\config_routes.py:128:10: PTH123 `open()` should be replaced by `Path.open()`
+Found 8 errors.

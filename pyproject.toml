@@ -1,0 +1,7 @@
+[tool.mypy]
+exclude = [
+  'flypig-archive/',
+  'flypig_archive2/',
+  'flypig-archive',
+  'flypig_archive2',
+]

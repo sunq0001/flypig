@@ -1,7 +1,7 @@
 # 前端 UI 重构方案
 
 > **来源**：用户反馈"太多 div 看着不舒服"引发的前端 UI 全面审计与重构讨论
-> **关联文档**: `frontend-arch.md`（前端架构总览）、`tech-stack.md`（技术栈决策）、`standards-and-testing.md`（自动化检查清单）
+> **关联文档**: `frontend-arch.md`（前端架构总览）、`tech-stack.md`（技术栈决策）、`standards-testing-debugging.md`（自动化检查清单）
 > 
 > 本方案涵盖：div 层级瘦身 → 嵌套组件抽取 → CSS 清理 → 性能优化，采用三阶段渐进式策略，每步可截图验证、可 git 回退。
 
@@ -335,7 +335,7 @@ import 'iconify-icon/cache-all'  // 不加载
 
 ## 八、自动化检查覆盖
 
-本文档发现的 UI 问题已纳入 `scripts/frontend_check.py` 的自动化检测中（详见 [standards-and-testing.md#53-frontend_checkpy](standards-and-testing.md#53-frontend_checkpy)）：
+本文档发现的 UI 问题已纳入 `scripts/frontend_check.py` 的自动化检测中（详见 [standards-testing-debugging.md#53-frontend_checkpy](standards-testing-debugging.md#53-frontend_checkpy)）：
 
 | 文档中的问题 | 自动检查 | 代号 |
 |------------|---------|------|

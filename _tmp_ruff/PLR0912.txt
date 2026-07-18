@@ -1,0 +1,2 @@
+flypig\infrastructure\llm\openai_adapter.py:91:15: PLR0912 Too many branches (14 > 12)
+Found 1 error.

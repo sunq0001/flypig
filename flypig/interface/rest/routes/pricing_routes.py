@@ -9,8 +9,9 @@
 
 import asyncio
 
-from flypig.infrastructure.usage.pricing import PricingService
 from quart import Blueprint, current_app, jsonify, request
+
+from flypig.infrastructure.usage.pricing import PricingService
 
 pricing_bp = Blueprint("pricing", __name__)
 _refreshing = False
@@ -21,7 +22,7 @@ def _get_pricing_service() -> PricingService:
 
 
 @pricing_bp.route("/api/pricing")
-async def pricing() -> dict:
+async def pricing():
     """返回价格数据，缓存优先，后台异步刷新
 
     查询参数:
@@ -42,7 +43,7 @@ async def pricing() -> dict:
 
 
 @pricing_bp.route("/api/routes")
-async def list_routes() -> dict:
+async def list_routes():
     rules = sorted([r.rule for r in current_app.url_map.iter_rules()])
     return jsonify({"routes": rules})
 

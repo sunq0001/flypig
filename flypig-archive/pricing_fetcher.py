@@ -4,7 +4,6 @@ import json
 import re
 import urllib.request
 from pathlib import Path
-from typing import Optional, Tuple
 
 # ============================================================
 # 内置价格参考表（$/1M tokens）— 出厂默认值，仅当无缓存且在线失败时用
@@ -31,7 +30,7 @@ def _load_cache() -> dict:
     cache = dict(BUILTIN_PRICES)
     if _CACHE_PATH.exists():
         try:
-            with open(_CACHE_PATH, "r", encoding="utf-8") as f:
+            with open(_CACHE_PATH, encoding="utf-8") as f:
                 cached = json.load(f)
             cache.update(cached)  # 缓存覆盖内置表
         except Exception:
@@ -44,7 +43,7 @@ def _save_to_cache(model_name: str, prices: dict):
     try:
         data = {}
         if _CACHE_PATH.exists():
-            with open(_CACHE_PATH, "r", encoding="utf-8") as f:
+            with open(_CACHE_PATH, encoding="utf-8") as f:
                 data = json.load(f)
         data[model_name] = prices
         with open(_CACHE_PATH, "w", encoding="utf-8") as f:
@@ -63,7 +62,7 @@ PRICING_URLS = {
 
 def fetch_pricing(
     model_name: str, provider: str = ""
-) -> Tuple[Optional[dict], Optional[str]]:
+) -> tuple[dict | None, str | None]:
     """获取模型价格
 
     Returns:
@@ -93,7 +92,7 @@ def fetch_pricing(
     return None, None
 
 
-def _try_web_fetch(model_name: str, provider: str) -> Optional[dict]:
+def _try_web_fetch(model_name: str, provider: str) -> dict | None:
     """尝试从官方价格页抓取"""
     url = PRICING_URLS.get(provider)
     if not url:
@@ -120,7 +119,7 @@ def _try_web_fetch(model_name: str, provider: str) -> Optional[dict]:
     return None
 
 
-def _extract_prices(text: str) -> Optional[dict]:
+def _extract_prices(text: str) -> dict | None:
     """从文本中提取 $X.XX 模式的价格"""
     amounts = [float(x) for x in re.findall(r"\$(\d+\.?\d*)", text)]
     amounts = [a for a in amounts if 0.001 < a < 500]

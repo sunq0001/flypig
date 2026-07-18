@@ -11,8 +11,9 @@ from __future__ import annotations
 
 from http import HTTPStatus
 
-from flypig.orchestration.chat_service import ChatApplicationService
 from quart import Blueprint, Response, current_app, jsonify, request
+
+from flypig.orchestration.chat_service import ChatApplicationService
 
 chat_bp = Blueprint("chat", __name__, url_prefix="/api")
 

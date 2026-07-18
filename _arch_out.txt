@@ -2,82 +2,111 @@
   FlyPig 架构合规检查报告
 ============================================================
 
-[FAIL] 文件行数超限（1 处）
-  flypig\tools.py:  [SIZE] 文件 812 行，超过 300 行阈值，建议拆分
+[FAIL] bareexc（3 处）
+  flypig\infrastructure\tools\mcp\tool_mcp_loader.py:  [EXC] 抛裸 RuntimeError()，应使用 FlyPigException 子类
+  flypig\infrastructure\tools\mcp\tool_mcp_loader.py:  [EXC] 抛裸 RuntimeError()，应使用 FlyPigException 子类
+  flypig\infrastructure\tools\mcp\tool_mcp_loader.py:  [EXC] 抛裸 RuntimeError()，应使用 FlyPigException 子类
 
-[FAIL] 函数参数过多（1 处）
-  flypig\agent.py:  [PARAMS] 函数 __init__ 有 6 个参数（> 5）
+[FAIL] filesize（1 处）
+  flypig\infrastructure\tools\mcp\tool_mcp_loader.py:  [SIZE] 文件 334 行，超过 300 行阈值，建议拆分
 
-[FAIL] 嵌套过深（1 处）
-  flypig\tools.py:  [NESTING] 最大嵌套深度 5 层（> 4），建议提前 return 或提取函数
+[FAIL] nesting（3 处）
+  flypig\domain\agent\nodes.py:  [NESTING] 最大嵌套深度 5 层（> 4），建议提前 return 或提取函数
+  flypig\infrastructure\llm\openai_adapter.py:  [NESTING] 最大嵌套深度 6 层（> 4），建议提前 return 或提取函数
+  flypig\infrastructure\tools\search\grep.py:  [NESTING] 最大嵌套深度 5 层（> 4），建议提前 return 或提取函数
 
-[FAIL] 魔法数字（4 处）
-  flypig\agent.py:  [MAGIC] 第 48 行：魔法数字 10，建议定义为命名常量
-  flypig\infrastructure\usage\pricing.py:  [MAGIC] 第 114 行：魔法数字 4，建议定义为命名常量
-  flypig\interface\rest\routes\files_routes.py:  [MAGIC] 第 61 行：魔法数字 500，建议定义为命名常量
-  flypig\tools.py:  [MAGIC] 第 251 行：魔法数字 60，建议定义为命名常量
+[FAIL] magicnum（16 处）
+  flypig\domain\agent\nodes.py:  [MAGIC] 第 62 行：魔法数字 200，建议定义为命名常量
+  flypig\domain\interfaces\ivector_store.py:  [MAGIC] 第 22 行：魔法数字 10，建议定义为命名常量
+  flypig\infrastructure\llm\api_key_validator.py:  [MAGIC] 第 54 行：魔法数字 200，建议定义为命名常量
+  flypig\infrastructure\persistence\api_key_file_repo.py:  [MAGIC] 第 67 行：魔法数字 2，建议定义为命名常量
+  flypig\infrastructure\tools\file\read.py:  [MAGIC] 第 28 行：魔法数字 50000，建议定义为命名常量
+  flypig\infrastructure\tools\mcp\tool_mcp_loader.py:  [MAGIC] 第 48 行：魔法数字 10，建议定义为命名常量
+  flypig\infrastructure\tools\registry.py:  [MAGIC] 第 20 行：魔法数字 30，建议定义为命名常量
+  flypig\infrastructure\tools\review\tool_lint.py:  [MAGIC] 第 166 行：魔法数字 4，建议定义为命名常量
+  flypig\infrastructure\tools\search\find.py:  [MAGIC] 第 38 行：魔法数字 50，建议定义为命名常量
+  flypig\infrastructure\tools\search\grep.py:  [MAGIC] 第 76 行：魔法数字 50，建议定义为命名常量
+  flypig\infrastructure\tools\system\bash.py:  [MAGIC] 第 28 行：魔法数字 60，建议定义为命名常量
+  flypig\infrastructure\usage\pricing.py:  [MAGIC] 第 113 行：魔法数字 4，建议定义为命名常量
+  flypig\infrastructure\vector_store_stub.py:  [MAGIC] 第 19 行：魔法数字 10，建议定义为命名常量
+  flypig\interface\rest\routes\config_routes.py:  [MAGIC] 第 129 行：魔法数字 2，建议定义为命名常量
+  flypig\interface\rest\routes\files_routes.py:  [MAGIC] 第 64 行：魔法数字 500，建议定义为命名常量
+  flypig\orchestration\chat_service.py:  [MAGIC] 第 82 行：魔法数字 200，建议定义为命名常量
 
-[FAIL] 空异常捕获（2 处）
-  flypig\agent.py:  [EMPTY_EXC] 第 163 行：except Name(id='Exception', ctx=Load()): pass，静默吞异常
-  flypig\tools.py:  [EMPTY_EXC] 第 205 行：except Name(id='Exception', ctx=Load()): pass，静默吞异常
+[FAIL] emptyexc（1 处）
+  flypig\infrastructure\tools\mcp\tool_mcp_loader.py:  [EMPTY_EXC] 第 287 行：except Name(id='Exception', ctx=Load()): pass，静默吞异常
 
-[FAIL] 函数过长（4 处）
-  flypig\agent.py:  [LONG_FUNC] run 98 行（> 80），建议拆分
-  flypig\tools.py:  [LONG_FUNC] _open_new_terminal_linux 59 行（> 50），考虑拆分
-  flypig\tools.py:  [LONG_FUNC] tool_bash 68 行（> 50），考虑拆分
-  flypig\tools.py:  [LONG_FUNC] get_tools_schema 125 行（> 80），建议拆分
+[FAIL] longfunc（4 处）
+  flypig\domain\agent\nodes.py:  [LONG_FUNC] chat_node 80 行（> 50），考虑拆分
+  flypig\domain\agent\nodes.py:  [LONG_FUNC] _chat 59 行（> 50），考虑拆分
+  flypig\infrastructure\llm\openai_adapter.py:  [LONG_FUNC] stream_with_tools 74 行（> 50），考虑拆分
+  flypig\orchestration\chat_service.py:  [LONG_FUNC] generate_sse 90 行（> 80），建议拆分
 
-[FAIL] 生产代码print（2 处）
-  flypig\__main__.py:  [PRINT] 第 20 行：print()，应使用 logger.info() 或 logger.debug()
-  flypig\agent.py:  [PRINT] 第 214 行：print()，应使用 logger.info() 或 logger.debug()
+[FAIL] print（2 处）
+  flypig\__main__.py:  [PRINT] 第 35 行：print()，应使用 logger.info() 或 logger.debug()
+  flypig\infrastructure\tools\mcp\tool_mcp_loader.py:  [PRINT] 第 244 行：print()，应使用 logger.info() 或 logger.debug()
 
-[FAIL] 魔法字符串（9 处）
-  flypig\agent.py:  [MSTR] 字符串 "name" 出现了 6 次（行 219, 254...），建议定义为常量
-  flypig\application\chat_service.py:  [MSTR] 字符串 "errorText" 出现了 3 次（行 61, 75...），建议定义为常量
-  flypig\infrastructure\ollama\service.py:  [MSTR] 字符串 "name" 出现了 3 次（行 104, 85...），建议定义为常量
-  flypig\infrastructure\usage\pricing.py:  [MSTR] 字符串 "prices" 出现了 5 次（行 231, 207...），建议定义为常量
-  flypig\interface\rest\routes\config_routes.py:  [MSTR] 字符串 "default_model" 出现了 3 次（行 99, 87...），建议定义为常量
-  flypig\interface\rest\routes\files_routes.py:  [MSTR] 字符串 "error" 出现了 7 次（行 27, 31...），建议定义为常量
-  flypig\orchestration\nodes\chat_node.py:  [MSTR] 字符串 "content" 出现了 3 次（行 46, 54...），建议定义为常量
-  flypig\tests\unit\test_portkey_acl.py:  [MSTR] 字符串 "pricing_config" 出现了 3 次（行 21, 39...），建议定义为常量
-  flypig\tools.py:  [MSTR] 字符串 "read" 出现了 4 次（行 635, 77...），建议定义为常量
+[FAIL] magicstr（15 处）
+  flypig\domain\agent\exec_node.py:  [MSTR] 字符串 "messages" 出现了 3 次（行 52, 35...），建议定义为常量
+  flypig\domain\agent\nodes.py:  [MSTR] 字符串 "content" 出现了 6 次（行 84, 85...），建议定义为常量
+  flypig\infrastructure\ollama\service.py:  [MSTR] 字符串 "name" 出现了 3 次（行 102, 81...），建议定义为常量
+  flypig\infrastructure\tools\executor.py:  [MSTR] 字符串 "type" 出现了 8 次（行 108, 95...），建议定义为常量
+  flypig\infrastructure\tools\mcp\tool_mcp_loader.py:  [MSTR] 字符串 "name" 出现了 3 次（行 47, 250...），建议定义为常量
+  flypig\infrastructure\tools\review\tool_lint.py:  [MSTR] 字符串 "run_linter" 出现了 8 次（行 31, 138...），建议定义为常量
+  flypig\infrastructure\tools\system\bash.py:  [MSTR] 字符串 "replace" 出现了 4 次（行 41, 42...），建议定义为常量
+  flypig\infrastructure\usage\pricing.py:  [MSTR] 字符串 "prices" 出现了 5 次（行 231, 205...），建议定义为常量
+  flypig\interface\rest\routes\config_routes.py:  [MSTR] 字符串 "default_model" 出现了 3 次（行 107, 93...），建议定义为常量
+  flypig\interface\rest\routes\files_routes.py:  [MSTR] 字符串 "error" 出现了 7 次（行 28, 32...），建议定义为常量
+  flypig\interface\rest\routes\tool_events_routes.py:  [MSTR] 字符串 "name" 出现了 4 次（行 42, 42...），建议定义为常量
+  flypig\orchestration\chat_service.py:  [MSTR] 字符串 "errorText" 出现了 3 次（行 83, 144...），建议定义为常量
+  flypig\orchestration\dto\chat_response.py:  [MSTR] 字符串 "ChatResponse" 出现了 5 次（行 42, 46...），建议定义为常量
+  flypig\orchestration\graph_factory.py:  [MSTR] 字符串 "chat" 出现了 5 次（行 54, 57...），建议定义为常量
+  flypig\orchestration\nodes\chat_node.py:  [MSTR] 字符串 "role" 出现了 4 次（行 24, 42...），建议定义为常量
 
-[FAIL] 返回点过多（1 处）
-  flypig\tools.py:  [RETURNS] tool_edit_file 有 5 个 return 语句（> 4），流程过于复杂
+[FAIL] returns（4 处）
+  flypig\bootstrap\settings.py:  [RETURNS] _load_json_config 有 5 个 return 语句（> 4），流程过于复杂
+  flypig\domain\agent\router.py:  [RETURNS] router 有 5 个 return 语句（> 4），流程过于复杂
+  flypig\infrastructure\llm\api_key_validator.py:  [RETURNS] validate 有 7 个 return 语句（> 4），流程过于复杂
+  flypig\infrastructure\tools\review\tool_lint.py:  [RETURNS] __call__ 有 6 个 return 语句（> 4），流程过于复杂
 
-[FAIL] 缺返回类型注解（4 处）
-  flypig\__main__.py:  [RETTYPE] 公开函数 main 缺少返回类型注解
-  flypig\agent.py:  [RETTYPE] 公开函数 open_terminal 缺少返回类型注解
-  flypig\interface\rest\routes\config_routes.py:  [RETTYPE] 公开函数 browse 缺少返回类型注解
-  flypig\tools.py:  [RETTYPE] 公开函数 clear_pycache 缺少返回类型注解
+[FAIL] rettype（5 处）
+  flypig\domain\agent\exec_node.py:  [RETTYPE] 公开函数 execute_node 缺少返回类型注解
+  flypig\interface\rest\routes\config_routes.py:  [RETTYPE] 公开函数 get_config 缺少返回类型注解
+  flypig\interface\rest\routes\files_routes.py:  [RETTYPE] 公开函数 tree 缺少返回类型注解
+  flypig\interface\rest\routes\pricing_routes.py:  [RETTYPE] 公开函数 pricing 缺少返回类型注解
+  flypig\interface\rest\routes\tool_events_routes.py:  [RETTYPE] 公开函数 generate 缺少返回类型注解
 
-[FAIL] IO无try保护（1 处）
+[FAIL] robustasync（6 处）
   flypig\bootstrap\app_factory.py:  [ROBUST] _register_lifecycle 有 await 但无 try/except
+  flypig\domain\agent\exec_node.py:  [ROBUST] _execute 有 await 但无 try/except
+  flypig\infrastructure\tools\mcp\tool_mcp_loader.py:  [ROBUST] _handshake 有 await 但无 try/except
+  flypig\infrastructure\tools\review\tool_lint.py:  [ROBUST] __call__ 有 await 但无 try/except
+  flypig\infrastructure\tools\search\grep.py:  [ROBUST] __call__ 有 await 但无 try/except
+  flypig\infrastructure\tools\system\bash.py:  [ROBUST] __call__ 有 await 但无 try/except
 
-[FAIL] 函数内import（2 处）
-  flypig\agent.py:  [PERF] 函数 _self_heal 内有 import，应提到文件顶部
-  flypig\tools.py:  [PERF] 函数 _run_terminal_interactive 内有 import，应提到文件顶部
+[FAIL] robustio（3 处）
+  flypig\infrastructure\tools\file\edit.py:  [ROBUST] 文件操作 (read_text) 没有 try 包裹
+  flypig\infrastructure\tools\file\read.py:  [ROBUST] 文件操作 (read_text) 没有 try 包裹
+  flypig\infrastructure\tools\file\write.py:  [ROBUST] 文件操作 (write_text) 没有 try 包裹
 
-[FAIL] docstring质量（3 处）
-  flypig\__main__.py:  [DOCQ] docstring 太短，应包含：为什么做 / 实现方法 / 层&依赖
-  flypig\agent.py:  [DOCQ] docstring 太短，应包含：为什么做 / 实现方法 / 层&依赖
-  flypig\tools.py:  [DOCQ] docstring 太短，应包含：为什么做 / 实现方法 / 层&依赖
+[FAIL] perfimport（5 处）
+  flypig\__main__.py:  [PERF] 函数 main 内有 import，应提到文件顶部
+  flypig\bootstrap\app_factory.py:  [PERF] 函数 _register_lifecycle 内有 import，应提到文件顶部
+  flypig\bootstrap\settings.py:  [PERF] 函数 _load_persisted_api_keys 内有 import，应提到文件顶部
+  flypig\domain\agent\exec_node.py:  [PERF] 函数 execute_node 内有 import，应提到文件顶部
+  flypig\infrastructure\tools\executor.py:  [PERF] 函数 load_all 内有 import，应提到文件顶部
 
-[FAIL] 安全审计（1 处）
-  flypig\tools.py:  [SECURE] 检测到 shell 调用（os.system / subprocess shell=True），应使用 subprocess.run(..., shell=False)
+[FAIL] naming（2 处）
+  flypig\infrastructure\tools\mcp\tool_mcp_loader.py:  [NAMED] 第 267 行：类名 _DynamicMCPTool 不是 PascalCase
+  flypig\interface\rest\routes\graph_routes.py:  [NAMED] 第 39 行：类名 _DummyModel 不是 PascalCase
 
-[FAIL] 接口契约（3 处）
-  [CONTRACT] 接口 IAgent（定义于 C:\Users\mss\WorkBuddy\Flypig-agent\flypig\domain\interfaces\iagent.py）在 infrastructure 中无已知实现类
-  [CONTRACT] 接口 IEventStream（定义于 C:\Users\mss\WorkBuddy\Flypig-agent\flypig\domain\interfaces\ievent_stream.py）在 infrastructure 中无已知实现类
-  [CONTRACT] 接口 IModelPolicy（定义于 C:\Users\mss\WorkBuddy\Flypig-agent\flypig\domain\interfaces\imodel_policy.py）在 infrastructure 中无已知实现类
-
-[FAIL] 依赖安全（1 处）
-  [DEPSEC] 依赖 setuptools>=68.0 未锁定上限，应使用 setuptools>=68.0,<next_major
+[FAIL] security（1 处）
+  flypig\infrastructure\tools\system\bash.py:  [SECURE] 检测到 shell 调用（os.system / subprocess shell=True），应使用 subprocess.run(..., shell=False)
 
 [FAIL] 国际化就绪（1 处）
   [I18N] 未检测到 i18n 基础设施（无 i18n/locale/translations 目录），异常 code 无法映射到用户界面文本
 
-[FAIL] 测试覆盖（156 处）
+[FAIL] 测试覆盖（158 处）
   [TEST] acl\casbin.py 缺少对应的测试文件 tests\unit\test_casbin.py
   [TEST] acl\chat_server.py 缺少对应的测试文件 tests\unit\test_chat_server.py
   [TEST] acl\docker.py 缺少对应的测试文件 tests\unit\test_docker.py
@@ -85,27 +114,20 @@
   [TEST] acl\license.py 缺少对应的测试文件 tests\unit\test_license.py
   [TEST] acl\llm_api.py 缺少对应的测试文件 tests\unit\test_llm_api.py
   [TEST] acl\mcp.py 缺少对应的测试文件 tests\unit\test_mcp.py
-  [TEST] acl\pricing.py 的测试文件 tests\unit\test_pricing.py 为空
   [TEST] acl\subprocess.py 缺少对应的测试文件 tests\unit\test_subprocess.py
-  [TEST] application\chat_service.py 缺少对应的测试文件 tests\unit\test_chat_service.py
-  [TEST] application\dto\chat_response.py 缺少对应的测试文件 tests\unit\test_chat_response.py
+  [TEST] domain\agent\exec_node.py 缺少对应的测试文件 tests\unit\test_exec_node.py
+  [TEST] domain\agent\nodes.py 缺少对应的测试文件 tests\unit\test_nodes.py
+  [TEST] domain\agent\router.py 的测试文件 tests\unit\test_router.py 为空
   [TEST] domain\agent_state.py 缺少对应的测试文件 tests\unit\test_agent_state.py
   [TEST] domain\api_key.py 缺少对应的测试文件 tests\unit\test_api_key.py
   [TEST] domain\change_review.py 缺少对应的测试文件 tests\unit\test_change_review.py
   [TEST] domain\change_score.py 缺少对应的测试文件 tests\unit\test_change_score.py
   [TEST] domain\chat_context.py 缺少对应的测试文件 tests\unit\test_chat_context.py
-  [TEST] domain\event\message_received.py 缺少对应的测试文件 tests\unit\test_message_received.py
-  [TEST] domain\event\message_sent.py 缺少对应的测试文件 tests\unit\test_message_sent.py
-  [TEST] domain\event\message_sent_handler.py 缺少对应的测试文件 tests\unit\test_message_sent_handler.py
-  [TEST] domain\event\session_closed.py 缺少对应的测试文件 tests\unit\test_session_closed.py
-  [TEST] domain\event\session_created.py 缺少对应的测试文件 tests\unit\test_session_created.py
-  [TEST] domain\event\session_created_handler.py 缺少对应的测试文件 tests\unit\test_session_created_handler.py
-  [TEST] domain\event\tool_called.py 缺少对应的测试文件 tests\unit\test_tool_called.py
-  [TEST] domain\event\tool_completed.py 缺少对应的测试文件 tests\unit\test_tool_completed.py
-  [TEST] domain\event\tool_completed_handler.py 缺少对应的测试文件 tests\unit\test_tool_completed_handler.py
-  [TEST] domain\exceptions.py 缺少对应的测试文件 tests\unit\test_exceptions.py
   [TEST] domain\graph_spec.py 缺少对应的测试文件 tests\unit\test_graph_spec.py
+  [TEST] domain\interfaces\chat_chunk.py 缺少对应的测试文件 tests\unit\test_chat_chunk.py
   [TEST] domain\interfaces\iagent.py 缺少对应的测试文件 tests\unit\test_iagent.py
+  [TEST] domain\interfaces\iapikey_repository.py 缺少对应的测试文件 tests\unit\test_iapikey_repository.py
+  [TEST] domain\interfaces\iapikey_validator.py 缺少对应的测试文件 tests\unit\test_iapikey_validator.py
   [TEST] domain\interfaces\iast_parser.py 缺少对应的测试文件 tests\unit\test_iast_parser.py
   [TEST] domain\interfaces\icache.py 缺少对应的测试文件 tests\unit\test_icache.py
   [TEST] domain\interfaces\icontext_pipeline.py 缺少对应的测试文件 tests\unit\test_icontext_pipeline.py
@@ -133,14 +155,11 @@
   [TEST] domain\mode.py 缺少对应的测试文件 tests\unit\test_mode.py
   [TEST] domain\mode_matrix.py 缺少对应的测试文件 tests\unit\test_mode_matrix.py
   [TEST] domain\persona.py 缺少对应的测试文件 tests\unit\test_persona.py
-  [TEST] domain\prompts\multirole_manager.py 缺少对应的测试文件 tests\unit\test_multirole_manager.py
   [TEST] domain\registry.py 缺少对应的测试文件 tests\unit\test_registry.py
+  [TEST] domain\services\api_key_service.py 缺少对应的测试文件 tests\unit\test_api_key_service.py
   [TEST] domain\session.py 缺少对应的测试文件 tests\unit\test_session.py
   [TEST] domain\session_id.py 缺少对应的测试文件 tests\unit\test_session_id.py
   [TEST] domain\session_status.py 缺少对应的测试文件 tests\unit\test_session_status.py
-  [TEST] domain\specification\session_by_status.py 缺少对应的测试文件 tests\unit\test_session_by_status.py
-  [TEST] domain\specification\session_by_time.py 缺少对应的测试文件 tests\unit\test_session_by_time.py
-  [TEST] domain\specification\session_by_user.py 缺少对应的测试文件 tests\unit\test_session_by_user.py
   [TEST] domain\suggestion_card.py 缺少对应的测试文件 tests\unit\test_suggestion_card.py
   [TEST] domain\task_item.py 缺少对应的测试文件 tests\unit\test_task_item.py
   [TEST] domain\tool_call.py 缺少对应的测试文件 tests\unit\test_tool_call.py
@@ -148,19 +167,32 @@
   [TEST] domain\tool_result.py 缺少对应的测试文件 tests\unit\test_tool_result.py
   [TEST] domain\turn.py 缺少对应的测试文件 tests\unit\test_turn.py
   [TEST] domain\workspace.py 缺少对应的测试文件 tests\unit\test_workspace.py
+  [TEST] infrastructure\agent_stub.py 缺少对应的测试文件 tests\unit\test_agent_stub.py
+  [TEST] infrastructure\ast_parser_stub.py 缺少对应的测试文件 tests\unit\test_ast_parser_stub.py
+  [TEST] infrastructure\cache_stub.py 缺少对应的测试文件 tests\unit\test_cache_stub.py
   [TEST] infrastructure\cascade_breaker.py 缺少对应的测试文件 tests\unit\test_cascade_breaker.py
-  [TEST] infrastructure\event\event_bus.py 缺少对应的测试文件 tests\unit\test_event_bus.py
+  [TEST] infrastructure\context_pipeline_stub.py 缺少对应的测试文件 tests\unit\test_context_pipeline_stub.py
+  [TEST] infrastructure\conversation_store_stub.py 缺少对应的测试文件 tests\unit\test_conversation_store_stub.py
+  [TEST] infrastructure\event_stream_stub.py 缺少对应的测试文件 tests\unit\test_event_stream_stub.py
   [TEST] infrastructure\health_checker.py 缺少对应的测试文件 tests\unit\test_health_checker.py
+  [TEST] infrastructure\hook_stub.py 缺少对应的测试文件 tests\unit\test_hook_stub.py
   [TEST] infrastructure\hooks.py 缺少对应的测试文件 tests\unit\test_hooks.py
+  [TEST] infrastructure\knowledge_graph_stub.py 缺少对应的测试文件 tests\unit\test_knowledge_graph_stub.py
+  [TEST] infrastructure\license_service_stub.py 缺少对应的测试文件 tests\unit\test_license_service_stub.py
   [TEST] infrastructure\llm\anthropic.py 缺少对应的测试文件 tests\unit\test_anthropic.py
+  [TEST] infrastructure\llm\api_key_validator.py 缺少对应的测试文件 tests\unit\test_api_key_validator.py
   [TEST] infrastructure\llm\circuit_breaker.py 缺少对应的测试文件 tests\unit\test_circuit_breaker.py
   [TEST] infrastructure\llm\local.py 缺少对应的测试文件 tests\unit\test_local.py
   [TEST] infrastructure\llm\model_factory.py 缺少对应的测试文件 tests\unit\test_model_factory.py
   [TEST] infrastructure\llm\openai_adapter.py 缺少对应的测试文件 tests\unit\test_openai_adapter.py
   [TEST] infrastructure\llm\retry_policy.py 缺少对应的测试文件 tests\unit\test_retry_policy.py
+  [TEST] infrastructure\lsp_diagnostics_stub.py 缺少对应的测试文件 tests\unit\test_lsp_diagnostics_stub.py
+  [TEST] infrastructure\mapper_stub.py 缺少对应的测试文件 tests\unit\test_mapper_stub.py
   [TEST] infrastructure\memory_monitor.py 缺少对应的测试文件 tests\unit\test_memory_monitor.py
+  [TEST] infrastructure\model_policy_stub.py 缺少对应的测试文件 tests\unit\test_model_policy_stub.py
   [TEST] infrastructure\ollama\service.py 缺少对应的测试文件 tests\unit\test_service.py
   [TEST] infrastructure\ollama_discovery.py 缺少对应的测试文件 tests\unit\test_ollama_discovery.py
+  [TEST] infrastructure\persistence\api_key_file_repo.py 缺少对应的测试文件 tests\unit\test_api_key_file_repo.py
   [TEST] infrastructure\persistence\integrity_checker.py 缺少对应的测试文件 tests\unit\test_integrity_checker.py
   [TEST] infrastructure\persistence\sqlite_conversation_repo.py 缺少对应的测试文件 tests\unit\test_sqlite_conversation_repo.py
   [TEST] infrastructure\persistence\sqlite_pricing_repo.py 缺少对应的测试文件 tests\unit\test_sqlite_pricing_repo.py
@@ -169,6 +201,8 @@
   [TEST] infrastructure\policies\casbin_setup.py 缺少对应的测试文件 tests\unit\test_casbin_setup.py
   [TEST] infrastructure\policies\permission_checker.py 的测试文件 tests\unit\test_permission_checker.py 为空
   [TEST] infrastructure\process_manager.py 缺少对应的测试文件 tests\unit\test_process_manager.py
+  [TEST] infrastructure\ranker_stub.py 缺少对应的测试文件 tests\unit\test_ranker_stub.py
+  [TEST] infrastructure\repository_stub.py 缺少对应的测试文件 tests\unit\test_repository_stub.py
   [TEST] infrastructure\sandbox\builder.py 缺少对应的测试文件 tests\unit\test_builder.py
   [TEST] infrastructure\sandbox\env_sanitizer.py 缺少对应的测试文件 tests\unit\test_env_sanitizer.py
   [TEST] infrastructure\sandbox\path_validator.py 缺少对应的测试文件 tests\unit\test_path_validator.py
@@ -181,26 +215,35 @@
   [TEST] infrastructure\search\search_kg.py 缺少对应的测试文件 tests\unit\test_search_kg.py
   [TEST] infrastructure\search\search_ranker.py 缺少对应的测试文件 tests\unit\test_search_ranker.py
   [TEST] infrastructure\search\search_vector.py 缺少对应的测试文件 tests\unit\test_search_vector.py
+  [TEST] infrastructure\search_stub.py 缺少对应的测试文件 tests\unit\test_search_stub.py
   [TEST] infrastructure\tools\executor.py 缺少对应的测试文件 tests\unit\test_executor.py
+  [TEST] infrastructure\tools\file\edit.py 缺少对应的测试文件 tests\unit\test_edit.py
+  [TEST] infrastructure\tools\file\read.py 缺少对应的测试文件 tests\unit\test_read.py
   [TEST] infrastructure\tools\file\size_limiter.py 缺少对应的测试文件 tests\unit\test_size_limiter.py
   [TEST] infrastructure\tools\file\tool_delete.py 缺少对应的测试文件 tests\unit\test_tool_delete.py
   [TEST] infrastructure\tools\file\tool_list_dir.py 缺少对应的测试文件 tests\unit\test_tool_list_dir.py
   [TEST] infrastructure\tools\file\tool_patch_file.py 缺少对应的测试文件 tests\unit\test_tool_patch_file.py
   [TEST] infrastructure\tools\file\tool_read.py 缺少对应的测试文件 tests\unit\test_tool_read.py
   [TEST] infrastructure\tools\file\tool_write.py 缺少对应的测试文件 tests\unit\test_tool_write.py
+  [TEST] infrastructure\tools\file\write.py 缺少对应的测试文件 tests\unit\test_write.py
   [TEST] infrastructure\tools\interact\tool_ask_choice.py 缺少对应的测试文件 tests\unit\test_tool_ask_choice.py
   [TEST] infrastructure\tools\mcp\tool_mcp_controller.py 缺少对应的测试文件 tests\unit\test_tool_mcp_controller.py
   [TEST] infrastructure\tools\mcp\tool_mcp_discovery.py 缺少对应的测试文件 tests\unit\test_tool_mcp_discovery.py
   [TEST] infrastructure\tools\mcp\tool_mcp_lifecycle.py 缺少对应的测试文件 tests\unit\test_tool_mcp_lifecycle.py
   [TEST] infrastructure\tools\mcp\tool_mcp_loader.py 缺少对应的测试文件 tests\unit\test_tool_mcp_loader.py
   [TEST] infrastructure\tools\mcp\tool_mcp_manager.py 缺少对应的测试文件 tests\unit\test_tool_mcp_manager.py
+  [TEST] infrastructure\tools\registry.py 缺少对应的测试文件 tests\unit\test_registry.py
   [TEST] infrastructure\tools\review\tool_change_review.py 缺少对应的测试文件 tests\unit\test_tool_change_review.py
   [TEST] infrastructure\tools\review\tool_change_score.py 缺少对应的测试文件 tests\unit\test_tool_change_score.py
   [TEST] infrastructure\tools\review\tool_lint.py 缺少对应的测试文件 tests\unit\test_tool_lint.py
+  [TEST] infrastructure\tools\search\find.py 缺少对应的测试文件 tests\unit\test_find.py
+  [TEST] infrastructure\tools\search\grep.py 缺少对应的测试文件 tests\unit\test_grep.py
   [TEST] infrastructure\tools\search\tool_call_direct.py 缺少对应的测试文件 tests\unit\test_tool_call_direct.py
   [TEST] infrastructure\tools\search\tool_search.py 缺少对应的测试文件 tests\unit\test_tool_search.py
   [TEST] infrastructure\tools\search\tool_search_tools.py 缺少对应的测试文件 tests\unit\test_tool_search_tools.py
   [TEST] infrastructure\tools\search\tool_web_search.py 缺少对应的测试文件 tests\unit\test_tool_web_search.py
+  [TEST] infrastructure\tools\system\bash.py 缺少对应的测试文件 tests\unit\test_bash.py
+  [TEST] infrastructure\tools\system\task.py 缺少对应的测试文件 tests\unit\test_task.py
   [TEST] infrastructure\tools\system\tool_bash.py 缺少对应的测试文件 tests\unit\test_tool_bash.py
   [TEST] infrastructure\tools\system\tool_calc.py 缺少对应的测试文件 tests\unit\test_tool_calc.py
   [TEST] infrastructure\tools\system\tool_datetime.py 缺少对应的测试文件 tests\unit\test_tool_datetime.py
@@ -211,51 +254,24 @@
   [TEST] infrastructure\tools\system\tool_task.py 缺少对应的测试文件 tests\unit\test_tool_task.py
   [TEST] infrastructure\tools\system\tool_task_manager.py 缺少对应的测试文件 tests\unit\test_tool_task_manager.py
   [TEST] infrastructure\tools\utils.py 缺少对应的测试文件 tests\unit\test_utils.py
-  [TEST] infrastructure\usage\pricing.py 的测试文件 tests\unit\test_pricing.py 为空
+  [TEST] infrastructure\update_service_stub.py 缺少对应的测试文件 tests\unit\test_update_service_stub.py
   [TEST] infrastructure\usage\sqlite_tracker.py 缺少对应的测试文件 tests\unit\test_sqlite_tracker.py
   [TEST] infrastructure\usage\usage_handler.py 缺少对应的测试文件 tests\unit\test_usage_handler.py
+  [TEST] infrastructure\usage_tracker_stub.py 缺少对应的测试文件 tests\unit\test_usage_tracker_stub.py
+  [TEST] infrastructure\vector_store_stub.py 缺少对应的测试文件 tests\unit\test_vector_store_stub.py
   [TEST] interface\rest\file_watcher.py 缺少对应的测试文件 tests\unit\test_file_watcher.py
   [TEST] interface\rest\middleware\idempotency.py 缺少对应的测试文件 tests\unit\test_idempotency.py
-  [TEST] interface\rest\routes\agent_routes.py 缺少对应的测试文件 tests\unit\test_agent_routes.py
-  [TEST] interface\rest\routes\chat_routes.py 缺少对应的测试文件 tests\unit\test_chat_routes.py
-  [TEST] interface\rest\routes\config_routes.py 缺少对应的测试文件 tests\unit\test_config_routes.py
-  [TEST] interface\rest\routes\feedback_routes.py 缺少对应的测试文件 tests\unit\test_feedback_routes.py
-  [TEST] interface\rest\routes\files_routes.py 缺少对应的测试文件 tests\unit\test_files_routes.py
-  [TEST] interface\rest\routes\health_routes.py 缺少对应的测试文件 tests\unit\test_health_routes.py
-  [TEST] interface\rest\routes\history_routes.py 缺少对应的测试文件 tests\unit\test_history_routes.py
-  [TEST] interface\rest\routes\mcp_routes.py 缺少对应的测试文件 tests\unit\test_mcp_routes.py
-  [TEST] interface\rest\routes\pricing_routes.py 缺少对应的测试文件 tests\unit\test_pricing_routes.py
-  [TEST] interface\rest\routes\rollback_routes.py 缺少对应的测试文件 tests\unit\test_rollback_routes.py
-  [TEST] interface\rest\routes\session_routes.py 缺少对应的测试文件 tests\unit\test_session_routes.py
-  [TEST] interface\rest\routes\tasks_routes.py 缺少对应的测试文件 tests\unit\test_tasks_routes.py
-  [TEST] interface\rest\routes\upload_routes.py 缺少对应的测试文件 tests\unit\test_upload_routes.py
-  [TEST] interface\rest\routes\usage_routes.py 缺少对应的测试文件 tests\unit\test_usage_routes.py
   [TEST] interface\rest\server.py 缺少对应的测试文件 tests\unit\test_server.py
   [TEST] interface\sse\sse_queue.py 缺少对应的测试文件 tests\unit\test_sse_queue.py
   [TEST] interface\sse\sse_transport.py 缺少对应的测试文件 tests\unit\test_sse_transport.py
   [TEST] interface\sse\terminal.py 缺少对应的测试文件 tests\unit\test_terminal.py
 
-[FAIL] 前端console.log（4 处）
-  flypig\interface\web\static_vite\src\components\interact\chat\ChatPanel.vue:  [F_LOG] 第 84 行：console.error()，生产代码应移除
-  flypig\interface\web\static_vite\src\components\interact\chat\MessageList.vue:  [F_LOG] 第 48 行：console.log()，生产代码应移除
-  flypig\interface\web\static_vite\src\composables\useChat.js:  [F_LOG] 第 27 行：console.error()，生产代码应移除
-  flypig\interface\web\static_vite\src\composables\useFileCache.js:  [F_LOG] 第 45 行：console.error()，生产代码应移除
-
-[FAIL] 前端直接fetch（6 处）
-  flypig\interface\web\static_vite\src\components\init\WorkspaceStep.vue:  [F_API] 直接调用 fetch()，应使用 utils/api.js 或 store 中的封装
-  flypig\interface\web\static_vite\src\components\interact\chat\ChatPanel.vue:  [F_API] 直接调用 fetch()，应使用 utils/api.js 或 store 中的封装
-  flypig\interface\web\static_vite\src\components\interact\input\LocalModelDialog.vue:  [F_API] 直接调用 fetch()，应使用 utils/api.js 或 store 中的封装
-  flypig\interface\web\static_vite\src\components\interact\input\ModelSelect.vue:  [F_API] 直接调用 fetch()，应使用 utils/api.js 或 store 中的封装
-  flypig\interface\web\static_vite\src\components\resource\FileTree.vue:  [F_API] 直接调用 fetch()，应使用 utils/api.js 或 store 中的封装
-  flypig\interface\web\static_vite\src\components\resource\TreeNode.vue:  [F_API] 直接调用 fetch()，应使用 utils/api.js 或 store 中的封装
-
-[FAIL] 前端文件过大（2 处）
-  flypig\interface\web\static_vite\src\components\init\WorkspaceStep.vue:  [F_SIZE] 481 行（> 300），建议拆分组件
-  flypig\interface\web\static_vite\src\components\interact\input\ModelSelect.vue:  [F_SIZE] 352 行（> 300），建议拆分组件
-
 ============================================================
-  共 209 处违规
+  共 230 处违规
   请修复后再提交
 ============================================================
-[FAIL] 未找到 flypig 目录：C:\Users\mss\WorkBuddy\flypig
-[FAIL] 未找到前端 src 目录：C:\Users\mss\WorkBuddy\Flypig-agent\interface\web\static_vite\src
+============================================================
+  FlyPig 前端合规检查报告
+============================================================
+
+[PASS] 全部通过！前端合规。

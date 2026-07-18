@@ -81,6 +81,7 @@ class ChatApplicationService(ApplicationService):
         except ModelAPIError as e:
             _log.error("[sse] 创建模型适配器失败: {}", str(e)[:200])
             yield f"data: {json.dumps({_KEY_TYPE: SSE_ERROR, 'errorText': str(e)})}\n\n"
+            yield "data: [DONE]\n\n"
             return
 
         # 用队列桥接 on_token 回调 → SSE yield
@@ -96,10 +97,21 @@ class ChatApplicationService(ApplicationService):
 
             async def run_graph() -> None:
                 try:
+                    # 注入工作区信息（让 LLM 知道在哪个目录操作）
+                    ctx_messages = list(messages)
+                    ws = self._settings.workspace if self._settings else None
+                    if ws and not any(m.get("role") == "system" for m in ctx_messages):
+                        ctx_messages.insert(
+                            0,
+                            {
+                                "role": "system",
+                                "content": f"当前工作区目录: {ws}\n所有文件操作都应基于此目录。",
+                            },
+                        )
                     await graph_factory.invoke(
                         session_id,
                         {
-                            "messages": messages,
+                            "messages": ctx_messages,
                             "session_id": session_id,
                             "mode": "explore",
                             "turn_id": 0,
@@ -130,6 +142,8 @@ class ChatApplicationService(ApplicationService):
         except ModelAPIError as e:
             _log.error("[sse] 模型 API 错误: {}", str(e)[:200])
             yield f"data: {json.dumps({_KEY_TYPE: SSE_ERROR, 'errorText': str(e)})}\n\n"
+            yield "data: [DONE]\n\n"
         except Exception as e:
             _log.error("[sse] 服务错误: {}", str(e)[:_TRUNCATE_LENGTH])
             yield f"data: {json.dumps({_KEY_TYPE: SSE_ERROR, 'errorText': f'服务错误: {str(e)[:_TRUNCATE_LENGTH]}'})}\n\n"
+            yield "data: [DONE]\n\n"

@@ -41,13 +41,14 @@ def _load_mcp_cfg() -> dict:
 
 
 # 模块加载时一次读取，运行期不变（热加载重启进程时会重新 import）
+# 全部用 .get() + 默认值，避免 model_registry.json mcp 段缺键导致 KeyError
 _MCP_CFG = _load_mcp_cfg()
-_MCP_PROTOCOL = _MCP_CFG["protocol_version"]
-_MCP_CLIENT_INFO = _MCP_CFG["client_info"]
-_MCP_HANDSHAKE_TIMEOUT = _MCP_CFG["handshake_timeout"]
-_MCP_TOOL_CALL_TIMEOUT = _MCP_CFG["tool_call_timeout"]
-_MCP_TOOL_PREFIX = _MCP_CFG["tool_name_prefix"]
-_MCP_SERVERS = _MCP_CFG.get("servers", {})
+_MCP_PROTOCOL: str = _MCP_CFG.get("protocol_version", "0.1.0")
+_MCP_CLIENT_INFO: dict = _MCP_CFG.get("client_info", {"name": "flypig", "version": "0.1.0"})
+_MCP_HANDSHAKE_TIMEOUT: int = _MCP_CFG.get("handshake_timeout", 10)
+_MCP_TOOL_CALL_TIMEOUT: int = _MCP_CFG.get("tool_call_timeout", 60)
+_MCP_TOOL_PREFIX: str = _MCP_CFG.get("tool_name_prefix", "mcp")
+_MCP_SERVERS: dict = _MCP_CFG.get("servers", {})
 
 
 class MCPServerProcess:
@@ -81,7 +82,7 @@ class MCPServerProcess:
             await asyncio.wait_for(self._handshake(), timeout=_MCP_HANDSHAKE_TIMEOUT)
         except (TimeoutError, Exception) as e:
             await self.stop()
-            raise RuntimeError(f"MCP [{self.name}] 启动失败: {e}")
+            raise RuntimeError(f"MCP [{self.name}] 启动失败: {e}") from e
 
     async def _handshake(self) -> None:
         """发送 initialize + tools/list 握手"""

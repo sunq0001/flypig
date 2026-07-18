@@ -31,7 +31,12 @@ function getLanguage(filename) {
 }
 
 function createModel(value, filePath) {
-  const uri = monaco.Uri.parse(`file:///${filePath.replace(/\\/g, '/')}`)
+  const normalized = filePath.replace(/\\/g, '/')
+  // WSL 路径如 /mnt/c/... → file:///mnt/c/...（三斜杠）
+  // Windows 路径如 C:\... → file:///C:/...（三斜杠）
+  const uri = monaco.Uri.parse(normalized.startsWith('/')
+    ? `file://${normalized}`
+    : `file:///${normalized}`)
   return monaco.editor.createModel(value || '', getLanguage(filePath), uri)
 }
 

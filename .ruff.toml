@@ -1,0 +1,59 @@
+# 工作区根级 Ruff 配置
+# 不依赖 extend，IDE 扩展和 CLI 使用完全相同的配置
+
+line-length = 100
+target-version = "py311"
+
+exclude = [
+    "typings",
+    "flypig-archive",
+    "flypig_archive2",
+    "electron",
+    "docs",
+    "check_*.py",
+    "_check_*.py",
+    "test_*.py",
+    "$null",
+]
+
+[lint]
+select = [
+    "E", "F", "I", "N", "W", "B", "UP", "SIM", "RUF100",
+    "PL",
+    "TRY",
+    "PTH",
+    "C4",
+    "RUF",
+    "ASYNC",
+]
+ignore = [
+    "PLR0911",
+    "PLR0912",
+    "PLR2004",
+    "TRY003",
+    "C901",
+    "PLR0913",
+    "RUF001",
+    "RUF002",
+    "RUF003",
+    "N818",
+    "ASYNC109",
+    "ASYNC240",
+    "PLC0415",
+    "E501",
+    "B007",
+    "RUF012",
+    "PLR1714",
+    "PLW0603",
+    "PTH123",
+    "B024",
+    "TRY300",
+    "PLW2901",
+    "B904",
+    "B018",
+    "F841",
+    "RUF005",
+    "RUF006",
+    "PLC0206",
+    "SIM105",
+]

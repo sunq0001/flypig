@@ -10,8 +10,8 @@
 import argparse
 import mimetypes
 import re
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
-from http.server import HTTPServer, BaseHTTPRequestHandler
 from socketserver import ThreadingMixIn
 
 DOCS_DIR = Path(__file__).parent

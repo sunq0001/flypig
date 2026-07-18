@@ -1,0 +1,4 @@
+flypig\infrastructure\tools\executor.py:68:20: PLR1714 Consider merging multiple comparisons: `pname in {"self", "args", "kwargs"}`.
+flypig\infrastructure\tools\review\tool_lint.py:62:12: PLR1714 Consider merging multiple comparisons: `target in {"architecture", "arch"}`.
+Found 2 errors.
+No fixes available (2 hidden fixes can be enabled with the `--unsafe-fixes` option).

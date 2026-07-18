@@ -1,0 +1,2 @@
+flypig\domain\exceptions.py:13:7: N818 Exception name `FlyPigException` should be named with an Error suffix
+Found 1 error.

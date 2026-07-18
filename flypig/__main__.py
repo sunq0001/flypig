@@ -18,7 +18,7 @@ from flypig.bootstrap import create_app
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--port", type=int, default=8320)
-    parser.add_argument("--host", type=str, default="127.0.0.1")
+    parser.add_argument("--host", type=str, default="0.0.0.0")
     parser.add_argument("--reload", action="store_true", help="启用热重载（开发模式）")
     args = parser.parse_args()
 
@@ -38,6 +38,7 @@ def main() -> None:
             host=args.host,
             port=args.port,
             reload=True,
+            reload_dirs=["flypig"],  # 只监控 flypig/ 目录，根目录的临时文件不触发 reload
             factory=True,
             log_level="warning",
         )

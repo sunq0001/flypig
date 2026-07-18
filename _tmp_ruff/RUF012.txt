@@ -1,0 +1,2 @@
+flypig\domain\prompts\multirole_manager.py:29:30: RUF012 Mutable default value for class attribute
+Found 1 error.

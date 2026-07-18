@@ -9,13 +9,17 @@
 
 from __future__ import annotations
 
+import json
+from collections.abc import AsyncGenerator
 from typing import Any
 
+from openai import AsyncOpenAI
+
 from flypig.domain.exceptions import ModelAPIError
+from flypig.domain.interfaces.chat_chunk import ChatChunk
 from flypig.domain.interfaces.imodel import IModel
 from flypig.domain.registry import ModelRegistry
 from flypig.shared.settings import AppSettings
-from openai import AsyncOpenAI
 
 
 class OpenAIAdapter(IModel):
@@ -69,11 +73,11 @@ class OpenAIAdapter(IModel):
         self,
         messages: list[dict],
         **kwargs: Any,
-    ) -> Any:
+    ) -> AsyncGenerator[str, None]:
         try:
-            stream = await self._client.chat.completions.create(
+            stream = await self._client.chat.completions.create(  # pyright: ignore[reportCallIssue,reportArgumentType]
                 model=self._api_model,
-                messages=messages,
+                messages=messages,  # pyright: ignore[reportArgumentType]
                 stream=True,
                 **kwargs,
             )
@@ -81,6 +85,81 @@ class OpenAIAdapter(IModel):
                 delta = chunk.choices[0].delta if chunk.choices else None
                 if delta and delta.content:
                     yield delta.content
+        except Exception as e:
+            raise ModelAPIError(f"{self._provider} API 调用失败: {e}") from e
+
+    async def stream_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        **kwargs: Any,
+    ) -> AsyncGenerator[ChatChunk, None]:
+        """带工具调用的流式生成
+
+        OpenAI streaming function calling 的 chunk 结构：
+        - 普通回答：delta.content 逐 token 产出
+        - 工具调用：delta.tool_calls 分片到达，需按 index 累积后解析 arguments JSON
+        - 流末尾：最后一块 chunk 通常会标记 finish_reason="tool_calls"
+        """
+        try:
+            stream = await self._client.chat.completions.create(  # pyright: ignore[reportCallIssue,reportArgumentType]
+                model=self._api_model,
+                messages=messages,  # pyright: ignore[reportArgumentType]
+                tools=tools,  # pyright: ignore[reportArgumentType]
+                stream=True,
+                **kwargs,
+            )
+
+            tool_calls_acc: dict[int, dict[str, Any]] = {}
+            has_tool_calls = False
+
+            async for chunk in stream:
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta
+
+                # 文本 token
+                if delta.content:
+                    yield ChatChunk(text=delta.content)
+
+                # 工具调用分片（按 index 累积）
+                if delta.tool_calls:
+                    has_tool_calls = True
+                    for tc_delta in delta.tool_calls:
+                        idx = tc_delta.index
+                        if idx not in tool_calls_acc:
+                            tool_calls_acc[idx] = {
+                                "_id": "",
+                                "_name": "",
+                                "_args_str": "",
+                            }
+                        if tc_delta.id:
+                            tool_calls_acc[idx]["_id"] = tc_delta.id
+                        if tc_delta.function:
+                            if tc_delta.function.name:
+                                tool_calls_acc[idx]["_name"] = tc_delta.function.name
+                            if tc_delta.function.arguments:
+                                tool_calls_acc[idx]["_args_str"] += tc_delta.function.arguments
+
+            # 流结束，产出 tool_calls
+            if has_tool_calls:
+                final_tool_calls = []
+                for idx in sorted(tool_calls_acc.keys()):
+                    acc = tool_calls_acc[idx]
+                    args_str = acc["_args_str"] or "{}"
+                    try:
+                        parsed_args = json.loads(args_str)
+                    except json.JSONDecodeError:
+                        parsed_args = {"_raw": args_str}
+                    final_tool_calls.append(
+                        {
+                            "id": acc["_id"],
+                            "name": acc["_name"],
+                            "arguments": parsed_args,
+                        }
+                    )
+                yield ChatChunk(tool_calls=final_tool_calls)
+
         except Exception as e:
             raise ModelAPIError(f"{self._provider} API 调用失败: {e}") from e
 

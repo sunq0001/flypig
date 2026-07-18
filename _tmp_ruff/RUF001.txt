@@ -1,0 +1,16 @@
+flypig\__main__.py:22:69: RUF001 String contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\__main__.py:22:74: RUF001 String contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\infrastructure\llm\api_key_validator.py:57:66: RUF001 String contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\llm\api_key_validator.py:63:65: RUF001 String contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\infrastructure\llm\api_key_validator.py:63:70: RUF001 String contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\infrastructure\llm\api_key_validator.py:68:65: RUF001 String contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\review\tool_lint.py:34:36: RUF001 String contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\infrastructure\tools\review\tool_lint.py:34:61: RUF001 String contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\infrastructure\tools\review\tool_lint.py:39:16: RUF001 String contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\review\tool_lint.py:41:15: RUF001 String contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\review\tool_lint.py:93:47: RUF001 String contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\usage\pricing.py:253:44: RUF001 String contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\usage\pricing.py:255:51: RUF001 String contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\usage\pricing.py:261:53: RUF001 String contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\orchestration\nodes\chat_node.py:77:66: RUF001 String contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+Found 15 errors.

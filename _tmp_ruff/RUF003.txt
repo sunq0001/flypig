@@ -1,0 +1,123 @@
+flypig\__main__.py:28:18: RUF003 Comment contains ambiguous `：` (FULLWIDTH COLON). Did you mean `:` (COLON)?
+flypig\__main__.py:29:57: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\__main__.py:30:40: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\__main__.py:31:21: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\__main__.py:41:54: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\__main__.py:46:18: RUF003 Comment contains ambiguous `：` (FULLWIDTH COLON). Did you mean `:` (COLON)?
+flypig\__main__.py:47:21: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\bootstrap\app_factory.py:25:12: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\bootstrap\app_factory.py:25:30: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\bootstrap\app_factory.py:48:38: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\bootstrap\app_factory.py:48:60: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\bootstrap\app_factory.py:51:64: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\bootstrap\app_factory.py:76:22: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\bootstrap\app_factory.py:109:25: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\bootstrap\app_factory.py:109:47: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\bootstrap\logging.py:48:11: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\bootstrap\logging.py:48:15: RUF003 Comment contains ambiguous `：` (FULLWIDTH COLON). Did you mean `:` (COLON)?
+flypig\bootstrap\logging.py:48:30: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\bootstrap\settings.py:140:61: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\bootstrap\settings.py:140:69: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\domain\agent\nodes.py:190:53: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\domain\agent\router.py:19:9: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\domain\agent\router.py:38:10: RUF003 Comment contains ambiguous `：` (FULLWIDTH COLON). Did you mean `:` (COLON)?
+flypig\domain\agent_state.py:20:14: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\domain\agent_state.py:20:20: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\domain\agent_state.py:26:17: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\domain\agent_state.py:26:25: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\domain\agent_state.py:29:17: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\domain\agent_state.py:29:24: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\domain\agent_state.py:36:18: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\domain\agent_state.py:36:25: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\domain\agent_state.py:40:12: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\domain\agent_state.py:40:19: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\domain\interfaces\ievent_stream.py:12:44: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\domain\interfaces\ievent_stream.py:12:46: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\infrastructure\hooks.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\llm\anthropic.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\llm\local.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\llm\model_factory.py:34:48: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\infrastructure\llm\model_factory.py:34:54: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\infrastructure\llm\openai_adapter.py:125:25: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\infrastructure\llm\openai_adapter.py:125:36: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\infrastructure\llm\openai_adapter.py:144:18: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\persistence\api_key_file_repo.py:26:22: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\infrastructure\persistence\api_key_file_repo.py:26:31: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\infrastructure\policies\casbin_setup.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\policies\permission_checker.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\process_manager.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\sandbox\builder.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\sandbox\path_validator.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\sandbox\sandbox_config.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\sandbox\sandbox_manager.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\search\ast_parser.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\search\lsp_diagnostics.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\search\search_ast.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\search\search_grep.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\search\search_kg.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\search\search_ranker.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\search\search_vector.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\executor.py:103:25: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\file\tool_delete.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\file\tool_list_dir.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\file\tool_patch_file.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\file\tool_read.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\file\tool_write.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\interact\tool_ask_choice.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\mcp\tool_mcp_controller.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\mcp\tool_mcp_discovery.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\mcp\tool_mcp_lifecycle.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:31:12: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:31:17: RUF003 Comment contains ambiguous `：` (FULLWIDTH COLON). Did you mean `:` (COLON)?
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:31:45: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:43:12: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:43:18: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:43:37: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:44:19: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:80:15: RUF003 Comment contains ambiguous `：` (FULLWIDTH COLON). Did you mean `:` (COLON)?
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:89:14: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:89:49: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:234:20: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:234:36: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:253:17: RUF003 Comment contains ambiguous `：` (FULLWIDTH COLON). Did you mean `:` (COLON)?
+flypig\infrastructure\tools\mcp\tool_mcp_manager.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\review\tool_change_review.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\review\tool_change_score.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\review\tool_lint.py:72:17: RUF003 Comment contains ambiguous `：` (FULLWIDTH COLON). Did you mean `:` (COLON)?
+flypig\infrastructure\tools\search\grep.py:38:13: RUF003 Comment contains ambiguous `：` (FULLWIDTH COLON). Did you mean `:` (COLON)?
+flypig\infrastructure\tools\search\tool_call_direct.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\search\tool_search.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\search\tool_search_tools.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\search\tool_web_search.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\system\tool_bash.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\system\tool_calc.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\system\tool_datetime.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\system\tool_extract_archive.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\system\tool_fetch_url.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\system\tool_git.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\system\tool_ocr.py:11:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\system\tool_task.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\system\tool_task_manager.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\tools\utils.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\usage\sqlite_tracker.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\infrastructure\usage\usage_handler.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\interface\rest\routes\config_routes.py:146:14: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\interface\rest\routes\config_routes.py:146:29: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\interface\rest\routes\config_routes.py:181:21: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\interface\rest\routes\config_routes.py:181:31: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\interface\rest\routes\graph_routes.py:36:11: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\interface\rest\routes\graph_routes.py:36:18: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\interface\rest\routes\graph_routes.py:36:28: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\interface\rest\routes\pricing_routes.py:37:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\interface\rest\routes\pricing_routes.py:37:22: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\interface\rest\routes\pricing_routes.py:37:28: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\interface\rest\routes\pricing_routes.py:55:41: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\interface\sse\sse_queue.py:18:33: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\interface\sse\sse_queue.py:18:35: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\interface\sse\terminal.py:12:15: RUF003 Comment contains ambiguous `，` (FULLWIDTH COMMA). Did you mean `,` (COMMA)?
+flypig\orchestration\chat_service.py:100:30: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\orchestration\chat_service.py:100:46: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+flypig\orchestration\chat_service.py:121:55: RUF003 Comment contains ambiguous `：` (FULLWIDTH COLON). Did you mean `:` (COLON)?
+flypig\orchestration\graph_factory.py:60:23: RUF003 Comment contains ambiguous `（` (FULLWIDTH LEFT PARENTHESIS). Did you mean `(` (LEFT PARENTHESIS)?
+flypig\orchestration\graph_factory.py:60:48: RUF003 Comment contains ambiguous `）` (FULLWIDTH RIGHT PARENTHESIS). Did you mean `)` (RIGHT PARENTHESIS)?
+Found 122 errors.

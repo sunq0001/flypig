@@ -1,0 +1,21 @@
+flypig\domain\prompts\multirole_manager.py:31:62: ARG002 Unused method argument: `mode`
+flypig\domain\specification\session_by_status.py:16:31: ARG002 Unused method argument: `candidate`
+flypig\domain\specification\session_by_time.py:16:31: ARG002 Unused method argument: `candidate`
+flypig\domain\specification\session_by_user.py:16:31: ARG002 Unused method argument: `candidate`
+flypig\infrastructure\ast_parser_stub.py:14:34: ARG002 Unused method argument: `symbol`
+flypig\infrastructure\cache_stub.py:16:25: ARG002 Unused method argument: `key`
+flypig\infrastructure\context_pipeline_stub.py:16:51: ARG002 Unused method argument: `context`
+flypig\infrastructure\conversation_store_stub.py:19:33: ARG002 Unused method argument: `session_id`
+flypig\infrastructure\event_stream_stub.py:17:25: ARG002 Unused method argument: `session_id`
+flypig\infrastructure\event_stream_stub.py:17:42: ARG002 Unused method argument: `timeout`
+flypig\infrastructure\knowledge_graph_stub.py:16:27: ARG002 Unused method argument: `query`
+flypig\infrastructure\lsp_diagnostics_stub.py:16:37: ARG002 Unused method argument: `file_path`
+flypig\infrastructure\ranker_stub.py:16:44: ARG002 Unused method argument: `query`
+flypig\infrastructure\repository_stub.py:19:32: ARG002 Unused method argument: `entity_id`
+flypig\infrastructure\search_stub.py:16:28: ARG002 Unused method argument: `query`
+flypig\infrastructure\search_stub.py:16:40: ARG002 Unused method argument: `source`
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:278:34: ARG002 Unused method argument: `name`
+flypig\infrastructure\usage_tracker_stub.py:19:27: ARG002 Unused method argument: `filters`
+flypig\infrastructure\vector_store_stub.py:19:28: ARG002 Unused method argument: `query_vector`
+flypig\infrastructure\vector_store_stub.py:19:55: ARG002 Unused method argument: `top_k`
+Found 20 errors.

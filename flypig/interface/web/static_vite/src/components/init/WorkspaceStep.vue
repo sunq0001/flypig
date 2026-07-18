@@ -141,6 +141,8 @@ async function openBrowser() {
 function onBrowserSelect(path) {
   currentPath.value = path
   browserVisible.value = false
+  // 已选目录 → 自动跳过"使用此目录"按钮
+  confirmPath()
 }
 </script>
 

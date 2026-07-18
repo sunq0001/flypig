@@ -50,13 +50,15 @@ def build_graph(  # pyright: ignore[reportUnknownVariableType]
     builder = StateGraph(AgentState)
 
     # ── 注册节点 ──
-    builder.add_node("chat", create_chat_node(model, on_token=on_token))
+    tool_schemas = tool_executor.get_schemas() if tool_executor else None
+    builder.add_node("chat", create_chat_node(model, on_token=on_token, tools=tool_schemas))
 
     # ── 流程编排 ──
     builder.add_edge(START, "chat")
 
     if tool_executor:
         # R2: ReAct 循环（chat ⇄ execute → __end__）
+        # 注入 tool schemas 使 LLM 感知可用工具并触发 tool_calls
         builder.add_node("execute", create_exec_node(tool_executor))
         builder.add_conditional_edges(
             "chat",
@@ -67,7 +69,8 @@ def build_graph(  # pyright: ignore[reportUnknownVariableType]
             },
         )
         builder.add_edge("execute", "chat")
-        _log.info("Graph 已编译: R2 ReAct 模式 (chat ⇄ execute)")
+        n_tools = len(tool_schemas)
+        _log.info("Graph 已编译: R2 ReAct 模式 (chat ⇄ execute, {} tools)", n_tools)
     else:
         # R1: 直接结束
         builder.add_edge("chat", END)

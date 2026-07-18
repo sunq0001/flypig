@@ -1,0 +1,21 @@
+# Bandit 安全扫描配置
+# 跳过的规则：
+#   B101 - assert 语句（pytest 中使用）
+#   B311 - 使用 random（非安全场景）
+#   B404 - subprocess 导入（项目需要执行命令）
+#   B603 - subprocess_without_shell_equals_true（已控制输入）
+
+exclude_dirs:
+  - tests
+  - flypig-archive
+  - flypig_archive2
+  - typings
+  - flypig/interface/web/static_vite/node_modules
+skips:
+  - B101
+  - B311
+  - B404
+  - B603
+  - B110
+  - B112
+  - B607

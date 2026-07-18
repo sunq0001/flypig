@@ -1,0 +1,8 @@
+flypig\infrastructure\llm\openai_adapter.py:59:23: TRY003 Avoid specifying long messages outside the exception class
+flypig\infrastructure\llm\openai_adapter.py:89:19: TRY003 Avoid specifying long messages outside the exception class
+flypig\infrastructure\llm\openai_adapter.py:164:19: TRY003 Avoid specifying long messages outside the exception class
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:85:19: TRY003 Avoid specifying long messages outside the exception class
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:104:19: TRY003 Avoid specifying long messages outside the exception class
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:177:19: TRY003 Avoid specifying long messages outside the exception class
+flypig\shared\result.py:52:19: TRY003 Avoid specifying long messages outside the exception class
+Found 7 errors.

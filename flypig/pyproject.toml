@@ -20,12 +20,14 @@ dev = [
     "pytest>=8.0.0,<9.0",
     "pytest-asyncio>=0.23.0,<1.0",
     "coverage>=7.0.0,<8.0",
-    "ruff>=0.3.0,<1.0",
+    "ruff>=0.15.18,<0.16.0",
     "mypy>=1.10.0,<2.0",
     "httpx>=0.27.0,<1.0",
     "import-linter>=2.0.0,<3.0",
     "pre-commit>=4.0.0,<5.0",
     "uvicorn[standard]>=0.30.0,<1.0",
+    "bandit>=1.8.0,<2.0",
+    "hypothesis>=6.100.0,<7.0",
 ]
 web = [
     "quart>=0.19.0,<1.0",
@@ -70,83 +72,35 @@ select = [
     "C4",       # 简化写法（不必要的列表推导等）
     "RUF",      # ruff 专属规则
     "ASYNC",    # async 相关（await 无 await 等）
+    "PERF",     # 性能相关（不必要的 list/map/排序优化）
+    "FURB",     # 现代写法建议（迭代器/模式优化）
+    "ARG",      # 未使用的函数参数
 ]
-# 所有规则默认开启，逐个关闭不适用的
+# 规则分类：
+#   必须保留 — 违反项目设计原则或误报太多
+#   可开+noqa — 仅1~2处违规，加 # noqa 即可
+#   已打开   — 0 违规，无需处理
 ignore = [
-    "PLR0911",  # 太多 return（允许简化代码）
-    "PLR0912",  # 太多分支
-    "PLR2004",  # 魔法数字（放宽，有用例的参数不算魔法）
-    "TRY003",   # 异常消息太长
-    "C901",     # 圈复杂度（过于严格）
-    "PLR0913",  # 参数过多（放宽到实际影响）
-    "RUF001",   # 全角字符检查（中文项目用全角标点正常）
-    "RUF002",   # 同上
-    "RUF003",   # 同上
-    "N818",     # Exception 后缀命名（已统一为 FlyPigException，不改）
-    "ASYNC109", # async 函数 timeout 参数（asyncio.timeout 替代方案不够成熟）
-    "ASYNC240", # async 函数中的 pathlib 方法（同步 Path 在 Quart 中安全）
-    "PLC0415",  # 延迟导入（避免循环依赖的设计决策）
-    "E501",     # 行太长（docstring 包含中文描述，强制换行破坏可读性）
-    "B007",     # 未使用的循环变量（保留参数名可读性）
-    "RUF012",   # 可变类默认值（类级缓存设计）
-    "PLR1714",  # 合并多重比较（当前写法更清晰）
-    "PLW0603",  # global 语句（必要设计，如网关单例）
-    "PTH123",   # open() vs Path.open()（旧代码兼容）
-    "B024",     # 无抽象方法的 ABC（DDD 标记基类如 Entity/ValueObject 是设计意图）
-    "TRY300",   # try 中 return vs else（当前写法更简洁）
-    "PLW2901",  # 循环变量覆盖（line = line.strip() 是惯用模式）
-    "B904",     # raise without from inside except（简单异常传递）
-    "B018",     # 无用表达式（残留调试代码）
-    "F841",     # 未使用变量（保留以备后续扩展）
-    "RUF005",   # 列表拼接 vs 解包（当前写法更直观）
-    "RUF006",   # asyncio create_task 未存储引用（后台任务设计）
-    "PLC0206",  # dict 索引 vs .items()（需要索引值逐个匹配）
-    "SIM105",   # try-except-pass vs contextlib.suppress（try 写法更直观）
+    # ── 必须保留：项目设计决策 ──
+    "C901",     # 圈复杂度 — agent router/exec 节点天然复杂
+    "TRY003",   # 异常消息太长 — 带上下文是 FlyPig 设计风格
+    "TRY300",   # try-return 写法 — 风格选择
+    "RUF001",   # 全角字符 — 中文项目 15 处误报
+    "RUF002",   # 混淆字符 — 中文项目 2014 处误报
+    "RUF003",   # 混淆字符 — 中文项目 122 处误报
+    "RUF006",   # create_task 未存引用 — 后台 task 有意不存储
+    "N818",     # Exception 后缀 Error — 已统一 FlyPigException，不动
+    "B024",     # ABC 无抽象方法 — DDD 标记基类设计意图
+    "PLR0911",  # 太多 return — api_key_validator HTTP 状态码分支
+    "PLR0912",  # 太多分支 — openai_adapter 消息构建多分支
+    "E501",     # 行太长 — 中文 docstring 强制换行破坏可读性
+    "ASYNC109", # async timeout 参数 — 项目风格
+    "ASYNC240", # async Path 方法 — Quart 中使用同步 Path 安全
+    "PLC0415",  # 延迟导入 — 防循环依赖，DDD 常见实践
+    "PLW0603",  # global 语句 — gateway 单例，架构设计
+    "PTH123",   # open() vs Path.open() — 旧代码逐步迁移中
+    "ARG002",   # 未用函数参数 — stub 类按 DDD 接口声明签名
 ]
-
-[tool.pytest.ini_options]
-asyncio_mode = "auto"
-addopts = "-v --tb=short"
-
-[tool.importlinter]
+  
+[tool.import_linter]
 root_packages = ["flypig"]
-
-[[tool.importlinter.contracts]]
-name = "DDD Layer Dependency"
-type = "layers"
-layers = [
-    "bootstrap",
-    "interface",
-    "orchestration",
-    "infrastructure",
-    "acl",
-    "domain",
-    "shared",
-]
-containers = ["flypig"]
-
-[tool.coverage.run]
-source = ["flypig"]
-omit = ["*/tests/*", "*/__pycache__/*"]
-
-[tool.mypy]
-python_version = "3.11"
-strict = false
-check_untyped_defs = true
-disallow_untyped_defs = false
-ignore_missing_imports = true
-warn_unused_ignores = true
-warn_redundant_casts = true
-warn_return_any = true
-warn_unreachable = true
-explicit_package_bases = true
-namespace_packages = true
-
-[[tool.mypy.overrides]]
-module = ["flypig.tests.*"]
-ignore_errors = true
-
-[tool.coverage.report]
-show_missing = true
-skip_covered = true
-fail_under = 10

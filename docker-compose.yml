@@ -1,0 +1,17 @@
+services:
+  flypig:
+    build: .
+    ports:
+      - "8320:8320"
+      - "8321:8321"
+      - "5173:5173"
+      - "8765:8765"
+    volumes:
+      # 源码热加载（不挂载 node_modules，用容器内装的）
+      - .:/app
+      - /app/flypig/interface/web/static_vite/node_modules
+    environment:
+      - OLLAMA_HOST=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

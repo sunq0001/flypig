@@ -29,9 +29,7 @@ class ToolTaskStatus:
     def _list_all(self) -> str:
         if not self._results:
             return "[Background Tasks] No tasks."
-        lines = ["[Background Tasks]"]
-        for tid in self._results:
-            lines.append(f"  {tid}")
+        lines = ["[Background Tasks]"] + [f"  {tid}" for tid in self._results]
         return "\n".join(lines)
 
     def store(self, task_id: str, result: str) -> None:

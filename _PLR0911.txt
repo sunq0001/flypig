@@ -1,0 +1,2 @@
+flypig\infrastructure\llm\api_key_validator.py:27:15: PLR0911 Too many return statements (7 > 6)
+Found 1 error.

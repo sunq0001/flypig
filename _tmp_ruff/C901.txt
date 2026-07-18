@@ -1,0 +1,4 @@
+flypig\domain\agent\nodes.py:121:5: C901 `chat_node` is too complex (13 > 10)
+flypig\domain\agent\nodes.py:139:15: C901 `_chat` is too complex (12 > 10)
+flypig\infrastructure\llm\openai_adapter.py:91:15: C901 `stream_with_tools` is too complex (15 > 10)
+Found 3 errors.

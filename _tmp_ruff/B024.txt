@@ -1,0 +1,5 @@
+flypig\shared\application_service.py:13:7: B024 `ApplicationService` is an abstract base class, but it has no abstract methods or properties
+flypig\shared\kernel\domain_service.py:15:7: B024 `DomainService` is an abstract base class, but it has no abstract methods or properties
+flypig\shared\kernel\entity.py:17:7: B024 `Entity` is an abstract base class, but it has no abstract methods or properties
+flypig\shared\kernel\value_object.py:16:7: B024 `ValueObject` is an abstract base class, but it has no abstract methods or properties
+Found 4 errors.

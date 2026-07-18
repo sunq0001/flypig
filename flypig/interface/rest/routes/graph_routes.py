@@ -7,39 +7,56 @@
 实现方法：GET /api/graph/ 返回内嵌 Mermaid.js 的 HTML 页面，
          GET /api/graph/mermaid 返回原始 Mermaid 代码。
          两者都通过 build_graph(dummy_model) 获取图拓扑。
+         HTML 模板从独立文件读取，模板脚本在请求时惰性加载。
 
 层&依赖：interface.rest.routes 层，依赖 application.graph_factory
 """
 
 from __future__ import annotations
 
-import contextlib
 import re
 from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any, override
 
+from quart import Blueprint, Response
+
+from flypig.domain.interfaces.chat_chunk import ChatChunk
 from flypig.domain.interfaces.imodel import IModel
 from flypig.domain.interfaces.itool_executor import IToolExecutor
 from flypig.orchestration.graph_factory import (
     build_graph,  # pyright: ignore[reportUnknownVariableType]
 )
-from quart import Blueprint
 
 graph_bp = Blueprint("graph", __name__, url_prefix="/api/graph")
 
+_TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 
-# ── 虚拟模型适配器（仅用于可视化，不调用真实 LLM）──
+
+# ── 虚拟适配器（仅用于可视化，不调用真实 LLM）──
+
+
 class _DummyModel(IModel):
+    """不调用任何 API 的虚拟模型适配器，仅满足 build_graph 签名"""
+
     @override
-    async def stream(  # pyright: ignore[reportIncompatibleMethodOverride]
+    async def stream(
         self,
-        messages: list[dict[str, Any]],  # pyright: ignore[reportExplicitAny]
-        **kwargs: Any,  # pyright: ignore[reportAny,reportExplicitAny]
+        messages: list[dict[str, Any]],
+        **kwargs: Any,
     ) -> AsyncGenerator[str, None]:
-        # 仅为满足抽象方法签名；可视化场景永远不会调用 stream。
-        if False:
-            yield  # pyright: ignore[reportUnreachable]
+        return
+        yield ""  # pyright: ignore[reportUnreachable]
+
+    @override
+    async def stream_with_tools(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]],
+        **kwargs: Any,
+    ) -> AsyncGenerator[ChatChunk, None]:
+        return
+        yield ChatChunk()  # pyright: ignore[reportUnreachable]
 
     @override
     def get_model_name(self) -> str:
@@ -50,96 +67,41 @@ class _DummyToolExecutor(IToolExecutor):
     """虚拟工具执行器（仅用于可视化，不执行真实工具）"""
 
     @override
-    async def execute(self, name: str, arguments: dict[str, Any]) -> str:  # pyright: ignore[reportExplicitAny]
+    async def execute(self, name: str, arguments: dict[str, Any]) -> str:
         return f"[Dummy] {name}({arguments})"
 
     @override
-    def get_schemas(self) -> list[dict[str, Any]]:  # pyright: ignore[reportExplicitAny]
+    def get_schemas(self) -> list[dict[str, Any]]:
         return []
 
 
-_DUMMY: _DummyModel = _DummyModel()
-_DUMMY_TE: _DummyToolExecutor = _DummyToolExecutor()
+_DUMMY = _DummyModel()
+_DUMMY_TE = _DummyToolExecutor()
 
-# ── 本地 mermaid 库（不用 CDN，避免 Tracking Prevention 拦截）──
-_MERMAID_PATH: Path = (
-    Path(__file__).resolve().parent.parent.parent
-    / "web"
-    / "static_vite"
-    / "node_modules"
-    / "mermaid"
-    / "dist"
-    / "mermaid.min.js"
-)
-_MERMAID_SCRIPT: str = ""
-if _MERMAID_PATH.exists():
-    with contextlib.suppress(Exception):
-        _MERMAID_SCRIPT = _MERMAID_PATH.read_text(encoding="utf-8")  # pyright: ignore[reportConstantRedefinition]
+# ── 缓存 ──
 
-_HTML_PAGE = """\
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FlyPig LangGraph 流程图</title>
-<script>__MERMAID_SCRIPT__</script>
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    background: #1e1e1e;
-    color: #d4d4d4;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    padding: 24px;
-  }
-  h1 { font-size: 20px; margin-bottom: 8px; color: #e0e0e0; }
-  .info {
-    font-size: 13px; color: #888; margin-bottom: 24px;
-  }
-  .mermaid-container {
-    background: #fff; border-radius: 8px; padding: 24px; overflow-x: auto;
-  }
-  .raw {
-    margin-top: 24px; background: #252526; border-radius: 6px; padding: 16px;
-    font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 13px;
-    white-space: pre-wrap; border: 1px solid #333;
-  }
-  .raw-label {
-    font-size: 12px; color: #888; margin-bottom: 6px;
-    text-transform: uppercase; letter-spacing: 1px;
-  }
-  .actions { margin-bottom: 16px; }
-  .actions a {
-    color: #4fc3f7; text-decoration: none; font-size: 13px; margin-right: 16px;
-  }
-  .actions a:hover { text-decoration: underline; }
-</style>
-</head>
-<body>
-  <h1>FlyPig LangGraph 流程图</h1>
-  <div class="info">__FLOW_INFO__ · 修改 flypig/orchestration/graph_factory.py 即可改变流程</div>
-  <div class="actions">
-    <a href="/api/graph/mermaid" target="_blank">查看原始 Mermaid 代码</a>
-  </div>
-  <div class="mermaid-container">
-    <pre class="mermaid">__MERMAID_CODE__</pre>
-  </div>
-  <div class="raw-label">Mermaid 原始代码</div>
-  <div class="raw">__MERMAID_CODE__</div>
-  <script>mermaid.initialize({ theme: 'default', startOnLoad: true });</script>
-</body>
-</html>
-"""
+_GRAPH_CACHE: tuple[str, str] | None = None  # (mermaid_code, flow_label)
+
+
+def _get_graph() -> tuple[str, str]:
+    """获取缓存的图拓扑 Mermaid 代码和流程标签"""
+    global _GRAPH_CACHE
+    if _GRAPH_CACHE is not None:
+        return _GRAPH_CACHE
+    graph = build_graph(_DUMMY, tool_executor=_DUMMY_TE)  # pyright: ignore[reportUnknownVariableType]
+    raw: str = graph.get_graph().draw_mermaid()
+    labeled = _label_mermaid(raw)
+    flow_label = (
+        "R2: ReAct loop (chat ⇄ execute → end)"
+        if "execute" in labeled and "chat -.->" in labeled
+        else "R1: single chat node"
+    )
+    _GRAPH_CACHE = (labeled, flow_label)
+    return _GRAPH_CACHE
 
 
 def _label_mermaid(code: str) -> str:
-    """给 Mermaid 条件边（-.->）加上路由条件标签
-
-    根据 router.py 的逻辑：
-      tool_calls → execute
-      no tool_calls → __end__
-    """
-    # 用正则匹配灵活处理空白字符
+    """给 Mermaid 条件边（-.->）加上路由条件标签"""
     code = re.sub(
         r"chat\s*-\.->\s*execute\s*;",
         "chat -.->|tool_calls| execute;",
@@ -153,31 +115,48 @@ def _label_mermaid(code: str) -> str:
     return code
 
 
+def _load_html() -> str:
+    """读取 HTML 模板文件（惰性加载）"""
+    path = _TEMPLATE_DIR / "graph.html"
+    if not path.exists():
+        return "<html><body><h1>模板文件不存在</h1></body></html>"
+    return path.read_text(encoding="utf-8")
+
+
+def _load_mermaid_script() -> str:
+    """惰性加载本地 mermaid.min.js（避免导入时读文件）"""
+    mermaid_path = (
+        Path(__file__).resolve().parent.parent.parent
+        / "web" / "static_vite" / "node_modules"
+        / "mermaid" / "dist" / "mermaid.min.js"
+    )
+    if not mermaid_path.exists():
+        return ""
+    try:
+        return mermaid_path.read_text(encoding="utf-8")
+    except Exception:
+        return ""
+
+
 @graph_bp.route("/mermaid")
 async def get_mermaid() -> str:
     """返回原始 Mermaid 代码"""
-    graph = build_graph(_DUMMY, tool_executor=_DUMMY_TE)  # pyright: ignore[reportUnknownVariableType]
-    raw: str = graph.get_graph().draw_mermaid()
-    return _label_mermaid(raw)
+    code, _ = _get_graph()
+    return code
 
 
 @graph_bp.route("/")
-async def graph_page() -> str:
+async def graph_page() -> Response:
     """返回渲染好的 Mermaid 流程图页面"""
-    graph = build_graph(_DUMMY, tool_executor=_DUMMY_TE)  # pyright: ignore[reportUnknownVariableType]
-    raw: str = graph.get_graph().draw_mermaid()
-    code = _label_mermaid(raw)
-    flow_label = (
-        "R2: ReAct loop (chat ⇄ execute → end)"
-        if "execute" in code and "chat -.->" in code
-        else "R1: single chat node"
+    code, flow_label = _get_graph()
+    html = _load_html()
+    mermaid_script = _load_mermaid_script()
+
+    html = (
+        html
+        .replace("__MERMAID_CODE__", code)
+        .replace("__FLOW_INFO__", flow_label)
+        .replace("__MERMAID_SCRIPT__", mermaid_script)
     )
-    html = _HTML_PAGE.replace("__MERMAID_CODE__", code).replace("__FLOW_INFO__", flow_label)
-    if _MERMAID_SCRIPT:
-        html = html.replace("__MERMAID_SCRIPT__", _MERMAID_SCRIPT)
-    else:
-        # mermaid 库不可用，用普通 pre 展示 Mermaid 源码
-        html = html.replace(
-            "<script>__MERMAID_SCRIPT__</script>", "<style>.mermaid{display:none}</style>"
-        )
-    return html
+
+    return Response(html, mimetype="text/html")

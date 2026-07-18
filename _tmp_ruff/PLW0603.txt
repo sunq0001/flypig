@@ -1,0 +1,10 @@
+flypig\bootstrap\otel.py:48:12: PLW0603 Using the global statement to update `_tracer` is discouraged
+flypig\bootstrap\otel.py:48:12: PLW0603 Using the global statement to update `_tracer` is discouraged
+flypig\bootstrap\otel.py:48:21: PLW0603 Using the global statement to update `_initialized` is discouraged
+flypig\bootstrap\otel.py:80:12: PLW0603 Using the global statement to update `_tracer` is discouraged
+flypig\infrastructure\tools\mcp\tool_mcp_loader.py:317:12: PLW0603 Using the global statement to update `_gateway` is discouraged
+flypig\interface\rest\routes\graph_routes.py:88:12: PLW0603 Using the global statement to update `_GRAPH_CACHE` is discouraged
+flypig\interface\rest\routes\pricing_routes.py:31:12: PLW0603 Using the global statement to update `_refreshing` is discouraged
+flypig\interface\rest\routes\pricing_routes.py:53:12: PLW0603 Using the global statement to update `_refreshing` is discouraged
+flypig\orchestration\tool_event_hub.py:54:12: PLW0603 Using the global statement to update `_hub` is discouraged
+Found 9 errors.

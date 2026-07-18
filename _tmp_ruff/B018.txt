@@ -1,0 +1,2 @@
+flypig\infrastructure\usage\pricing.py:269:13: B018 Found useless expression. Either assign it to a variable or remove it.
+Found 1 error.

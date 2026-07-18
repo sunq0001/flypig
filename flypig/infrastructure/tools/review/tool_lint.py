@@ -59,7 +59,7 @@ class LintTool:
             target_path = ROOT / target_path
 
         # ── 全项目架构检查 ──
-        if target == "architecture" or target == "arch":
+        if target == "architecture" or target == "arch":  # noqa: PLR1714
             return await self._run_architecture_check()
 
         # ── 单文件 / 目录检查 ──
@@ -152,7 +152,7 @@ class LintTool:
         errors = []
         # ruff 输出格式: path:line:col: code message
         for line in output.split("\n"):
-            line = line.strip()
+            line = line.strip()  # noqa: PLW2901
             m = re.match(
                 r"^(.+?):(\d+):(\d+):\s*(\S+)\s+(.+)",
                 line,
@@ -217,7 +217,7 @@ class LintTool:
         errors = []
         # eslint 紧凑格式: path:line:col: severity message [rule]
         for line in output.split("\n"):
-            line = line.strip()
+            line = line.strip()  # noqa: PLW2901
             m = re.match(
                 r"^(.+?):(\d+):(\d+):\s*(error|warning)\s+(.+?)\s+\[(.+?)\]",
                 line,

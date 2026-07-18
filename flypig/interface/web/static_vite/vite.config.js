@@ -12,6 +12,7 @@ export default defineConfig({
   optimizeDeps: { include: ['@iconify/vue'] },
   server: {
     port: 5173,
+    strictPort: true,
     proxy: {
       '/api/chat': {
         target: 'http://127.0.0.1:8320',

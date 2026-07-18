@@ -64,16 +64,17 @@ DirBrowser：工作区目录浏览器弹窗，从 WorkspaceStep 提取
             v-for="entry in entries"
             :key="entry.name"
             class="browser-item"
-            :class="{ 'is-dir': entry.type === 'directory' }"
-            @click="entry.type === 'directory' && enterDir(entry.name)"
+            :class="{ 'is-dir': entry.type === DIR }"
+            @click="onItemClick(entry, $event)"
+            @dblclick="onItemDoubleClick(entry, $event)"
           >
-            <span v-if="entry.type === 'directory'">📁</span>
+            <span v-if="entry.type === DIR">📁</span>
             <span v-else>📄</span>
             <span class="item-name">{{ entry.name }}</span>
             <span
-              v-if="entry.type === 'directory'"
+              v-if="entry.type === DIR"
               class="item-hint"
-            >点击进入</span>
+            >单击进入 / 双击选择</span>
           </div>
           <div
             v-if="entries.length === 0 && !browsing"
@@ -100,6 +101,7 @@ DirBrowser：工作区目录浏览器弹窗，从 WorkspaceStep 提取
 
 <script setup>
 import { ref, watch } from 'vue'
+const DIR = 'directory'
 import { browseDir, mkdirDir } from '@/utils/api'
 
 const props = defineProps({ visible: { type: Boolean, default: false } })
@@ -134,6 +136,24 @@ function enterDir(name) {
   if (!browsePath.value) return
   const sep = browsePath.value.endsWith('/') ? '' : '/'
   browse(browsePath.value + sep + name)
+}
+
+function onItemClick(entry, e) {
+  if (entry.type === DIR) {
+    enterDir(entry.name)
+  } else {
+    e.stopPropagation()
+  }
+}
+
+function onItemDoubleClick(entry, e) {
+  if (entry.type !== DIR) return
+  if (!browsePath.value) return
+  const sep = browsePath.value.endsWith('/') ? '' : '/'
+  const fullPath = browsePath.value + sep + entry.name
+  emit('select', fullPath)
+  emit('close')
+  e.stopPropagation()
 }
 
 function goUp() {

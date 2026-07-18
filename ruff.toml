@@ -18,4 +18,6 @@ exclude = [
     "domain_details.txt",
     # 文档构建脚本
     "docs/serve_docs.py",
+    # 根目录脚本（按需手动跑，不在 IDE 实时检查）
+    "scripts/",
 ]

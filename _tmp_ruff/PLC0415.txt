@@ -1,0 +1,13 @@
+flypig\__main__.py:32:9: PLC0415 `import` should be at the top-level of a file
+flypig\__main__.py:48:9: PLC0415 `import` should be at the top-level of a file
+flypig\__main__.py:50:9: PLC0415 `import` should be at the top-level of a file
+flypig\__main__.py:51:9: PLC0415 `import` should be at the top-level of a file
+flypig\bootstrap\app_factory.py:73:9: PLC0415 `import` should be at the top-level of a file
+flypig\bootstrap\app_factory.py:83:9: PLC0415 `import` should be at the top-level of a file
+flypig\bootstrap\settings.py:101:5: PLC0415 `import` should be at the top-level of a file
+flypig\domain\agent\exec_node.py:54:5: PLC0415 `import` should be at the top-level of a file
+flypig\infrastructure\tools\executor.py:33:9: PLC0415 `import` should be at the top-level of a file
+flypig\infrastructure\tools\executor.py:34:9: PLC0415 `import` should be at the top-level of a file
+flypig\infrastructure\tools\executor.py:35:9: PLC0415 `import` should be at the top-level of a file
+flypig\infrastructure\tools\executor.py:36:9: PLC0415 `import` should be at the top-level of a file
+Found 12 errors.

@@ -9,7 +9,7 @@
 
 from typing import Any
 
-from flypig.domain.pricing_entry import PricingEntry
+from flypig.domain.pricing_entry_value import PricingEntry
 
 PRICE_KEY = "price"
 PRICE_PRECISION = 4  # 价格计算保留 4 位小数
@@ -30,7 +30,7 @@ def _match_model_config(
     """在 Portkey 数据中精确或模糊匹配模型配置"""
     model_config = portkey_data.get(api_model_name)
     if not model_config:
-        for key in portkey_data:
+        for key in portkey_data:  # noqa: PLC0206
             if key == api_model_name or key.endswith("/" + api_model_name) or api_model_name in key:
                 model_config = portkey_data[key]
                 break

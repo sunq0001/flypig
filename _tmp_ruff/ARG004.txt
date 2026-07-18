@@ -1,0 +1,2 @@
+flypig\infrastructure\tools\executor.py:91:26: ARG004 Unused static method argument: `name`
+Found 1 error.

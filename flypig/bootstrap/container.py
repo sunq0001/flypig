@@ -8,8 +8,12 @@
 """
 
 from dependency_injector import containers, providers
+
 from flypig.domain.registry import ModelRegistry
+from flypig.domain.services.api_key_service import ApiKeyService
+from flypig.infrastructure.llm.api_key_validator import LLMApiKeyValidator
 from flypig.infrastructure.llm.model_factory import ModelFactory
+from flypig.infrastructure.persistence.api_key_file_repo import ApiKeyFileRepository
 from flypig.infrastructure.tools import ToolExecutor
 from flypig.infrastructure.usage.pricing import PricingService
 from flypig.orchestration.chat_service import ChatApplicationService
@@ -23,7 +27,14 @@ class AppContainer(containers.DeclarativeContainer):
     # ── 域服务 ──
     model_registry = providers.Singleton(ModelRegistry)
 
+    # ── 仓储 ──
+    api_key_repository = providers.Singleton(ApiKeyFileRepository)
+
     # ── 基础设施 ──
+    api_key_validator = providers.Factory(
+        LLMApiKeyValidator,
+        registry=model_registry,
+    )
     model_factory = providers.Factory(
         ModelFactory,
         registry=model_registry,
@@ -35,6 +46,13 @@ class AppContainer(containers.DeclarativeContainer):
     tool_executor = providers.Singleton(
         ToolExecutor,
         workspace_dir=config.workspace_dir,
+    )
+
+    # ── 领域服务 ──
+    api_key_service = providers.Factory(
+        ApiKeyService,
+        validator=api_key_validator,
+        repository=api_key_repository,
     )
 
     # ── 应用服务 ──

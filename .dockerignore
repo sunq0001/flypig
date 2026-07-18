@@ -1,0 +1,16 @@
+__pycache__
+*.pyc
+.env
+.git
+.gitignore
+.vscode
+.idea
+node_modules
+flypig-archive
+flypig_archive2
+typings
+dev_output.txt
+dev_err.txt
+$null
+check_*.py
+test_*.py

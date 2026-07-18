@@ -16,9 +16,10 @@ from http import HTTPStatus
 from pathlib import Path
 
 import httpx
+from loguru import logger
+
 from flypig.acl.pricing import default_pricing_to_entry, portkey_to_pricing_entry
 from flypig.domain.registry import ModelRegistry
-from loguru import logger
 
 # ── 常量 ──
 JSON_INDENT = 2
@@ -188,8 +189,7 @@ class PricingService:
                 if price:
                     prices[model_name] = price
 
-        for name, price in self._load_defaults().items():
-            prices[name] = price
+        prices.update(self._load_defaults())
 
         return prices
 
@@ -266,4 +266,4 @@ class PricingService:
         """停止后台循环"""
         if self._loop_task is not None:
             self._loop_task.cancel()
-            self._loop_t
+            self._loop_task = None

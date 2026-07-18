@@ -65,7 +65,7 @@ class ToolExecutor(IToolExecutor):
             properties = {}
             required = []
             for pname, param in sig.parameters.items():
-                if pname == "self" or pname == "args" or pname == "kwargs":
+                if pname == "self" or pname == "args" or pname == "kwargs":  # noqa: PLR1714
                     continue
                 properties[pname] = self._param_to_schema(pname, param)
                 if param.default is inspect.Parameter.empty:
@@ -88,7 +88,7 @@ class ToolExecutor(IToolExecutor):
         return schemas
 
     @staticmethod
-    def _param_to_schema(name: str, param: inspect.Parameter) -> dict:
+    def _param_to_schema(name: str, param: inspect.Parameter) -> dict:  # noqa: ARG004
         """参数 → JSON Schema 类型映射"""
         hint = param.annotation if param.annotation is not inspect.Parameter.empty else str
         type_map = {

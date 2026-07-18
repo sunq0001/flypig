@@ -1,0 +1,4 @@
+flypig\infrastructure\tools\system\bash.py:71:9: RUF006 Store a reference to the return value of `asyncio.create_task`
+flypig\interface\rest\routes\config_routes.py:274:5: RUF006 Store a reference to the return value of `asyncio.ensure_future`
+flypig\interface\rest\routes\pricing_routes.py:40:9: RUF006 Store a reference to the return value of `asyncio.ensure_future`
+Found 3 errors.
