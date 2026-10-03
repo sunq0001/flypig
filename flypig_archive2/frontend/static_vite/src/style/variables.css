@@ -1,0 +1,12 @@
+/* variables：CSS 自定义变量
+   为什么做：颜色/间距/字体/断点等设计元素需要集中定义为 CSS 变量，方便主题切换和一改全改。
+   实现方法：:root 下定义 --color-primary、--spacing-md、--font-mono 等变量，全局使用。
+   实现效果：改一个 CSS 变量，所有引用它的元素自动更新。
+   技术栈：CSS 自定义属性
+   层&依赖：frontend.style
+   细节见文档：docs/docs_refactor/frontend-arch.md → §技术栈 */
+
+:root {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+}

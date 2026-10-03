@@ -1,0 +1,20 @@
+{
+  "name": "flypig-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "concurrently -k -n vue,electron -c green,blue \"cd ../web/static_vite && npx vite --host\" \"wait-on http://localhost:5173 && electron .\"",
+    "start": "cd ../web/static_vite && npx vite build && electron .",
+    "build": "cd ../web/static_vite && npx vite build && electron-builder --config electron-builder.json"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0",
+    "electron": "^42.5.0",
+    "electron-builder": "^26.0.0",
+    "wait-on": "^8.0.0"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}

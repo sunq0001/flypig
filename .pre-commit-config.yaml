@@ -1,0 +1,41 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.18
+    hooks:
+      - id: ruff
+        args: [--config, flypig/pyproject.toml, --fix]
+      - id: ruff-format
+        args: [--config, flypig/pyproject.toml]
+
+  - repo: local
+    hooks:
+      # 不用 mirrors-eslint：eslint 9 + "type": "module" 下它会以 ESM 方式
+      # import legacy .eslintrc.json，直接抛 ERR_IMPORT_ATTRIBUTE_MISSING。
+      # 改走项目本地 eslint（脚本内设置 ESLINT_USE_FLAT_CONFIG=false）。
+      - id: eslint
+        name: eslint (前端 lint)
+        entry: python scripts/precommit_eslint.py
+        language: system
+        pass_filenames: false
+        files: ^flypig/interface/web/static_vite/src/.*\.(js|vue)$
+
+      - id: lint-imports
+        name: lint-imports (层依赖检查)
+        entry: lint-imports --config flypig/pyproject.toml
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: bandit
+        name: bandit (安全扫描)
+        entry: bandit -c .bandit -r flypig
+        language: system
+        pass_filenames: false
+        always_run: true
+
+      - id: architecture-check
+        name: architecture_check (DDD 合规)
+        entry: python scripts/architecture_check.py
+        language: system
+        pass_filenames: false
+        always_run: true

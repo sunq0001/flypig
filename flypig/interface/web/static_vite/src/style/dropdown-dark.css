@@ -1,0 +1,60 @@
+/* ── TDesign Dropdown 深色覆盖 ── */
+
+.t-popup__content.t-dropdown,
+.t-dropdown__submenu {
+  background: #252526;
+  border: 1px solid #1e1e1e;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.t-dropdown__item-text {
+  color: #ddd;
+  font-size: 13px;
+}
+
+/* ── hover ── */
+
+/* 普通项 hover */
+.t-dropdown__item--theme-default:hover {
+  background: #094771;
+  color: #fff;
+}
+
+/* 有子菜单的项 hover（TDesign 默认浅蓝，覆盖为深蓝） */
+.t-dropdown__item--theme-default.t-dropdown__item--suffix:hover {
+  background: #094771;
+  color: #fff;
+}
+
+/* hover 时里面所有文字变白 */
+.t-dropdown__item--theme-default:hover .t-dropdown__item-text,
+.t-dropdown__item--theme-default.t-dropdown__item--suffix:hover .t-dropdown__item-text,
+.t-dropdown__item--theme-default:hover .t-dropdown__item-content,
+.t-dropdown__item--theme-default.t-dropdown__item--suffix:hover .t-dropdown__item-content {
+  color: #fff;
+}
+
+/* ── 箭头图标 ── */
+
+/* 默认态：浅灰 */
+.t-dropdown__item-direction,
+.t-dropdown__item--suffix .t-icon,
+.t-dropdown__item .t-icon-chevron-right {
+  color: #888;
+}
+
+/* hover 态：亮灰 */
+.t-dropdown__item--theme-default:hover .t-dropdown__item-direction,
+.t-dropdown__item--theme-default.t-dropdown__item--suffix:hover .t-dropdown__item-direction,
+.t-dropdown__item--theme-default:hover .t-icon-chevron-right,
+.t-dropdown__item--theme-default.t-dropdown__item--suffix:hover .t-icon-chevron-right {
+  color: #bbb;
+}
+
+/* ── 子菜单项 hover ── */
+.t-dropdown__submenu .t-dropdown__item--theme-default:hover {
+  background: #094771;
+}
+.t-dropdown__submenu .t-dropdown__item--theme-default:hover .t-dropdown__item-text {
+  color: #fff;
+}

@@ -1,0 +1,270 @@
+<!--
+DirBrowser：工作区目录浏览器弹窗，从 WorkspaceStep 提取
+-->
+<template>
+  <div
+    v-if="visible"
+    class="brw-overlay"
+    @click.self="$emit('close')"
+  >
+    <div class="brw-box">
+      <div class="brw-box-header">
+        选择工作区目录
+      </div>
+      <div class="brw-body">
+        <div class="browser-toolbar">
+          <t-button
+            size="small"
+            :disabled="!parentPath"
+            @click="goUp"
+          >
+            返回上级
+          </t-button>
+          <t-button
+            size="small"
+            @click="showNewFolderInput"
+          >
+            新建文件夹
+          </t-button>
+        </div>
+
+        <div
+          v-if="newFolderVisible"
+          class="new-folder-row"
+        >
+          <t-input
+            v-model="newFolderName"
+            placeholder="输入文件夹名称"
+            size="small"
+            @keydown.enter.prevent="createFolder"
+          />
+          <t-button
+            theme="primary"
+            size="small"
+            @click="createFolder"
+          >
+            创建
+          </t-button>
+          <t-button
+            size="small"
+            @click="cancelNewFolder"
+          >
+            取消
+          </t-button>
+        </div>
+
+        <div class="browser-path">
+          {{ browsePath || '...' }}
+        </div>
+        <div
+          class="browser-list"
+          :loading="browsing"
+        >
+          <div
+            v-for="entry in entries"
+            :key="entry.name"
+            class="browser-item"
+            :class="{ 'is-dir': entry.type === DIR }"
+            @click="onItemClick(entry, $event)"
+            @dblclick="onItemDoubleClick(entry, $event)"
+          >
+            <span v-if="entry.type === DIR">📁</span>
+            <span v-else>📄</span>
+            <span class="item-name">{{ entry.name }}</span>
+            <span
+              v-if="entry.type === DIR"
+              class="item-hint"
+            >单击进入 / 双击选择</span>
+          </div>
+          <div
+            v-if="entries.length === 0 && !browsing"
+            class="browser-empty"
+          >
+            空目录
+          </div>
+        </div>
+      </div>
+      <div class="brw-footer">
+        <t-button
+          theme="primary"
+          @click="pickCurrentDir"
+        >
+          选择当前目录
+        </t-button>
+        <t-button @click="$emit('close')">
+          取消
+        </t-button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, watch } from 'vue'
+const DIR = 'directory'
+import { browseDir, mkdirDir } from '@/shared/utils/api'
+
+const props = defineProps({ visible: { type: Boolean, default: false } })
+const emit = defineEmits(['close', 'select'])
+
+const browsePath = ref('')
+const entries = ref([])
+const parentPath = ref(null)
+const browsing = ref(false)
+const newFolderVisible = ref(false)
+const newFolderName = ref('')
+
+watch(() => props.visible, async (v) => {
+  if (v) try { await browse('.') } catch { /* browse 内部有 try */ }
+})
+
+async function browse(path) {
+  browsing.value = true
+  try {
+    const data = await browseDir(path || '.')
+    entries.value = data.entries || []
+    parentPath.value = data.parent
+    browsePath.value = data.path
+  } catch {
+    entries.value = []
+  } finally {
+    browsing.value = false
+  }
+}
+
+function enterDir(name) {
+  if (!browsePath.value) return
+  const sep = browsePath.value.endsWith('/') ? '' : '/'
+  browse(browsePath.value + sep + name)
+}
+
+function onItemClick(entry, e) {
+  if (entry.type === DIR) {
+    enterDir(entry.name)
+  } else {
+    e.stopPropagation()
+  }
+}
+
+function onItemDoubleClick(entry, e) {
+  if (entry.type !== DIR) return
+  if (!browsePath.value) return
+  const sep = browsePath.value.endsWith('/') ? '' : '/'
+  const fullPath = browsePath.value + sep + entry.name
+  emit('select', fullPath)
+  emit('close')
+  e.stopPropagation()
+}
+
+function goUp() {
+  if (parentPath.value) browse(parentPath.value)
+}
+
+function showNewFolderInput() {
+  newFolderVisible.value = true
+  newFolderName.value = ''
+  setTimeout(() => {
+    const input = document.querySelector('.new-folder-row .t-input__inner')
+    if (input) input.focus()
+  }, 50)
+}
+
+function cancelNewFolder() {
+  newFolderVisible.value = false
+  newFolderName.value = ''
+}
+
+async function createFolder() {
+  if (!newFolderName.value || !browsePath.value) return
+  try {
+    const res = await mkdirDir(browsePath.value, newFolderName.value)
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error || '创建目录失败')
+    }
+    newFolderName.value = ''
+    newFolderVisible.value = false
+    await browse(browsePath.value)
+  } catch (e) {
+    // error handled by parent
+  }
+}
+
+function pickCurrentDir() {
+  if (browsePath.value) {
+    emit('select', browsePath.value)
+    emit('close')
+  }
+}
+</script>
+
+<style scoped>
+.brw-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3100;
+}
+.brw-box {
+  background: #252526;
+  border: 1px solid #333;
+  border-radius: 8px;
+  width: 520px;
+  max-width: 90vw;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+}
+.brw-box-header {
+  padding: 12px 20px;
+  border-bottom: 1px solid #333;
+  color: #ccc;
+  font-size: 14px;
+  font-weight: 500;
+}
+.brw-body { padding: 16px 20px; }
+.brw-footer {
+  display: flex; gap: 8px;
+  justify-content: flex-end;
+  padding: 12px 20px;
+  border-top: 1px solid #333;
+}
+.browser-toolbar { display: flex; gap: 8px; margin-bottom: 8px; }
+.new-folder-row { display: flex; gap: 6px; margin-bottom: 8px; }
+.new-folder-row .t-input { flex: 1; }
+.browser-path {
+  padding: 6px 8px; font-size: 12px; color: #bbbbbb;
+  background: #1e1e1e; border: 1px solid #3a3a3a;
+  border-radius: 4px; margin-bottom: 4px;
+  word-break: break-all; font-family: monospace;
+}
+.browser-list {
+  max-height: 220px; overflow-y: auto;
+  border: 1px solid #3a3a3a; border-radius: 4px; min-height: 80px;
+}
+.browser-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px; cursor: default; transition: background 0.15s;
+}
+.browser-item.is-dir { cursor: pointer; }
+.browser-item.is-dir:hover { background: #2f3338; }
+.item-name {
+  flex: 1; font-size: 13px; color: #d4d4d4;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.item-hint { font-size: 11px; color: #7a7a7a; flex-shrink: 0; }
+.browser-empty { padding: 24px; text-align: center; color: #7a7a7a; font-size: 13px; }
+
+/* 统一 TDesign 输入框为深色，适配深色弹窗 */
+:deep(.t-input) {
+  background-color: #1e1e1e;
+  border-color: #3a3a3a;
+}
+:deep(.t-input__inner) {
+  color: #d4d4d4;
+}
+:deep(.t-input__inner::placeholder) {
+  color: #7a7a7a;
+}
+</style>

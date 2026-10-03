@@ -1,0 +1,9 @@
+agent:
+  recent_workspaces:
+  - C:\Users\mss\WorkBuddy\Flypig-agent\flypig\backend
+  - C:\Users\mss\WorkBuddy\Flypig-agent
+  - C:\Users\mss\WorkBuddy\mydemo
+  workspace: C:\Users\mss\WorkBuddy\Flypig-agent\flypig\backend
+api_keys: {}
+llm:
+  default_model: qwen2.5:1.5b

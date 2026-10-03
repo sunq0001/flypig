@@ -1,0 +1,7 @@
+/* theme-cyberpunk：赛博朋克主题
+   为什么做：部分用户偏好暗色高饱和的视觉风格，赛博朋克主题覆盖默认 CSS 变量。
+   实现方法：覆盖 variables.css 中的颜色变量（霓虹绿/深紫/暗黑背景）。
+   实现效果：一键切换赛博朋克风格界面。
+   技术栈：CSS 变量覆盖
+   层&依赖：frontend.style
+   细节见文档：docs/docs_refactor/chat-ux.md → §主题切换 */

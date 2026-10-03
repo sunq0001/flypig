@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FlyPig LangGraph 流程图</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #1e1e1e;
+    color: #d4d4d4;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 24px;
+  }
+  h1 { font-size: 20px; margin-bottom: 8px; color: #e0e0e0; }
+  .info { font-size: 13px; color: #888; margin-bottom: 24px; }
+  .mermaid-container {
+    background: #fff; border-radius: 8px; padding: 24px; overflow-x: auto;
+  }
+  .raw {
+    margin-top: 24px; background: #252526; border-radius: 6px; padding: 16px;
+    font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 13px;
+    white-space: pre-wrap; border: 1px solid #333;
+  }
+  .raw-label {
+    font-size: 12px; color: #888; margin-bottom: 6px;
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+  .actions { margin-bottom: 16px; }
+  .actions a {
+    color: #4fc3f7; text-decoration: none; font-size: 13px; margin-right: 16px;
+  }
+  .actions a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+  <h1>FlyPig LangGraph 流程图</h1>
+  <div class="info">__FLOW_INFO__ · 修改 flypig/orchestration/graph_factory.py 即可改变流程</div>
+  <div class="actions">
+    <a href="/api/graph/mermaid" target="_blank">查看原始 Mermaid 代码</a>
+  </div>
+  <div class="mermaid-container">
+    <pre class="mermaid">__MERMAID_CODE__</pre>
+  </div>
+  <div class="raw-label">Mermaid 原始代码</div>
+  <div class="raw">__MERMAID_CODE__</div>
+  <script>__MERMAID_SCRIPT__</script>
+  <script>mermaid.initialize({ theme: 'default', startOnLoad: true });</script>
+</body>
+</html>

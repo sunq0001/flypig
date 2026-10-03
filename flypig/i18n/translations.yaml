@@ -1,0 +1,14 @@
+# FlyPig 异常 code → 用户可读文案
+# 与 flypig/domain/exceptions.py 中各类的 code 字段一一对应，新增异常时同步补充
+
+UNKNOWN: 未知错误
+DOMAIN_ERR: 业务规则冲突
+SESSION_CLOSED: 会话已关闭，无法继续发送消息
+INVALID_TURN: 非法的对话轮次
+MSG_INVALID: 消息内容不合法
+CONFIG_ERROR: 配置错误，请检查配置文件与 API Key
+MODEL_API_ERR: 模型服务调用失败，请稍后重试
+CIRCUIT_OPEN: 模型服务暂时熔断，请稍后重试
+TOOL_EXEC_ERR: 工具执行失败
+MCP_ERR: MCP 服务异常（子进程启动或握手失败）
+SANDBOX_ERR: 沙箱环境异常，请确认 Docker 是否运行

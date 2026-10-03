@@ -1,0 +1,156 @@
+[project]
+name = "flypig"
+version = "0.1.0"
+description = "FlyPig AI Agent - 终端+聊天 AI 助手"
+requires-python = ">=3.11"
+dependencies = [
+    "quart>=0.19.0,<1.0",
+    "hypercorn>=0.17.0,<1.0",
+    "httpx>=0.27.0,<1.0",
+    "python-dotenv>=1.0.0,<2.0",
+    "pydantic>=2.0.0,<3.0",
+    "loguru>=0.7.0,<1.0",
+    "watchdog>=6.0.0,<7.0",
+    "opentelemetry-api>=1.30,<2.0",
+    "opentelemetry-sdk>=1.30,<2.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.30,<2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0,<9.0",
+    "pytest-asyncio>=0.23.0,<1.0",
+    "coverage>=7.0.0,<8.0",
+    "ruff>=0.15.18,<0.16.0",
+    "mypy>=1.10.0,<2.0",
+    "httpx>=0.27.0,<1.0",
+    "import-linter>=2.0.0,<3.0",
+    "pre-commit>=4.0.0,<5.0",
+    "uvicorn[standard]>=0.30.0,<1.0",
+    "bandit>=1.8.0,<2.0",
+    "hypothesis>=6.100.0,<7.0",
+]
+web = [
+    "quart>=0.19.0,<1.0",
+    "hypercorn>=0.17.0,<1.0",
+    "quart-cors>=0.7.0,<1.0",
+]
+mcp = [
+    "mcp>=1.0.0,<2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/flypig"
+Documentation = "https://github.com/your-org/flypig#readme"
+Source = "https://github.com/your-org/flypig"
+
+[project.scripts]
+flypig = "flypig.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["flypig*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+exclude = [
+    "../typings/*",
+    "../flypig-archive/*",
+    "../flypig_archive2/*",
+]
+select = [
+    "E", "F", "I", "N", "W", "B", "UP", "SIM", "RUF100",  # 基础
+    "PL",       # Pylint 重构&检查（含魔法数字 / 函数过长 / 参数过多）
+    "TRY",      # try/except 异常处理（空 except / 过于宽泛的 except）
+    "PTH",      # pathlib 路径处理
+    "C4",       # 简化写法（不必要的列表推导等）
+    "RUF",      # ruff 专属规则
+    "ASYNC",    # async 相关（await 无 await 等）
+    "PERF",     # 性能相关（不必要的 list/map/排序优化）
+    "FURB",     # 现代写法建议（迭代器/模式优化）
+    "ARG",      # 未使用的函数参数
+]
+# 规则分类：
+#   必须保留 — 违反项目设计原则或误报太多
+#   可开+noqa — 仅1~2处违规，加 # noqa 即可
+#   已打开   — 0 违规，无需处理
+ignore = [
+    # ── 必须保留：项目设计决策 ──
+    "C901",     # 圈复杂度 — agent router/exec 节点天然复杂
+    "TRY003",   # 异常消息太长 — 带上下文是 FlyPig 设计风格
+    "TRY300",   # try-return 写法 — 风格选择
+    "RUF001",   # 全角字符 — 中文项目 15 处误报
+    "RUF002",   # 混淆字符 — 中文项目 2014 处误报
+    "RUF003",   # 混淆字符 — 中文项目 122 处误报
+    "RUF006",   # create_task 未存引用 — 后台 task 有意不存储
+    "N818",     # Exception 后缀 Error — 已统一 FlyPigException，不动
+    "B024",     # ABC 无抽象方法 — DDD 标记基类设计意图
+    "PLR0911",  # 太多 return — api_key_validator HTTP 状态码分支
+    "PLR0912",  # 太多分支 — openai_adapter 消息构建多分支
+    "E501",     # 行太长 — 中文 docstring 强制换行破坏可读性
+    "ASYNC109", # async timeout 参数 — 项目风格
+    "ASYNC240", # async Path 方法 — Quart 中使用同步 Path 安全
+    "PLC0415",  # 延迟导入 — 防循环依赖，DDD 常见实践
+    "PLW0603",  # global 语句 — gateway 单例，架构设计
+    "PTH123",   # open() vs Path.open() — 旧代码逐步迁移中
+    "ARG002",   # 未用函数参数 — stub 类按 DDD 接口声明签名
+]
+  
+[tool.ruff.lint.per-file-ignores]
+# dev.py 是本地启动器脚本（非业务代码，项目规则要求不改动），豁免风格类规则：
+#   SIM105 contextlib.suppress / PLR2004 退出码字面量 / PLR1714 合并比较 / PLR0915 main 语句数
+"**/dev.py" = ["SIM105", "PLR2004", "PLR1714", "PLR0915"]
+
+[tool.importlinter]
+# 注意：import-linter 只识别 [tool.importlinter]（无下划线），
+# 写成 [tool.import_linter] 会导致 "Could not read any configuration"
+root_packages = ["flypig"]
+
+# ── 依赖方向守护：禁止内层反向依赖外层 ──
+# 依赖方向 domain ← application ← infrastructure ← interface
+# 契约与 scripts/architecture_check.py 的 LAYER_RULES 保持一致
+
+[[tool.importlinter.contracts]]
+name = "domain 层禁止依赖任何外层"
+type = "forbidden"
+source_modules = ["flypig.domain"]
+forbidden_modules = [
+    "flypig.infrastructure",
+    "flypig.interface",
+    "flypig.orchestration",
+    "flypig.bootstrap",
+    "flypig.acl",
+]
+
+[[tool.importlinter.contracts]]
+name = "orchestration 层禁止依赖 interface"
+type = "forbidden"
+source_modules = ["flypig.orchestration"]
+forbidden_modules = ["flypig.interface"]
+
+[[tool.importlinter.contracts]]
+name = "infrastructure 层禁止依赖 interface / orchestration"
+type = "forbidden"
+source_modules = ["flypig.infrastructure"]
+forbidden_modules = [
+    "flypig.interface",
+    "flypig.orchestration",
+]
+
+[[tool.importlinter.contracts]]
+name = "acl 防腐层禁止依赖内层实现（只允许 shared + domain）"
+type = "forbidden"
+source_modules = ["flypig.acl"]
+forbidden_modules = [
+    "flypig.infrastructure",
+    "flypig.interface",
+    "flypig.orchestration",
+    "flypig.bootstrap",
+]

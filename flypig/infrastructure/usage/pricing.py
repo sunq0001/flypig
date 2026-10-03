@@ -1,0 +1,278 @@
+"""pricing
+
+为什么做：前端需要显示各模型实时价格，需要从 Portkey API 抓取 + 本地缓存 + 每日自动刷新
+
+实现方法：PricingService 封装了从 Portkey 抓取、USD→CNY 汇率转换、本地缓存（pricing_cache.json）、每日自动刷新循环
+
+层&依赖：infrastructure.usage 层，依赖 domain.registry
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+from datetime import UTC, date, datetime
+from http import HTTPStatus
+from pathlib import Path
+
+import httpx
+from loguru import logger
+
+from flypig.acl.pricing import default_pricing_to_entry, portkey_to_pricing_entry
+from flypig.domain.registry import ModelRegistry
+
+# ── 常量 ──
+JSON_INDENT = 2
+DEFAULT_EXCHANGE_CACHE_TTL = 3600
+EXCHANGE_RATE_TIMEOUT = 5
+DEFAULT_REFRESH_INTERVAL = 86400
+PORTKEY_REQUEST_TIMEOUT = 10
+DEFAULT_MODEL_PRICE = 7.2  # 默认 USD/CNY 汇率
+EXCHANGE_RATE_KEY = "rate"  # 汇率字典中的键名
+EXCHANGE_RATE_PRECISION = 4  # 汇率保留小数位数
+CNY_PRICE_PRECISION = 4  # 人民币价格保留小数位数
+
+# ── 价格数据的 JSON 字段键名 ──
+KEY_PRICES = "prices"
+KEY_UPDATED = "updated"
+KEY_UPDATE_TIME = "update_time"
+PRICE_INPUT = "input"
+PRICE_OUTPUT = "output"
+PRICE_INPUT_CACHE_HIT = "input_cache_hit"
+
+
+class PricingService:
+    """定价服务 — 从 Portkey API 获取模型价格并缓存"""
+
+    def __init__(
+        self,
+        registry: ModelRegistry,
+        data_dir: Path | None = None,
+    ) -> None:
+        self._registry = registry
+        self._data_dir = data_dir or Path(__file__).resolve().parent.parent.parent / "data"
+        self._cache_file = self._data_dir / "pricing_cache.json"
+        self._exchange_rate: dict[str, float | None] = {EXCHANGE_RATE_KEY: None, "ts": 0.0}
+        self._loop_task: asyncio.Task[None] | None = None
+
+    # ── 内部辅助 ──
+
+    def _pricing_cfg(self, key: str, default=None):
+        return self._registry.get_pricing_config().get(key, default)
+
+    def _cache_path(self) -> Path:
+        self._data_dir.mkdir(parents=True, exist_ok=True)
+        return self._cache_file
+
+    def _load_cache(self) -> dict | None:
+        path = self._cache_path()
+        if path.exists():
+            try:
+                return json.loads(path.read_text(encoding="utf-8"))
+            except Exception as exc:
+                logger.warning("[pricing] 缓存加载失败: {}", exc)
+        return None
+
+    def _save_cache(self, data: dict) -> None:
+        path = self._cache_path()
+        try:
+            path.write_text(
+                json.dumps(data, indent=JSON_INDENT, ensure_ascii=False),
+                encoding="utf-8",
+            )
+        except OSError:
+            logger.warning("[pricing] 缓存写入失败: {}", path)
+
+    # ── 汇率 ──
+
+    def _fetch_exchange_rate(self) -> float:
+        now = datetime.now().timestamp()
+        cache_ttl = self._pricing_cfg("exchange_rate_cache_ttl", DEFAULT_EXCHANGE_CACHE_TTL)
+        rate_val = self._exchange_rate[EXCHANGE_RATE_KEY]
+        ts_val = self._exchange_rate["ts"]
+        if ts_val is not None and now - ts_val < cache_ttl and rate_val is not None:
+            return rate_val  # type: ignore[return-value]
+
+        api_url = self._pricing_cfg("exchange_rate_api")
+        if not api_url:
+            return float(self._pricing_cfg("fallback_usd_cny", DEFAULT_MODEL_PRICE))
+
+        try:
+            timeout = self._pricing_cfg("exchange_rate_timeout", EXCHANGE_RATE_TIMEOUT)
+            resp = httpx.get(api_url, timeout=timeout)
+            if resp.status_code == HTTPStatus.OK:
+                rate = resp.json().get("rates", {}).get("CNY")
+                if rate:
+                    rate = round(float(rate), EXCHANGE_RATE_PRECISION)
+                    self._exchange_rate[EXCHANGE_RATE_KEY] = rate
+                    self._exchange_rate["ts"] = now
+                    return rate
+        except Exception as exc:
+            logger.warning("获取汇率失败: {}", exc)
+
+        return float(self._pricing_cfg("fallback_usd_cny", DEFAULT_MODEL_PRICE))
+
+    def _convert_to_cny(self, prices: dict) -> dict:
+        rate = self._fetch_exchange_rate()
+        converted = {}
+        for name, p in prices.items():
+            cp = {}
+            for key in (PRICE_INPUT, PRICE_OUTPUT, PRICE_INPUT_CACHE_HIT):
+                val = p.get(key)
+                cp[key] = round(val * rate, CNY_PRICE_PRECISION) if val is not None else None
+            converted[name] = cp
+        return converted
+
+    # ── Portkey 数据抓取 ──
+
+    def _fetch_portkey_provider(self, provider: str) -> dict:
+        pricing = self._registry.get_pricing_config()
+        base = pricing.get("portkey_base")
+        if not base:
+            return {}
+        timeout = pricing.get("timeout", PORTKEY_REQUEST_TIMEOUT)
+
+        provider_lower = provider.lower()
+        url = f"{base}/{provider_lower}.json"
+        try:
+            resp = httpx.get(url, timeout=timeout)
+            if resp.status_code != HTTPStatus.OK:
+                return {}
+            return resp.json()
+        except Exception:
+            return {}
+
+    def _extract_model_price(self, portkey_data: dict, model_name: str) -> dict | None:
+        """通过 ACL 将 Portkey 格式转为 dict（向后兼容）"""
+        meta = self._registry.resolve(model_name)
+        if not meta:
+            return None
+        api_model = meta.get("api_model")
+        if not api_model:
+            return None
+
+        entry = portkey_to_pricing_entry(portkey_data, api_model)
+        if entry is None:
+            return None
+        result: dict[str, float] = {}
+        if entry.input_price is not None:
+            result[PRICE_INPUT] = entry.input_price
+        if entry.output_price is not None:
+            result[PRICE_OUTPUT] = entry.output_price
+        if entry.input_cache_hit is not None:
+            result[PRICE_INPUT_CACHE_HIT] = entry.input_cache_hit
+        return result if PRICE_INPUT in result and PRICE_OUTPUT in result else None
+
+    def _load_defaults(self) -> dict:
+        defaults = {}
+        for name in self._registry.known_models():
+            meta = self._registry.resolve(name)
+            if meta:
+                pricing = meta.get("default_pricing")
+                if pricing is not None:
+                    entry = default_pricing_to_entry(pricing)
+                    d: dict[str, float] = {}
+                    if entry.input_price is not None:
+                        d[PRICE_INPUT] = entry.input_price
+                    if entry.output_price is not None:
+                        d[PRICE_OUTPUT] = entry.output_price
+                    if entry.input_cache_hit is not None:
+                        d[PRICE_INPUT_CACHE_HIT] = entry.input_cache_hit
+                    defaults[name] = d
+        return defaults
+
+    def _scrape_pricing(self) -> dict:
+        prices = {}
+
+        provider_models: dict[str, list[str]] = {}
+        for name, meta in self._registry.all_models.items():
+            provider = meta.get("provider", "")
+            provider_models.setdefault(provider, []).append(name)
+
+        for provider, model_names in provider_models.items():
+            portkey_data = self._fetch_portkey_provider(provider)
+            if not portkey_data:
+                continue
+            for model_name in model_names:
+                price = self._extract_model_price(portkey_data, model_name)
+                if price:
+                    prices[model_name] = price
+
+        prices.update(self._load_defaults())
+
+        return prices
+
+    # ── 公开 API ──
+
+    def fetch_pricing(self, currency: str = "USD") -> dict:
+        """获取价格数据，缓存优先"""
+        today = str(date.today())
+        now_iso = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        cache = self._load_cache()
+        if cache and cache.get(KEY_UPDATED) == today:
+            prices = dict(cache.get(KEY_PRICES, {}))
+            cached_update_time = cache.get(KEY_UPDATE_TIME, today)
+        else:
+            prices = self._scrape_pricing()
+
+            if cache:
+                for name, price in cache.get(KEY_PRICES, {}).items():
+                    if name not in prices:
+                        prices[name] = price
+
+            self._save_cache(
+                {
+                    KEY_PRICES: prices,
+                    KEY_UPDATED: today,
+                    KEY_UPDATE_TIME: now_iso,
+                }
+            )
+            cached_update_time = now_iso
+
+        if currency.upper() == "CNY":
+            prices = self._convert_to_cny(prices)
+            rate = self._fetch_exchange_rate()
+        else:
+            rate = None
+
+        return {
+            KEY_PRICES: prices,
+            KEY_UPDATED: today,
+            KEY_UPDATE_TIME: cached_update_time,
+            "currency": currency.upper(),
+            "exchange_rate": rate,
+            "source": "cached" if cache and cache.get(KEY_UPDATED) == today else "online",
+        }
+
+    def get_pricing(self, model_name: str) -> dict | None:
+        """获取单个模型价格"""
+        cache = self._load_cache()
+        if cache:
+            return cache.get(KEY_PRICES, {}).get(model_name)
+        return None
+
+    def start(self) -> None:
+        """启动后台定价刷新循环（每天早上 0 点自动刷新）"""
+
+        async def _loop():
+            refresh_interval = self._pricing_cfg("refresh_interval", DEFAULT_REFRESH_INTERVAL)
+            try:
+                self.fetch_pricing()
+                logger.info("[pricing] 预热完成，每天自动刷新")
+            except Exception as e:
+                logger.warning("[pricing] 预热失败: {}，使用默认价格", e)
+            while True:
+                await asyncio.sleep(refresh_interval)
+                try:
+                    self.fetch_pricing()
+                except Exception:
+                    logger.warning("[pricing] 自动刷新失败，下次重试")
+
+        self._loop_task = asyncio.create_task(_loop())
+
+    def stop(self) -> None:
+        """停止后台循环"""
+        if self._loop_task is not None:
+            self._loop_task.cancel()
+            self._loop_task = None

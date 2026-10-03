@@ -1,0 +1,65 @@
+[project]
+name = "flypig"
+version = "0.1.0"
+description = "FlyPig AI Agent - 终端+聊天 AI 助手"
+requires-python = ">=3.11"
+dependencies = [
+    "quart>=0.19.0",
+    "hypercorn>=0.17.0",
+    "httpx>=0.27.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "coverage>=7.0.0",
+    "ruff>=0.3.0",
+    "httpx>=0.27.0",
+]
+web = [
+    "quart>=0.19.0",
+    "hypercorn>=0.17.0",
+    "quart-cors>=0.7.0",
+]
+mcp = [
+    "mcp>=1.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/flypig"
+Documentation = "https://github.com/your-org/flypig#readme"
+Source = "https://github.com/your-org/flypig"
+
+[project.scripts]
+flypig = "flypig.__main__:main"
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["flypig*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "B", "UP", "SIM", "RUF100"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["flypig"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
