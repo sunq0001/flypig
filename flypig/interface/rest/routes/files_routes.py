@@ -7,17 +7,21 @@
 层&依赖：interface.rest.routes 层
 """
 
+import asyncio
 import re
 import sys
-from http import HTTPStatus
 from pathlib import Path
 
-from quart import Blueprint, jsonify, request, send_file
+from quart import Blueprint, Response, jsonify, request, send_file
 
 HTTP_BAD_REQUEST = 400
 HTTP_NOT_FOUND = 404
 HTTP_FORBIDDEN = 403
+HTTP_INTERNAL_SERVER_ERROR = 500
 PATH_KEY = "path"
+KEY_ERROR = "error"
+NODE_TYPE_DIRECTORY = "directory"
+NODE_TYPE_FILE = "file"
 
 # Windows 盘符正则: 匹配 "C:\..." 或 "C:/..."
 _WIN_DRIVE_RE = re.compile(r"^([A-Za-z]):[/\\]")
@@ -26,7 +30,7 @@ files_bp = Blueprint("files", __name__)
 
 
 def _to_wsl_path(p: str) -> str:
-    """转换路径格式：Windows 上保持原样，Linux/WSL 上将 C:\... 转为 /mnt/c/..."""
+    r"""转换路径格式：Windows 上保持原样，Linux/WSL 上将 C:\... 转为 /mnt/c/..."""
     if sys.platform == "win32":
         return p
     m = _WIN_DRIVE_RE.match(p)
@@ -40,16 +44,14 @@ def _resolve_path(path_str: str) -> Path:
     return Path(_to_wsl_path(path_str)).resolve()
 
 
-@files_bp.route("/api/tree", methods=["POST"])
-async def tree():
-    data = await request.get_json(force=True)
-    path_str = (data or {}).get(PATH_KEY, "")
-    if not path_str:
-        return jsonify({"error": "path required"}), HTTPStatus.BAD_REQUEST
+def _read_dir(p: Path) -> tuple[list[dict], int | None]:
+    """读取目录条目（同步，供 asyncio.to_thread 调用）
 
-    p = _resolve_path(path_str)
+    Returns:
+        (条目列表, 错误状态码或 None)
+    """
     if not p.exists() or not p.is_dir():
-        return jsonify({"error": "目录不存在", PATH_KEY: str(p)}), HTTPStatus.NOT_FOUND
+        return [], HTTP_NOT_FOUND
 
     entries = []
     try:
@@ -62,13 +64,29 @@ async def tree():
                     {
                         "name": entry.name,
                         PATH_KEY: str(entry.resolve()),
-                        "type": "directory" if is_dir else "file",
+                        "type": NODE_TYPE_DIRECTORY if is_dir else NODE_TYPE_FILE,
                     }
                 )
             except (PermissionError, OSError):
                 continue
     except PermissionError:
-        return jsonify({"error": "无权限访问", PATH_KEY: str(p)}), HTTP_FORBIDDEN
+        return [], HTTP_FORBIDDEN
+    return entries, None
+
+
+@files_bp.route("/api/tree", methods=["POST"])
+async def tree() -> tuple[Response, int] | Response:
+    data = await request.get_json(force=True)
+    path_str = (data or {}).get(PATH_KEY, "")
+    if not path_str:
+        return jsonify({KEY_ERROR: "path required"}), HTTP_BAD_REQUEST
+
+    p = _resolve_path(path_str)
+
+    # 文件系统操作扔到线程池，避免阻塞事件循环（尤其 WSL /mnt/ 跨系统访问）
+    entries, err_code = await asyncio.to_thread(_read_dir, p)
+    if err_code:
+        return jsonify({KEY_ERROR: "目录不存在"}), err_code
 
     return jsonify({PATH_KEY: str(p), "entries": entries})
 
@@ -76,32 +94,32 @@ async def tree():
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".svg", ".webp", ".ico", ".bmp"}
 
 
-async def _send_image(p: Path):
+async def _send_image(p: Path) -> Response | tuple[Response, int]:
     """发送图片文件（原始二进制，不走 JSON）"""
     try:
         return await send_file(str(p), mimetype=f"image/{p.suffix[1:].lower()}")
     except Exception:
-        return jsonify({"error": "读取图片失败"}), 500
+        return jsonify({KEY_ERROR: "读取图片失败"}), HTTP_INTERNAL_SERVER_ERROR
 
 
-async def _read_text_file(p: Path):
+async def _read_text_file(p: Path) -> Response | tuple[Response, int]:
     """读取文本文件内容，失败时返回错误信息"""
     try:
         content = p.read_text(encoding="utf-8", errors="replace")
         return jsonify({PATH_KEY: str(p), "name": p.name, "content": content})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return jsonify({KEY_ERROR: str(e)}), HTTP_INTERNAL_SERVER_ERROR
 
 
 @files_bp.route("/api/file", methods=["GET"])
-async def read_file():  # type: ignore[misc]
+async def read_file() -> Response | tuple[Response, int]:  # type: ignore[misc]
     file_path = request.args.get(PATH_KEY, "")
     if not file_path:
-        return jsonify({"error": "path required"}), HTTP_BAD_REQUEST
+        return jsonify({KEY_ERROR: "path required"}), HTTP_BAD_REQUEST
 
     p = _resolve_path(file_path)
     if not p.exists() or not p.is_file():
-        return jsonify({"error": "文件不存在", PATH_KEY: str(p)}), HTTP_NOT_FOUND
+        return jsonify({KEY_ERROR: "文件不存在", PATH_KEY: str(p)}), HTTP_NOT_FOUND
 
     if p.suffix.lower() in IMAGE_EXTENSIONS:
         return await _send_image(p)

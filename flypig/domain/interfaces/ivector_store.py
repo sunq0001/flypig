@@ -11,6 +11,9 @@ TODO: 骨架文件，待实现具体方法
 from abc import ABC, abstractmethod
 from typing import Any
 
+# ── 语义搜索默认返回条数 ──
+DEFAULT_TOP_K = 10
+
 
 class IVectorStore(ABC):
     """向量存储接口 — 向量嵌入的存取与搜索"""
@@ -19,4 +22,6 @@ class IVectorStore(ABC):
     async def upsert(self, vectors: list[dict[str, Any]]) -> None: ...
 
     @abstractmethod
-    async def search(self, query_vector: list[float], top_k: int = 10) -> list[dict[str, Any]]: ...
+    async def search(
+        self, query_vector: list[float], top_k: int = DEFAULT_TOP_K
+    ) -> list[dict[str, Any]]: ...

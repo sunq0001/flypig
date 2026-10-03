@@ -24,6 +24,8 @@ SSE_EVENT_TEXT_START = "text-start"
 SSE_EVENT_TEXT_DELTA = "text-delta"
 SSE_EVENT_TEXT_END = "text-end"
 SSE_EVENT_FINISH = "finish"
+SSE_EVENT_TOOL_CALL = "tool-call"
+SSE_EVENT_TOOL_RESULT = "tool-result"
 
 # ── 通用截断长度 ──
 ERROR_TRUNCATE_LENGTH = 200

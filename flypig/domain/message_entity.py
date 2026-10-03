@@ -3,12 +3,11 @@
 为什么做：对话中的每条消息需要唯一标识（MessageId + role + content + timestamp）。
 实现方法：Message(Entity) + MessageId(ValueObject)。
 
-TODO: 填充业务方法后移除 __init__ 中字段定义
-
 层&依赖：domain 层，依赖 shared
 """
 
 from datetime import datetime
+
 from flypig.shared.base import Entity, ValueObject
 
 
@@ -29,6 +28,10 @@ class MessageId(ValueObject):
     def __hash__(self) -> int:
         return hash(self._value)
 
+    def is_valid(self) -> bool:
+        """ID 非空且不含空白字符"""
+        return bool(self._value) and not any(c.isspace() for c in self._value)
+
 
 class Message(Entity):
     """消息实体 — 每条对话消息有唯一 ID"""
@@ -48,8 +51,8 @@ class Message(Entity):
         return self._content
 
     def edit_content(self, new_content: str) -> None:
-        """TODO: 编辑消息内容"""
-        ...
+        """编辑消息内容（保留原 ID 与角色）"""
+        self._content = new_content
 
     def is_from_user(self) -> bool:
         """TODO: 判断是否为用户消息"""

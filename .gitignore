@@ -60,3 +60,15 @@ api-test.json
 # Playwright MCP artifacts
 .playwright-cli/
 .playwright-mcp/
+
+# Debug logs, snapshots & backups
+.dev_logs/
+snapshot.txt
+*.bak
+
+# One-off debug scripts
+scripts/check_*.sh
+scripts/grep_watcher.sh
+scripts/test_watchdog.sh
+scripts/rerun.sh
+scripts/install_watchdog.sh

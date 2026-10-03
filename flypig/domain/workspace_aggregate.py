@@ -7,6 +7,7 @@
 """
 
 from pathlib import Path
+
 from flypig.shared.base import AggregateRoot
 
 

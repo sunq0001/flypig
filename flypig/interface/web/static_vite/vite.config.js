@@ -12,6 +12,7 @@ export default defineConfig({
   optimizeDeps: { include: ['@iconify/vue'] },
   server: {
     port: 5173,
+    watch: { usePolling: true, interval: 500 },
     strictPort: true,
     proxy: {
       '/api/chat': {
@@ -20,14 +21,24 @@ export default defineConfig({
         proxyTimeout: 0,
         timeout: 0,
         configure: (proxy) => {
-          proxy.on('proxyReq', (proxyReq) => {
+          proxy.on('proxyReq', (proxyReq, req) => {
             proxyReq.setHeader('Accept-Encoding', 'identity');
+            // 关掉 Nagle 算法：SSE 小包立即发送，不等攒满
+            proxyReq.setNoDelay(true);
           });
         },
       },
       '/api': {
         target: 'http://127.0.0.1:8320',
         changeOrigin: true,
+        proxyTimeout: 0,
+        timeout: 0,
+        configure: (proxy) => {
+          proxy.on('proxyReq', (proxyReq) => {
+            proxyReq.setHeader('Accept-Encoding', 'identity');
+            proxyReq.setNoDelay(true);
+          });
+        },
       },
       '/sse': {
         target: 'http://127.0.0.1:8320',

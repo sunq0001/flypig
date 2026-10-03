@@ -126,42 +126,46 @@ class OpenAIAdapter(IModel):
                 if delta.tool_calls:
                     has_tool_calls = True
                     for tc_delta in delta.tool_calls:
-                        idx = tc_delta.index
-                        if idx not in tool_calls_acc:
-                            tool_calls_acc[idx] = {
-                                "_id": "",
-                                "_name": "",
-                                "_args_str": "",
-                            }
-                        if tc_delta.id:
-                            tool_calls_acc[idx]["_id"] = tc_delta.id
-                        if tc_delta.function:
-                            if tc_delta.function.name:
-                                tool_calls_acc[idx]["_name"] = tc_delta.function.name
-                            if tc_delta.function.arguments:
-                                tool_calls_acc[idx]["_args_str"] += tc_delta.function.arguments
+                        self._accumulate_tool_call(tool_calls_acc, tc_delta)
 
             # 流结束，产出 tool_calls
             if has_tool_calls:
-                final_tool_calls = []
-                for idx in sorted(tool_calls_acc.keys()):
-                    acc = tool_calls_acc[idx]
-                    args_str = acc["_args_str"] or "{}"
-                    try:
-                        parsed_args = json.loads(args_str)
-                    except json.JSONDecodeError:
-                        parsed_args = {"_raw": args_str}
-                    final_tool_calls.append(
-                        {
-                            "id": acc["_id"],
-                            "name": acc["_name"],
-                            "arguments": parsed_args,
-                        }
-                    )
-                yield ChatChunk(tool_calls=final_tool_calls)
+                yield ChatChunk(tool_calls=self._build_tool_calls(tool_calls_acc))
 
         except Exception as e:
             raise ModelAPIError(f"{self._provider} API 调用失败: {e}") from e
+
+    @staticmethod
+    def _accumulate_tool_call(acc_map: dict[int, dict[str, Any]], tc_delta: Any) -> None:
+        """累积单个 tool_call 分片（OpenAI 按 index 分片下发）"""
+        acc = acc_map.setdefault(tc_delta.index, {"_id": "", "_name": "", "_args_str": ""})
+        if tc_delta.id:
+            acc["_id"] = tc_delta.id
+        if tc_delta.function:
+            if tc_delta.function.name:
+                acc["_name"] = tc_delta.function.name
+            if tc_delta.function.arguments:
+                acc["_args_str"] += tc_delta.function.arguments
+
+    @staticmethod
+    def _build_tool_calls(acc_map: dict[int, dict[str, Any]]) -> list[dict]:
+        """把累积的分片还原成 flat tool_calls 列表 {id, name, arguments}"""
+        final_tool_calls = []
+        for idx in sorted(acc_map.keys()):
+            acc = acc_map[idx]
+            args_str = acc["_args_str"] or "{}"
+            try:
+                parsed_args = json.loads(args_str)
+            except json.JSONDecodeError:
+                parsed_args = {"_raw": args_str}
+            final_tool_calls.append(
+                {
+                    "id": acc["_id"],
+                    "name": acc["_name"],
+                    "arguments": parsed_args,
+                }
+            )
+        return final_tool_calls
 
     def get_model_name(self) -> str:
         return self._model_name

@@ -14,11 +14,20 @@
 from __future__ import annotations
 
 import json
+from collections.abc import AsyncIterator
 
 from quart import Blueprint, Response, request
 
 from flypig.orchestration.tool_event_hub import get_hub
 from flypig.shared.constants import SSE_EVENT_TOOL_CALL, SSE_EVENT_TOOL_RESULT
+
+# ── 事件字典的字段名 ──
+_KEY_NAME = "name"
+_KEY_ARGS = "args"
+_KEY_PHASE = "phase"
+_KEY_RESULT = "result"
+_PHASE_CALL = "call"
+_PHASE_RESULT = "result"
 
 tool_events_bp = Blueprint("tool_events", __name__, url_prefix="/api")
 
@@ -30,24 +39,24 @@ async def chat_tool_events() -> Response:
     hub = get_hub()
     q = hub.get_or_create(session_id)
 
-    async def generate():
+    async def generate() -> AsyncIterator[str]:
         while True:
             event = await q.get()
             if event is None:
                 yield "data: [DONE]\n\n"
                 break
-            if event.get("phase") == "call":
+            if event.get(_KEY_PHASE) == _PHASE_CALL:
                 payload = {
                     "type": SSE_EVENT_TOOL_CALL,
-                    "name": event.get("name", ""),
-                    "args": event.get("args", {}),
+                    _KEY_NAME: event.get(_KEY_NAME, ""),
+                    _KEY_ARGS: event.get(_KEY_ARGS, {}),
                 }
-            elif event.get("phase") == "result":
+            elif event.get(_KEY_PHASE) == _PHASE_RESULT:
                 payload = {
                     "type": SSE_EVENT_TOOL_RESULT,
-                    "name": event.get("name", ""),
-                    "args": event.get("args", {}),
-                    "result": event.get("result", ""),
+                    _KEY_NAME: event.get(_KEY_NAME, ""),
+                    _KEY_ARGS: event.get(_KEY_ARGS, {}),
+                    _KEY_RESULT: event.get(_KEY_RESULT, ""),
                 }
             else:
                 continue

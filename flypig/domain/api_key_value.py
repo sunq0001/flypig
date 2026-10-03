@@ -8,6 +8,9 @@
 
 from flypig.shared.base import ValueObject
 
+# ── 掩码后保留的末尾可见字符数 ──
+_MASK_VISIBLE_TAIL = 4
+
 
 class ApiKey(ValueObject):
     """API Key 值对象"""
@@ -22,8 +25,10 @@ class ApiKey(ValueObject):
 
     @property
     def masked(self) -> str:
-        """返回掩码后的 Key（只显示末 4 位）"""
-        return f"{self._provider}:****{self._key[-4:]}" if len(self._key) > 4 else "****"
+        """返回掩码后的 Key（只显示末尾若干位）"""
+        if len(self._key) <= _MASK_VISIBLE_TAIL:
+            return "****"
+        return f"{self._provider}:****{self._key[-_MASK_VISIBLE_TAIL:]}"
 
     def is_valid_format(self) -> bool:
         """TODO: 验证 Key 格式是否合法"""

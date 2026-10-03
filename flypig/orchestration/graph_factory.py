@@ -26,16 +26,20 @@ from opentelemetry import trace as otel_trace
 
 from flypig.domain.agent.exec_node import execute_node as create_exec_node
 from flypig.domain.agent.nodes import chat_node as create_chat_node
-from flypig.domain.agent.router import router
+from flypig.domain.agent.router import NODE_END, NODE_EXECUTE, router
 from flypig.domain.agent_state import AgentState
 from flypig.domain.interfaces.imodel import IModel
 from flypig.domain.interfaces.itool_executor import IToolExecutor
+
+# ── LangGraph 节点名（终点/execute 与 domain.agent.router 保持一致）──
+CHAT_NODE = "chat"
 
 
 def build_graph(  # pyright: ignore[reportUnknownVariableType]
     model: IModel,
     tool_executor: IToolExecutor | None = None,
     on_token: Callable[[str], None] | None = None,
+    on_tool_event: Callable[[str, str, dict, str | None], None] | None = None,
 ) -> CompiledStateGraph:
     """构建并编译 LangGraph StateGraph
 
@@ -43,6 +47,7 @@ def build_graph(  # pyright: ignore[reportUnknownVariableType]
         model: 模型适配器实例
         tool_executor: 可选工具执行器（传入后启用 R2 条件路由）
         on_token: 可选 token 回调（用于 SSE 推流）
+        on_tool_event: 可选工具事件回调 (phase, name, args, result)
 
     Returns:
         编译后的可执行图
@@ -51,29 +56,29 @@ def build_graph(  # pyright: ignore[reportUnknownVariableType]
 
     # ── 注册节点 ──
     tool_schemas = tool_executor.get_schemas() if tool_executor else None
-    builder.add_node("chat", create_chat_node(model, on_token=on_token, tools=tool_schemas))
+    builder.add_node(CHAT_NODE, create_chat_node(model, on_token=on_token, tools=tool_schemas))
 
     # ── 流程编排 ──
-    builder.add_edge(START, "chat")
+    builder.add_edge(START, CHAT_NODE)
 
     if tool_executor:
         # R2: ReAct 循环（chat ⇄ execute → __end__）
         # 注入 tool schemas 使 LLM 感知可用工具并触发 tool_calls
-        builder.add_node("execute", create_exec_node(tool_executor))
+        builder.add_node(NODE_EXECUTE, create_exec_node(tool_executor, on_tool_event=on_tool_event))
         builder.add_conditional_edges(
-            "chat",
+            CHAT_NODE,
             router,
             {
-                "execute": "execute",
-                "__end__": "__end__",
+                NODE_EXECUTE: NODE_EXECUTE,
+                NODE_END: NODE_END,
             },
         )
-        builder.add_edge("execute", "chat")
+        builder.add_edge(NODE_EXECUTE, CHAT_NODE)
         n_tools = len(tool_schemas)
         _log.info("Graph 已编译: R2 ReAct 模式 (chat ⇄ execute, {} tools)", n_tools)
     else:
         # R1: 直接结束
-        builder.add_edge("chat", END)
+        builder.add_edge(CHAT_NODE, END)
         _log.info("Graph 已编译: R1 基础模式 (chat → END)")
 
     return builder.compile()
@@ -87,15 +92,22 @@ class GraphFactory:
         model: IModel,
         tool_executor: IToolExecutor | None = None,
         on_token: Callable[[str], None] | None = None,
+        on_tool_event: Callable[[str, str, dict, str | None], None] | None = None,
     ) -> None:
         self._model = model
         self._tool_executor = tool_executor
         self._on_token = on_token
+        self._on_tool_event = on_tool_event
         self._graphs: dict[str, Any] = {}
 
     def _build_graph(self) -> Any:
         """构建新的 StateGraph 实例"""
-        return build_graph(self._model, tool_executor=self._tool_executor, on_token=self._on_token)
+        return build_graph(
+            self._model,
+            tool_executor=self._tool_executor,
+            on_token=self._on_token,
+            on_tool_event=self._on_tool_event,
+        )
 
     def get_graph(self, session_id: str) -> Any:
         """获取（或创建）会话的编译图"""
@@ -112,7 +124,9 @@ class GraphFactory:
         graph = self.get_graph(session_id)
         _tracer = otel_trace.get_tracer(__name__)
 
-        _log.debug("[graph] 开始执行 (session={}, messages={})", session_id, len(state.get("messages", [])))
+        _log.debug(
+            "[graph] 开始执行 (session={}, messages={})", session_id, len(state.get("messages", []))
+        )
         t0 = time.monotonic()
 
         with _tracer.start_as_current_span("graph.invoke") as span:

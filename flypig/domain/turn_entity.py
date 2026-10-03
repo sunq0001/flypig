@@ -8,8 +8,8 @@ TODO: 填充业务方法后移除 __init__ 中的字段直接赋值
 层&依赖：domain 层，依赖 shared
 """
 
-from flypig.shared.base import Entity
 from flypig.domain.message_entity import MessageId
+from flypig.shared.base import Entity
 
 
 class Turn(Entity):

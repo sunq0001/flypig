@@ -7,6 +7,8 @@
 层&依赖：orchestration.dto 层
 """
 
+from __future__ import annotations
+
 import json
 from dataclasses import dataclass, field
 from typing import Any
@@ -39,21 +41,21 @@ class ChatResponse:
         return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     @classmethod
-    def text_delta(cls, content: str) -> "ChatResponse":
+    def text_delta(cls, content: str) -> ChatResponse:
         return cls(type="text-delta", content=content)
 
     @classmethod
-    def text_start(cls) -> "ChatResponse":
+    def text_start(cls) -> ChatResponse:
         return cls(type="text-start", content="")
 
     @classmethod
-    def text_end(cls) -> "ChatResponse":
+    def text_end(cls) -> ChatResponse:
         return cls(type="text-end", content="")
 
     @classmethod
-    def finish(cls) -> "ChatResponse":
+    def finish(cls) -> ChatResponse:
         return cls(type="finish")
 
     @classmethod
-    def error(cls, message: str) -> "ChatResponse":
+    def error(cls, message: str) -> ChatResponse:
         return cls(type="error", content=message)

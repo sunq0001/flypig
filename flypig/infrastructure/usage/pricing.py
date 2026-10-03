@@ -30,6 +30,15 @@ PORTKEY_REQUEST_TIMEOUT = 10
 DEFAULT_MODEL_PRICE = 7.2  # 默认 USD/CNY 汇率
 EXCHANGE_RATE_KEY = "rate"  # 汇率字典中的键名
 EXCHANGE_RATE_PRECISION = 4  # 汇率保留小数位数
+CNY_PRICE_PRECISION = 4  # 人民币价格保留小数位数
+
+# ── 价格数据的 JSON 字段键名 ──
+KEY_PRICES = "prices"
+KEY_UPDATED = "updated"
+KEY_UPDATE_TIME = "update_time"
+PRICE_INPUT = "input"
+PRICE_OUTPUT = "output"
+PRICE_INPUT_CACHE_HIT = "input_cache_hit"
 
 
 class PricingService:
@@ -108,9 +117,9 @@ class PricingService:
         converted = {}
         for name, p in prices.items():
             cp = {}
-            for key in ("input", "output", "input_cache_hit"):
+            for key in (PRICE_INPUT, PRICE_OUTPUT, PRICE_INPUT_CACHE_HIT):
                 val = p.get(key)
-                cp[key] = round(val * rate, 4) if val is not None else None
+                cp[key] = round(val * rate, CNY_PRICE_PRECISION) if val is not None else None
             converted[name] = cp
         return converted
 
@@ -147,12 +156,12 @@ class PricingService:
             return None
         result: dict[str, float] = {}
         if entry.input_price is not None:
-            result["input"] = entry.input_price
+            result[PRICE_INPUT] = entry.input_price
         if entry.output_price is not None:
-            result["output"] = entry.output_price
+            result[PRICE_OUTPUT] = entry.output_price
         if entry.input_cache_hit is not None:
-            result["input_cache_hit"] = entry.input_cache_hit
-        return result if "input" in result and "output" in result else None
+            result[PRICE_INPUT_CACHE_HIT] = entry.input_cache_hit
+        return result if PRICE_INPUT in result and PRICE_OUTPUT in result else None
 
     def _load_defaults(self) -> dict:
         defaults = {}
@@ -164,11 +173,11 @@ class PricingService:
                     entry = default_pricing_to_entry(pricing)
                     d: dict[str, float] = {}
                     if entry.input_price is not None:
-                        d["input"] = entry.input_price
+                        d[PRICE_INPUT] = entry.input_price
                     if entry.output_price is not None:
-                        d["output"] = entry.output_price
+                        d[PRICE_OUTPUT] = entry.output_price
                     if entry.input_cache_hit is not None:
-                        d["input_cache_hit"] = entry.input_cache_hit
+                        d[PRICE_INPUT_CACHE_HIT] = entry.input_cache_hit
                     defaults[name] = d
         return defaults
 
@@ -201,22 +210,22 @@ class PricingService:
         now_iso = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         cache = self._load_cache()
-        if cache and cache.get("updated") == today:
-            prices = dict(cache.get("prices", {}))
-            cached_update_time = cache.get("update_time", today)
+        if cache and cache.get(KEY_UPDATED) == today:
+            prices = dict(cache.get(KEY_PRICES, {}))
+            cached_update_time = cache.get(KEY_UPDATE_TIME, today)
         else:
             prices = self._scrape_pricing()
 
             if cache:
-                for name, price in cache.get("prices", {}).items():
+                for name, price in cache.get(KEY_PRICES, {}).items():
                     if name not in prices:
                         prices[name] = price
 
             self._save_cache(
                 {
-                    "prices": prices,
-                    "updated": today,
-                    "update_time": now_iso,
+                    KEY_PRICES: prices,
+                    KEY_UPDATED: today,
+                    KEY_UPDATE_TIME: now_iso,
                 }
             )
             cached_update_time = now_iso
@@ -228,19 +237,19 @@ class PricingService:
             rate = None
 
         return {
-            "prices": prices,
-            "updated": today,
-            "update_time": cached_update_time,
+            KEY_PRICES: prices,
+            KEY_UPDATED: today,
+            KEY_UPDATE_TIME: cached_update_time,
             "currency": currency.upper(),
             "exchange_rate": rate,
-            "source": "cached" if cache and cache.get("updated") == today else "online",
+            "source": "cached" if cache and cache.get(KEY_UPDATED) == today else "online",
         }
 
     def get_pricing(self, model_name: str) -> dict | None:
         """获取单个模型价格"""
         cache = self._load_cache()
         if cache:
-            return cache.get("prices", {}).get(model_name)
+            return cache.get(KEY_PRICES, {}).get(model_name)
         return None
 
     def start(self) -> None:

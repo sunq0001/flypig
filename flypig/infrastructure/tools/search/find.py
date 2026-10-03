@@ -12,6 +12,9 @@ from pathlib import Path
 
 from flypig.infrastructure.tools.registry import tool
 
+# 单次返回结果上限，避免刷屏
+_MAX_RESULTS = 50
+
 
 @tool(name="find_files", category="search", description="Find files by name pattern")
 class ToolFindFiles:
@@ -35,7 +38,7 @@ class ToolFindFiles:
             return "No files found"
 
         rels = []
-        for f in files[:50]:
+        for f in files[:_MAX_RESULTS]:
             if f.is_file():
                 try:
                     rels.append(str(f.relative_to(self.workspace_dir)))

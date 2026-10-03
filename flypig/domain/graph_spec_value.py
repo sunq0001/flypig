@@ -1,9 +1,11 @@
 """
 图谱规范值对象 — 描述知识图谱的结构
 
-TODO: 填充业务方法后移除 __init__ 中字段定义
-
-层&依赖：domain 层，依赖 shared
+为什么做：知识图谱的节点/边结构需要在领域层被显式描述与校验，
+        避免基础设施层直接暴露存储细节给上层。
+实现方法：GraphSpec 持有结构标识，validate()/to_dict()/from_dict()
+        负责自校验与序列化契约。
+层&依赖：domain 层（值对象），依赖 shared
 """
 
 from flypig.shared.base import ValueObject

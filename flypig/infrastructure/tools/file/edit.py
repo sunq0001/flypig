@@ -30,12 +30,22 @@ class ToolEdit:
         if not file_path.exists():
             return f"Error: File not found: {file_path}"
 
-        content = file_path.read_text(encoding="utf-8")
+        return self._replace_once(file_path, old_str, new_str)
+
+    def _replace_once(self, file_path: Path, old_str: str, new_str: str) -> str:
+        """读 → 校验 → 写，任一步失败返回错误文案"""
+        try:
+            content = file_path.read_text(encoding="utf-8")
+        except OSError as e:
+            return f"Error: Failed to read file: {e}"
+
         if old_str not in content:
             return "Error: String not found in file"
 
-        new_content = content.replace(old_str, new_str, 1)
-        file_path.write_text(new_content, encoding="utf-8")
+        try:
+            file_path.write_text(content.replace(old_str, new_str, 1), encoding="utf-8")
+        except OSError as e:
+            return f"Error: Failed to write file: {e}"
         return f"Successfully edited {file_path}"
 
     def _check_workspace(self) -> str | None:

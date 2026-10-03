@@ -42,9 +42,10 @@
  * @module 加载中
  * @description 加载中
  */
-import { ref, onMounted } from 'vue'
-import { useConfigStore } from './stores/config'
-import MainLayout from './components/layout/MainLayout.vue'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { useConfigStore } from './shared/stores/config'
+import { connectFileEvents, disconnectFileEvents } from './shared/stores/fileEvents'
+import MainLayout from './shared/layout/MainLayout.vue'
 
 const configStore = useConfigStore()
 const loading = ref(true)
@@ -76,6 +77,11 @@ function retry() {
 
 onMounted(() => {
   loadConfig()
+  connectFileEvents()
+})
+
+onUnmounted(() => {
+  disconnectFileEvents()
 })
 </script>
 

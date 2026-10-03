@@ -84,6 +84,15 @@ class ToolExecutionError(FlyPigException):
     code = "TOOL_EXEC_ERR"
 
 
+# ── MCP Gateway ───────────────────────────────────────────────────
+
+
+class MCPError(FlyPigException):
+    """MCP 网关错误：子进程启动失败 / 握手失败 / 进程未就绪"""
+
+    code = "MCP_ERR"
+
+
 # ── Sandbox ───────────────────────────────────────────────────────
 
 

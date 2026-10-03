@@ -12,4 +12,6 @@ from flypig.shared.base import DomainEvent
 class MessageSent(DomainEvent):
     """消息已发送事件"""
 
-    pass
+    def describe(self) -> str:
+        """返回可读事件摘要（日志/审计用）"""
+        return f"会话 {self.aggregate_id or '-'} 发出消息 @ {self.occurred_at:%H:%M:%S}"

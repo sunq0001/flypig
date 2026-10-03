@@ -24,12 +24,46 @@ from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
+_DEFAULT_OTLP_ENDPOINT = "http://localhost:4318/v1/traces"
+
+# ── 导出参数 ──
+# 关键：OTLPSpanExporter 内部用 requests.post()，默认 timeout 是无限。
+# collector 不可达时会阻塞 BatchSpanProcessor 的工作线程，
+# 队列满后开始阻塞主线程，导致所有经过 instrumentation 的请求卡死。
+# 因此用「1 秒超时 + 小队列 + 短导出间隔」让不可用场景快速失败。
+_OTLP_EXPORT_TIMEOUT_SEC = 1
+_OTLP_QUEUE_SIZE = 512
+_OTLP_SCHEDULE_DELAY_MS = 5000
+_OTLP_EXPORT_BATCH_SIZE = 32
+_OTLP_EXPORT_TIMEOUT_MS = 1000
+
 _tracer: trace.Tracer | None = None
 _initialized: bool = False
 
 
 def _is_enabled() -> bool:
     return os.getenv("FLYPIG_OTEL_ENABLED", "1") != "0"
+
+
+def _build_exporter(otlp_endpoint: str) -> OTLPSpanExporter:
+    """构建 OTLP HTTP exporter（秒级超时，collector 不可达时快速放弃）"""
+    return OTLPSpanExporter(endpoint=otlp_endpoint, timeout=_OTLP_EXPORT_TIMEOUT_SEC)
+
+
+def _build_provider(service_name: str, exporter: OTLPSpanExporter) -> TracerProvider:
+    """构建 TracerProvider 并挂载 BatchSpanProcessor"""
+    resource = Resource.create({SERVICE_NAME: service_name})
+    provider = TracerProvider(resource=resource)
+    provider.add_span_processor(
+        BatchSpanProcessor(
+            exporter,
+            max_queue_size=_OTLP_QUEUE_SIZE,
+            schedule_delay_millis=_OTLP_SCHEDULE_DELAY_MS,
+            max_export_batch_size=_OTLP_EXPORT_BATCH_SIZE,
+            export_timeout_millis=_OTLP_EXPORT_TIMEOUT_MS,
+        )
+    )
+    return provider
 
 
 def init_otel(service_name: str = "flypig") -> trace.Tracer:
@@ -57,20 +91,16 @@ def init_otel(service_name: str = "flypig") -> trace.Tracer:
         _tracer = trace.get_tracer(__name__)
         return _tracer
 
-    otlp_endpoint = os.getenv(
-        "OTEL_EXPORTER_OTLP_ENDPOINT",
-        "http://localhost:4318/v1/traces",
-    )
-
-    resource = Resource.create({SERVICE_NAME: service_name})
-    provider = TracerProvider(resource=resource)
-
-    exporter = OTLPSpanExporter(endpoint=otlp_endpoint)
-    provider.add_span_processor(BatchSpanProcessor(exporter))
+    otlp_endpoint = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", _DEFAULT_OTLP_ENDPOINT)
+    provider = _build_provider(service_name, _build_exporter(otlp_endpoint))
     trace.set_tracer_provider(provider)
 
     _tracer = trace.get_tracer(__name__)
-    _log.info("OTel 追踪已启用 -> {}", otlp_endpoint)
+    _log.info(
+        "OTel 追踪已启用 -> {} (timeout={}s, 防阻塞)",
+        otlp_endpoint,
+        _OTLP_EXPORT_TIMEOUT_SEC,
+    )
 
     return _tracer
 

@@ -26,8 +26,11 @@ class ToolWrite:
             return ws_msg
 
         file_path = self._resolve(path)
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-        file_path.write_text(content, encoding="utf-8")
+        try:
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            file_path.write_text(content, encoding="utf-8")
+        except OSError as e:
+            return f"Error: Failed to write file: {e}"
         return f"Successfully wrote to {file_path}"
 
     def _check_workspace(self) -> str | None:

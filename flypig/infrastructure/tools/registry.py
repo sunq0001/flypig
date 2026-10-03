@@ -13,11 +13,14 @@ from typing import Any
 
 _TOOL_REGISTRY: dict[str, type] = {}
 
+# ── 工具默认超时（秒）──
+_DEFAULT_TOOL_TIMEOUT = 30
+
 
 def tool(
     name: str | None = None,
     category: str = "system",
-    timeout: int = 30,
+    timeout: int = _DEFAULT_TOOL_TIMEOUT,
     description: str = "",
 ) -> Any:
     """装饰器：将工具类注册到全局注册表

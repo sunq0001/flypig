@@ -7,7 +7,8 @@
 """
 
 from flypig.infrastructure.tools.file.edit import ToolEdit
+from flypig.infrastructure.tools.file.tool_delete import ToolDelete
 from flypig.infrastructure.tools.file.tool_read import ToolRead
 from flypig.infrastructure.tools.file.tool_write import ToolWrite
 
-__all__ = ["ToolEdit", "ToolRead", "ToolWrite"]
+__all__ = ["ToolDelete", "ToolEdit", "ToolRead", "ToolWrite"]

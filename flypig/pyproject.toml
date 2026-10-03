@@ -10,6 +10,7 @@ dependencies = [
     "python-dotenv>=1.0.0,<2.0",
     "pydantic>=2.0.0,<3.0",
     "loguru>=0.7.0,<1.0",
+    "watchdog>=6.0.0,<7.0",
     "opentelemetry-api>=1.30,<2.0",
     "opentelemetry-sdk>=1.30,<2.0",
     "opentelemetry-exporter-otlp-proto-http>=1.30,<2.0",
@@ -102,5 +103,54 @@ ignore = [
     "ARG002",   # 未用函数参数 — stub 类按 DDD 接口声明签名
 ]
   
-[tool.import_linter]
+[tool.ruff.lint.per-file-ignores]
+# dev.py 是本地启动器脚本（非业务代码，项目规则要求不改动），豁免风格类规则：
+#   SIM105 contextlib.suppress / PLR2004 退出码字面量 / PLR1714 合并比较 / PLR0915 main 语句数
+"**/dev.py" = ["SIM105", "PLR2004", "PLR1714", "PLR0915"]
+
+[tool.importlinter]
+# 注意：import-linter 只识别 [tool.importlinter]（无下划线），
+# 写成 [tool.import_linter] 会导致 "Could not read any configuration"
 root_packages = ["flypig"]
+
+# ── 依赖方向守护：禁止内层反向依赖外层 ──
+# 依赖方向 domain ← application ← infrastructure ← interface
+# 契约与 scripts/architecture_check.py 的 LAYER_RULES 保持一致
+
+[[tool.importlinter.contracts]]
+name = "domain 层禁止依赖任何外层"
+type = "forbidden"
+source_modules = ["flypig.domain"]
+forbidden_modules = [
+    "flypig.infrastructure",
+    "flypig.interface",
+    "flypig.orchestration",
+    "flypig.bootstrap",
+    "flypig.acl",
+]
+
+[[tool.importlinter.contracts]]
+name = "orchestration 层禁止依赖 interface"
+type = "forbidden"
+source_modules = ["flypig.orchestration"]
+forbidden_modules = ["flypig.interface"]
+
+[[tool.importlinter.contracts]]
+name = "infrastructure 层禁止依赖 interface / orchestration"
+type = "forbidden"
+source_modules = ["flypig.infrastructure"]
+forbidden_modules = [
+    "flypig.interface",
+    "flypig.orchestration",
+]
+
+[[tool.importlinter.contracts]]
+name = "acl 防腐层禁止依赖内层实现（只允许 shared + domain）"
+type = "forbidden"
+source_modules = ["flypig.acl"]
+forbidden_modules = [
+    "flypig.infrastructure",
+    "flypig.interface",
+    "flypig.orchestration",
+    "flypig.bootstrap",
+]

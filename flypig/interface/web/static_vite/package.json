@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@ai-sdk/vue": "4.0.0-beta.183",
+    "@he-tree/vue3": "^1.2.9",
     "@iconify/vue": "^5.0.1",
+    "@rollup/rollup-linux-x64-gnu": "^4.62.2",
     "@tdesign-vue-next/chat": "^0.5.2",
     "monaco-editor": "^0.55.1",
     "monaco-editor-vue3": "^1.0.5",

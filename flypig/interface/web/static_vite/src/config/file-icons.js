@@ -1,4 +1,9 @@
-/** file-icons.js — 文件扩展名 → vscode-icons 图标名映射 */
+/**
+ * file-icons.js — 文件扩展名 → vscode-icons 图标名映射
+ *
+ * 数据与代码分离：图标映射表属于配置数据，统一放在 config/ 下维护，
+ * 文件树组件只通过 getFileIcon() 查询，不内嵌映射表。
+ */
 const iconMap = {
   js: 'vscode-icons:file-type-js', ts: 'vscode-icons:file-type-typescript',
   vue: 'vscode-icons:file-type-vue', py: 'vscode-icons:file-type-python',

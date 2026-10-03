@@ -17,40 +17,84 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
+from loguru import logger as _log
+
+from flypig.domain.agent.nodes import safe_node
 from flypig.domain.agent_state import AgentState
 from flypig.domain.interfaces.itool_executor import IToolExecutor
+from flypig.shared.constants import ERROR_TRUNCATE_LENGTH
+
+# ── AgentState / 消息字典的字段名 ──
+KEY_MESSAGES = "messages"
+KEY_TOOL_CALLS = "tool_calls"
+KEY_TURN_ID = "turn_id"
 
 
-def execute_node(tool_executor: IToolExecutor):
-    """创建工具执行节点
+def execute_node(
+    tool_executor: IToolExecutor,
+    on_tool_event: Callable[[str, str, dict, str | None], None] | None = None,
+) -> Callable:
+    """创建工具执行节点（safe_node 包裹）
 
     Args:
         tool_executor: 工具执行器实例
+        on_tool_event: 可选回调，每次工具调用 call/result 时触发
+                       (phase, name, args, result_or_None)
 
     Returns:
         safe_node 包裹的异步节点函数
     """
+    return safe_node(
+        _build_execute(tool_executor, on_tool_event),
+        node_name="execute",
+    )
+
+
+def _build_execute(
+    tool_executor: IToolExecutor,
+    on_tool_event: Callable[[str, str, dict, str | None], None] | None,
+) -> Callable:
+    """构建 execute 节点的原始异步函数（异常由 safe_node 兜底）"""
 
     async def _execute(state: AgentState) -> AgentState:
-        messages = list(state.get("messages", []))
+        messages = list(state.get(KEY_MESSAGES, []))
         last = messages[-1] if messages else {}
 
-        tool_calls = last.get("tool_calls", [])
+        tool_calls = last.get(KEY_TOOL_CALLS, [])
         if not tool_calls:
-            return {**state, "messages": messages, "turn_id": state.get("turn_id", 0) + 1}
+            return {**state, KEY_MESSAGES: messages, KEY_TURN_ID: state.get(KEY_TURN_ID, 0) + 1}
 
         for tc in tool_calls:
             name = tc.get("name", "")
             args = tc.get("arguments", {})
+
+            if on_tool_event:
+                on_tool_event("call", name, args, None)
+
             tool_call_id = tc.get("id", "")
-            result = await tool_executor.execute(name, args)
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call_id,
-                "content": str(result),
-            })
-        return {**state, "messages": messages, "turn_id": state.get("turn_id", 0) + 1}
+            try:
+                result = await tool_executor.execute(name, args)
+            except Exception as e:
+                # 记录后继续抛出，交由 safe_node 兜底（行为与改造前一致）
+                _log.exception(
+                    "[execute] 工具 {} 执行失败: {}",
+                    name,
+                    str(e)[:ERROR_TRUNCATE_LENGTH],
+                )
+                raise
 
-    from flypig.domain.agent.nodes import safe_node
+            if on_tool_event:
+                on_tool_event("result", name, args, str(result))
 
-    return safe_node(_execute, node_name="execute")
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tool_call_id,
+                    "content": str(result),
+                }
+            )
+        return {**state, KEY_MESSAGES: messages, KEY_TURN_ID: state.get(KEY_TURN_ID, 0) + 1}
+
+    return _execute

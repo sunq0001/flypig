@@ -19,6 +19,27 @@ from flypig.domain.agent_state import AgentState
 # 最大对话轮次，超过强制结束防止死循环
 _MAX_TURNS = 25
 
+# ── 路由终点 / 节点名 ──
+NODE_END = "__end__"
+NODE_EXECUTE = "execute"
+NODE_APPROVAL = "approval"
+
+
+def _route_by_last_message(state: AgentState, last_msg: dict) -> str:
+    """按最后一条消息决定路由（R2 / R2+ / R1 三种情况）"""
+    tool_calls = last_msg.get("tool_calls")
+    if tool_calls:
+        names = [tc.get("name", "?") for tc in tool_calls]
+        _log.debug("[router] 检测到 tool_calls: {} -> execute", names)
+        return NODE_EXECUTE
+
+    if state.get("pending_approval"):
+        _log.debug("[router] 有待审批 -> approval")
+        return NODE_APPROVAL
+
+    _log.debug("[router] 无 tool_calls -> END")
+    return NODE_END
+
 
 def router(state: AgentState) -> str:
     """条件路由：根据 AgentState 决定下一步
@@ -39,27 +60,11 @@ def router(state: AgentState) -> str:
     turn_id = state.get("turn_id", 0)
     if turn_id >= _MAX_TURNS:
         _log.warning("[router] 达到最大轮次 {} -> END", turn_id)
-        return "__end__"
+        return NODE_END
 
     messages = state.get("messages", [])
     if not messages:
         _log.debug("[router] 无消息 -> END")
-        return "__end__"
+        return NODE_END
 
-    last_msg = messages[-1]
-
-    # R2: AI 请求调工具
-    tool_calls = last_msg.get("tool_calls")
-    if tool_calls:
-        names = [tc.get("name", "?") for tc in tool_calls]
-        _log.debug("[router] 检测到 tool_calls: {} -> execute", names)
-        return "execute"
-
-    # R2+: 有待审批请求
-    if state.get("pending_approval"):
-        _log.debug("[router] 有待审批 -> approval")
-        return "approval"
-
-    # R1: 默认结束
-    _log.debug("[router] 无 tool_calls -> END")
-    return "__end__"
+    return _route_by_last_message(state, messages[-1])

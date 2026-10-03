@@ -13,6 +13,9 @@ from pathlib import Path
 
 from flypig.infrastructure.tools.registry import tool
 
+# 单次读取字符上限，防止超大文件撑爆 token
+_MAX_READ_CHARS = 50000
+
 
 @tool(name="read_file", category="file", description="Read file content, optionally by line range")
 class ToolRead:
@@ -26,7 +29,7 @@ class ToolRead:
         path: str,
         start: int | None = None,
         end: int | None = None,
-        max_chars: int = 50000,
+        max_chars: int = _MAX_READ_CHARS,
     ) -> str:
         ws_msg = self._check_workspace()
         if ws_msg:
@@ -36,7 +39,10 @@ class ToolRead:
         if not file_path.exists():
             return f"Error: File not found: {file_path}"
 
-        content = file_path.read_text(encoding="utf-8")
+        try:
+            content = file_path.read_text(encoding="utf-8")
+        except OSError as e:
+            return f"Error: Failed to read file: {e}"
 
         if start is not None:
             lines = content.splitlines(keepends=True)

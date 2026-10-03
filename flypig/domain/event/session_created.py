@@ -13,4 +13,6 @@ from flypig.shared.base import DomainEvent
 class SessionCreated(DomainEvent):
     """会话已创建事件"""
 
-    pass
+    def describe(self) -> str:
+        """返回可读事件摘要（日志/审计用）"""
+        return f"会话 {self.aggregate_id or '-'} 已创建 @ {self.occurred_at:%H:%M:%S}"

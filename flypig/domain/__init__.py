@@ -8,7 +8,6 @@
 """
 
 from flypig.domain.agent_state import AgentState
-from flypig.domain.agent_state import AgentState
 from flypig.domain.api_key_value import ApiKey
 from flypig.domain.change_review_entity import ChangeReview
 from flypig.domain.change_score_value import ChangeLevel, ChangeScore
@@ -19,6 +18,7 @@ from flypig.domain.exceptions import (
     DomainError,
     FlyPigException,
     InvalidTurnError,
+    MCPError,
     MessageValidationError,
     ModelAPIError,
     SandboxError,
@@ -28,8 +28,8 @@ from flypig.domain.exceptions import (
 from flypig.domain.graph_spec_value import GraphSpec
 from flypig.domain.mcp_server_value import McpServer
 from flypig.domain.message_entity import Message, MessageId
-from flypig.domain.mode_value import ExecutionMode, ModeConfig
 from flypig.domain.mode_matrix_value import ModeMatrix
+from flypig.domain.mode_value import ExecutionMode, ModeConfig
 from flypig.domain.persona_value import Persona
 from flypig.domain.pricing_entry_value import PricingEntry
 from flypig.domain.registry import ModelRegistry
@@ -54,6 +54,7 @@ __all__ = [
     "FlyPigException",
     "GraphSpec",
     "InvalidTurnError",
+    "MCPError",
     "McpServer",
     "Message",
     "MessageId",
@@ -69,6 +70,7 @@ __all__ = [
     "SessionClosedError",
     "SessionId",
     "SessionStatus",
+    "SuggestionCard",
     "TaskItem",
     "ToolCall",
     "ToolDef",

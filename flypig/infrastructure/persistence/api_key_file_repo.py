@@ -17,6 +17,9 @@ from pathlib import Path
 
 from flypig.domain.interfaces.iapikey_repository import IApiKeyRepository
 
+# JSON 缩进宽度
+_JSON_INDENT = 2
+
 
 def _get_keys_path() -> Path:
     """默认 API Key 文件路径：flypig/data/api_keys.json"""
@@ -64,4 +67,4 @@ class ApiKeyFileRepository(IApiKeyRepository):
         keys = self.load_all()
         keys[provider] = api_key
         with open(self._path, "w", encoding="utf-8") as f:
-            json.dump(keys, f, ensure_ascii=False, indent=2)
+            json.dump(keys, f, ensure_ascii=False, indent=_JSON_INDENT)

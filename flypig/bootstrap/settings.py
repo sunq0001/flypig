@@ -16,6 +16,7 @@ from typing import Any
 import yaml
 from pydantic_settings import BaseSettings  # noqa: F401 保持依赖
 
+from flypig.infrastructure.persistence.api_key_file_repo import load_api_keys_from_file
 from flypig.shared.settings import AppSettings
 
 
@@ -43,9 +44,8 @@ def _load_json_config(section: str, sub_key: str | None = None, default: Any = N
     section_data = data.get(section)
     if section_data is None:
         return default
-    if sub_key is None:
-        return section_data
-    return section_data.get(sub_key, default)
+    # sub_key 为 None → 返回整个段；否则取段内子键
+    return section_data if sub_key is None else section_data.get(sub_key, default)
 
 
 def _apply_yaml_llm(settings: AppSettings, data: dict) -> None:
@@ -98,8 +98,6 @@ def _load_persisted_api_keys(settings: AppSettings) -> None:
     委托给 infrastructure.persistence.api_key_file_repo 的公共函数，
     自身不实现任何文件读/写逻辑。
     """
-    from flypig.infrastructure.persistence.api_key_file_repo import load_api_keys_from_file
-
     keys = load_api_keys_from_file()
     if not keys:
         return

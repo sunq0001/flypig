@@ -1,4 +1,9 @@
-/** editor-languages.js — 文件扩展名 → Monaco Editor language ID 映射 */
+/**
+ * editor-languages.js — 文件扩展名 → Monaco Editor language ID 映射
+ *
+ * 数据与代码分离：映射表属于配置数据，统一放在 config/ 下维护，
+ * 编辑器组件只通过 getLanguage() 查询，不内嵌映射表。
+ */
 const langMap = {
   js: 'javascript', ts: 'typescript', jsx: 'javascript', tsx: 'typescript',
   vue: 'html', py: 'python', json: 'json', md: 'markdown',

@@ -7,9 +7,14 @@
 层&依赖：acl 层
 """
 
+from flypig.acl.llm_api import probe_chat_completion
+from flypig.acl.ollama import fetch_tag_names, probe
 from flypig.acl.pricing import default_pricing_to_entry, portkey_to_pricing_entry
 
 __all__ = [
     "default_pricing_to_entry",
+    "fetch_tag_names",
     "portkey_to_pricing_entry",
+    "probe",
+    "probe_chat_completion",
 ]

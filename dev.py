@@ -20,6 +20,10 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 ROOT = Path(__file__).parent
 PYTHON = sys.executable
 
+# 查找可用的 Linux Node.js（优先 nvm，Windows node 在 WSL 里跑会走错 localhost）
+_NVM_NODE = Path.home() / ".nvm/versions/node/v22.23.1/bin/node"
+NODE = str(_NVM_NODE) if _NVM_NODE.exists() else "node"
+
 _LOG_DIR = ROOT / ".dev_logs"
 _LOG_DIR.mkdir(exist_ok=True)
 
@@ -28,13 +32,13 @@ SERVICES = [
     (
         "chat",
         "聊天 :8321",
-        "node server.js",
+        f"{NODE} server.js",
         ROOT / "flypig" / "interface" / "chat-server",
     ),
     (
         "front",
         "前端 :5173",
-        "node node_modules/vite/bin/vite.js --host --force",
+        f"{NODE} node_modules/vite/bin/vite.js --host --force",
         ROOT / "flypig" / "interface" / "web" / "static_vite",
     ),
     ("docs", "文档 :8765", f"{PYTHON} docs/serve_docs.py --port 8765 --watch", ROOT),

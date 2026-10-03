@@ -15,8 +15,20 @@ import inspect
 from pathlib import Path
 from typing import Any
 
+# 导入各工具子包，触发 @tool 装饰器注册（副作用导入）
+import flypig.infrastructure.tools.file
+import flypig.infrastructure.tools.review
+import flypig.infrastructure.tools.search
+import flypig.infrastructure.tools.system  # noqa: F401
 from flypig.domain.interfaces.itool_executor import IToolExecutor
 from flypig.infrastructure.tools.registry import get_registry
+
+# ── JSON Schema 字段 / 类型常量 ──
+_KEY_TYPE = "type"
+_TYPE_STRING = {_KEY_TYPE: "string"}
+_TYPE_INTEGER = {_KEY_TYPE: "integer"}
+_TYPE_NUMBER = {_KEY_TYPE: "number"}
+_TYPE_BOOLEAN = {_KEY_TYPE: "boolean"}
 
 
 class ToolExecutor(IToolExecutor):
@@ -30,11 +42,6 @@ class ToolExecutor(IToolExecutor):
 
     def load_all(self) -> None:
         """从注册表实例化所有工具（含 MCP 网关发现的工具）"""
-        import flypig.infrastructure.tools.file as _file_import  # noqa: F401
-        import flypig.infrastructure.tools.review as _review_import  # noqa: F401
-        import flypig.infrastructure.tools.search as _search_import  # noqa: F401
-        import flypig.infrastructure.tools.system as _system_import  # noqa: F401
-
         registry = get_registry()
         for name, cls in registry.items():
             if name not in self._instances:
@@ -73,12 +80,12 @@ class ToolExecutor(IToolExecutor):
 
             schemas.append(
                 {
-                    "type": "function",
+                    _KEY_TYPE: "function",
                     "function": {
                         "name": name,
                         "description": meta.get("description", ""),
                         "parameters": {
-                            "type": "object",
+                            _KEY_TYPE: "object",
                             "properties": properties,
                             "required": required,
                         },
@@ -92,17 +99,17 @@ class ToolExecutor(IToolExecutor):
         """参数 → JSON Schema 类型映射"""
         hint = param.annotation if param.annotation is not inspect.Parameter.empty else str
         type_map = {
-            str: {"type": "string"},
-            int: {"type": "integer"},
-            float: {"type": "number"},
-            bool: {"type": "boolean"},
+            str: _TYPE_STRING,
+            int: _TYPE_INTEGER,
+            float: _TYPE_NUMBER,
+            bool: _TYPE_BOOLEAN,
         }
         if hint in type_map:
-            return type_map[hint]
+            return dict(type_map[hint])
 
         # bool 是 int 的子类，需在 int 之前判断
         origin = getattr(hint, "__origin__", None)
         if origin is not None:
-            return {"type": "string"}  # Union/Optional → string fallback
+            return dict(_TYPE_STRING)  # Union/Optional → string fallback
 
-        return {"type": "string"}
+        return dict(_TYPE_STRING)

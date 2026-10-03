@@ -7,7 +7,7 @@
 
 from typing import Any
 
-from flypig.domain.interfaces.ivector_store import IVectorStore
+from flypig.domain.interfaces.ivector_store import DEFAULT_TOP_K, IVectorStore
 
 
 class VectorStore(IVectorStore):
@@ -16,5 +16,7 @@ class VectorStore(IVectorStore):
     async def upsert(self, vectors: list[dict[str, Any]]) -> None:
         pass
 
-    async def search(self, query_vector: list[float], top_k: int = 10) -> list[dict[str, Any]]:
+    async def search(
+        self, query_vector: list[float], top_k: int = DEFAULT_TOP_K
+    ) -> list[dict[str, Any]]:
         return []

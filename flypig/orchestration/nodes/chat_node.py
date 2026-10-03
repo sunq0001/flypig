@@ -21,7 +21,10 @@ from flypig.domain.interfaces.imodel import IModel
 from flypig.shared.constants import ERROR_TRUNCATE_LENGTH as TRUNCATE_LENGTH
 
 _KEY_MESSAGES = "messages"
+_KEY_TURN_ID = "turn_id"
+_KEY_CONTENT = "content"
 _ROLE_KEY = "role"
+_ROLE_ASSISTANT = "assistant"
 
 
 def _extract_text(msg: dict) -> str:
@@ -30,18 +33,15 @@ def _extract_text(msg: dict) -> str:
     AI SDK v4 useChat 发送: {"parts":[{"type":"text","text":"..."}],"role":"user"}
     OpenAI 标准格式: {"role":"user","content":"..."}
     """
-    if msg.get("content"):
-        return msg["content"]
+    if msg.get(_KEY_CONTENT):
+        return msg[_KEY_CONTENT]
     parts = msg.get("parts", [])
     return "".join(p.get("text", "") for p in parts if p.get("type") == "text")
 
 
 def _normalize_for_llm(messages: list[dict]) -> list[dict]:
     """将消息统一为 LLM 可读的 content 格式"""
-    return [
-        {"role": m.get("role", "user"), "content": _extract_text(m)}
-        for m in messages
-    ]
+    return [{_ROLE_KEY: m.get(_ROLE_KEY, "user"), _KEY_CONTENT: _extract_text(m)} for m in messages]
 
 
 def chat_node(model: IModel) -> callable:
@@ -64,17 +64,17 @@ def chat_node(model: IModel) -> callable:
                 response_content += token
 
             new_messages = list(messages)
-            new_messages.append({"role": "assistant", "content": response_content})
+            new_messages.append({_ROLE_KEY: _ROLE_ASSISTANT, _KEY_CONTENT: response_content})
 
             return {
                 _KEY_MESSAGES: new_messages,
-                "turn_id": state.get("turn_id", 0) + 1,
+                _KEY_TURN_ID: state.get(_KEY_TURN_ID, 0) + 1,
             }
         except ModelAPIError:
             return {
                 _KEY_MESSAGES: [
                     *messages,
-                    {_ROLE_KEY: "assistant", "content": "模型服务暂不可用，请稍后重试"},
+                    {_ROLE_KEY: _ROLE_ASSISTANT, _KEY_CONTENT: "模型服务暂不可用，请稍后重试"},
                 ],
                 "error": "model_api_error",
             }
@@ -82,7 +82,10 @@ def chat_node(model: IModel) -> callable:
             return {
                 _KEY_MESSAGES: [
                     *messages,
-                    {_ROLE_KEY: "assistant", "content": f"处理出错: {str(e)[:TRUNCATE_LENGTH]}"},
+                    {
+                        _ROLE_KEY: _ROLE_ASSISTANT,
+                        _KEY_CONTENT: f"处理出错: {str(e)[:TRUNCATE_LENGTH]}",
+                    },
                 ],
                 "error": str(e),
             }

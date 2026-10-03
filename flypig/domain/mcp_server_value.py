@@ -1,9 +1,11 @@
 """
 MCP 服务器值对象 — MCP 协议的服务端配置
 
-TODO: 填充业务方法后移除 __init__ 中字段定义
-
-层&依赖：domain 层，依赖 shared
+为什么做：外部 MCP 服务器的连接信息与工具清单属于领域概念，
+        需要统一建模，避免各处裸字典传递。
+实现方法：McpServer 持有服务器标识，暴露 is_connected()/list_tools()/call_tool()
+        表达领域语义，具体协议实现交给 infrastructure 的 ACL。
+层&依赖：domain 层（值对象），依赖 shared
 """
 
 from flypig.shared.base import ValueObject

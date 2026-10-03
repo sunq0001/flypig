@@ -13,7 +13,7 @@ test_chat_response
 
 import json
 
-from flypig.application.dto.chat_response import ChatResponse
+from flypig.orchestration.dto.chat_response import ChatResponse
 
 
 class TestChatResponseFactory:

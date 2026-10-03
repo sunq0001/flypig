@@ -8,6 +8,9 @@
 
 from flypig.shared.base import Entity
 
+# 审查通过的最低评分
+_APPROVAL_THRESHOLD = 0.7
+
 
 class ChangeReview(Entity):
     """代码审查实体 — AI 对变更的审查结果"""
@@ -23,7 +26,7 @@ class ChangeReview(Entity):
 
     def is_approved(self) -> bool:
         """TODO: 判断审查是否通过"""
-        return self._score >= 0.7
+        return self._score >= _APPROVAL_THRESHOLD
 
     def to_suggestion_card(self) -> dict:
         """TODO: 转换为前端建议卡片格式"""

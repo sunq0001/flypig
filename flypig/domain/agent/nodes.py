@@ -28,6 +28,15 @@ from loguru import logger as _log
 from flypig.domain.agent_state import AgentState
 from flypig.domain.exceptions import ModelAPIError
 from flypig.domain.interfaces.imodel import IModel
+from flypig.shared.constants import ERROR_TRUNCATE_LENGTH
+
+# ── AgentState / 消息字典的字段名 ──
+KEY_MESSAGES = "messages"
+KEY_TURN_ID = "turn_id"
+KEY_CONTENT = "content"
+KEY_ROLE = "role"
+KEY_ASSISTANT = "assistant"
+KEY_TOOL_CALLS = "tool_calls"
 
 
 def safe_node(node_func: Callable, node_name: str = "unknown") -> Callable:
@@ -42,14 +51,19 @@ def safe_node(node_func: Callable, node_name: str = "unknown") -> Callable:
 
     @functools.wraps(node_func)
     async def wrapper(state: AgentState) -> AgentState:
-        turn = state.get("turn_id", 0)
+        turn = state.get(KEY_TURN_ID, 0)
         _log.debug("[{}] 进入 (turn={})", node_name, turn)
 
         t0 = time.monotonic()
         try:
             result = await node_func(state)
             elapsed = time.monotonic() - t0
-            _log.debug("[{}] 完成 (耗时={:.2f}s, turn={})", node_name, elapsed, result.get("turn_id", turn))
+            _log.debug(
+                "[{}] 完成 (耗时={:.2f}s, turn={})",
+                node_name,
+                elapsed,
+                result.get(KEY_TURN_ID, turn),
+            )
             return result
         except Exception as e:
             elapsed = time.monotonic() - t0
@@ -57,20 +71,20 @@ def safe_node(node_func: Callable, node_name: str = "unknown") -> Callable:
                 "[{}] 节点异常 (耗时={:.2f}s): {}",
                 node_name,
                 elapsed,
-                str(e)[:200],
+                str(e)[:ERROR_TRUNCATE_LENGTH],
             )
-            err_msg = str(e)[:200]
-            new_msgs = list(state.get("messages", []))
+            err_msg = str(e)[:ERROR_TRUNCATE_LENGTH]
+            new_msgs = list(state.get(KEY_MESSAGES, []))
             new_msgs.append(
                 {
-                    "role": "assistant",
-                    "content": f"处理出错: {err_msg}",
+                    KEY_ROLE: KEY_ASSISTANT,
+                    KEY_CONTENT: f"处理出错: {err_msg}",
                 }
             )
             return {
                 **state,
-                "messages": new_msgs,
-                "turn_id": turn + 1,
+                KEY_MESSAGES: new_msgs,
+                KEY_TURN_ID: turn + 1,
             }
 
     return wrapper
@@ -81,8 +95,8 @@ def _extract_text_for_llm(msg: dict) -> str:
 
     前端 @ai-sdk/vue useChat 发送 parts 格式，LLM 需要 content 格式。
     """
-    if msg.get("content"):
-        return msg["content"]
+    if msg.get(KEY_CONTENT):
+        return msg[KEY_CONTENT]
     parts = msg.get("parts", [])
     return "".join(p.get("text", "") for p in parts if p.get("type") == "text")
 
@@ -97,11 +111,11 @@ def _normalize_for_llm(messages: list[dict]) -> list[dict]:
     """
     out: list[dict] = []
     for m in messages:
-        role = m.get("role", "user")
-        nm: dict[str, Any] = {"role": role, "content": _extract_text_for_llm(m)}
-        tcs = m.get("tool_calls")
+        role = m.get(KEY_ROLE, "user")
+        nm: dict[str, Any] = {KEY_ROLE: role, KEY_CONTENT: _extract_text_for_llm(m)}
+        tcs = m.get(KEY_TOOL_CALLS)
         if tcs:
-            nm["tool_calls"] = [
+            nm[KEY_TOOL_CALLS] = [
                 {
                     "id": tc.get("id", ""),
                     "type": "function",
@@ -116,6 +130,91 @@ def _normalize_for_llm(messages: list[dict]) -> list[dict]:
             nm["tool_call_id"] = m.get("tool_call_id", "")
         out.append(nm)
     return out
+
+
+async def stream_llm_with_tools(
+    model: IModel,
+    llm_messages: list[dict],
+    tools: list[dict],
+    on_token: Callable[[str], None] | None,
+) -> tuple[str, int, list[dict]]:
+    """流式消费带工具调用的模型响应
+
+    Returns:
+        (全文, token 数, tool_calls)
+    """
+    full_response = ""
+    token_count = 0
+    tool_calls: list[dict] = []
+    async for chunk in model.stream_with_tools(llm_messages, tools=tools):  # pyright: ignore[reportGeneralTypeIssues]
+        if chunk.text:
+            full_response += chunk.text
+            token_count += 1
+            if on_token:
+                on_token(chunk.text)
+        if chunk.tool_calls:
+            tool_calls = chunk.tool_calls
+    return full_response, token_count, tool_calls
+
+
+async def stream_llm_text(
+    model: IModel,
+    llm_messages: list[dict],
+    on_token: Callable[[str], None] | None,
+) -> tuple[str, int]:
+    """流式消费纯文本模型响应
+
+    Returns:
+        (全文, token 数)
+    """
+    full_response = ""
+    token_count = 0
+    async for token in model.stream(llm_messages):  # pyright: ignore[reportGeneralTypeIssues]
+        if token:
+            full_response += token
+            token_count += 1
+            if on_token:
+                on_token(token)
+    return full_response, token_count
+
+
+def _api_error_state(
+    state: AgentState,
+    messages: list[dict],
+    err_msg: str,
+    on_token: Callable[[str], None] | None,
+) -> AgentState:
+    """模型 API 错误：把错误文本作为 assistant 消息写回 state"""
+    _log.warning("[chat] 模型 API 错误: {}", err_msg)
+    if on_token:
+        on_token(err_msg)
+    new_messages = list(messages)
+    new_messages.append({KEY_ROLE: KEY_ASSISTANT, KEY_CONTENT: err_msg})
+    return {
+        **state,
+        KEY_MESSAGES: new_messages,
+        KEY_TURN_ID: state.get(KEY_TURN_ID, 0) + 1,
+    }
+
+
+def _success_state(
+    state: AgentState,
+    messages: list[dict],
+    full_response: str,
+    tool_calls: list[dict],
+) -> AgentState:
+    """模型正常返回：追加 assistant 消息（含 tool_calls 时写回 flat 格式）"""
+    new_messages = list(messages)
+    assistant_msg: dict[str, Any] = {KEY_ROLE: KEY_ASSISTANT, KEY_CONTENT: full_response}
+    if tool_calls:
+        # 写回 flat 格式 {id, name, arguments(dict)}，供 router 检测、exec_node 执行
+        assistant_msg[KEY_TOOL_CALLS] = tool_calls
+    new_messages.append(assistant_msg)
+    return {
+        **state,
+        KEY_MESSAGES: new_messages,
+        KEY_TURN_ID: state.get(KEY_TURN_ID, 0) + 1,
+    }
 
 
 def chat_node(
@@ -137,44 +236,22 @@ def chat_node(
     """
 
     async def _chat(state: AgentState) -> AgentState:
-        messages = state["messages"]
+        messages = state[KEY_MESSAGES]
         llm_messages = _normalize_for_llm(messages)
-        full_response = ""
-        token_count = 0
-        tool_calls: list[dict] = []
 
         _log.debug("[chat] 调用 LLM, 消息数={}, 工具={}", len(llm_messages), bool(tools))
         t0 = time.monotonic()
 
         try:
             if tools:
-                async for chunk in model.stream_with_tools(llm_messages, tools=tools):  # pyright: ignore[reportGeneralTypeIssues]
-                    if chunk.text:
-                        full_response += chunk.text
-                        token_count += 1
-                        if on_token:
-                            on_token(chunk.text)
-                    if chunk.tool_calls:
-                        tool_calls = chunk.tool_calls
+                full_response, token_count, tool_calls = await stream_llm_with_tools(
+                    model, llm_messages, tools, on_token
+                )
             else:
-                async for token in model.stream(llm_messages):  # pyright: ignore[reportGeneralTypeIssues]
-                    if token:
-                        full_response += token
-                        token_count += 1
-                        if on_token:
-                            on_token(token)
+                full_response, token_count = await stream_llm_text(model, llm_messages, on_token)
+                tool_calls = []
         except ModelAPIError as e:
-            err_msg = str(e)
-            _log.warning("[chat] 模型 API 错误: {}", err_msg)
-            if on_token:
-                on_token(err_msg)
-            new_messages = list(messages)
-            new_messages.append({"role": "assistant", "content": err_msg})
-            return {
-                **state,
-                "messages": new_messages,
-                "turn_id": state.get("turn_id", 0) + 1,
-            }
+            return _api_error_state(state, messages, str(e), on_token)
 
         elapsed = time.monotonic() - t0
         _log.debug(
@@ -184,17 +261,6 @@ def chat_node(
             len(tool_calls),
         )
 
-        new_messages = list(messages)
-        assistant_msg: dict[str, Any] = {"role": "assistant", "content": full_response}
-        if tool_calls:
-            # 写回 flat 格式 {id, name, arguments(dict)}，供 router 检测、exec_node 执行
-            assistant_msg["tool_calls"] = tool_calls
-        new_messages.append(assistant_msg)
-
-        return {
-            **state,
-            "messages": new_messages,
-            "turn_id": state.get("turn_id", 0) + 1,
-        }
+        return _success_state(state, messages, full_response, tool_calls)
 
     return safe_node(_chat, node_name="chat")

@@ -11,6 +11,12 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
+
+import uvicorn
+from hypercorn.asyncio import serve
+from hypercorn.config import Config as HCConfig
+from loguru import logger
 
 from flypig.bootstrap import create_app
 
@@ -29,10 +35,7 @@ def main() -> None:
         # uvicorn.run() 传入模块路径字符串 "module:app_factory()"，
         # 内部 reloader 检测到文件变化后重新 import，保证拿到新代码。
         # 不再传 app 对象，避免 reloader 持有旧对象引用。
-        import uvicorn
-
-        msg += " (v2 热重载)"
-        print(msg)
+        logger.info("{} (v2 热重载)", msg)
         uvicorn.run(
             "flypig.bootstrap:create_app",
             host=args.host,
@@ -45,17 +48,12 @@ def main() -> None:
     else:
         # ── 生产模式：Hypercorn serve() ──
         # 直接传 app 对象，无 reloader 开销
-        import asyncio
-
-        from hypercorn.asyncio import serve
-        from hypercorn.config import Config as HCConfig
-
         app = create_app()
         cfg = HCConfig()
         cfg.bind = [f"{args.host}:{args.port}"]
         cfg.loglevel = "warning"
         cfg.worker_class = "asyncio"
-        print(msg)
+        logger.info(msg)
         asyncio.run(serve(app, cfg))
 
 

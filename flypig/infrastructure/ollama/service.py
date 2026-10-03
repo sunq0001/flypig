@@ -2,7 +2,8 @@
 
 为什么做：封装 Ollama HTTP API，提供本地模型的生命周期管理
 
-实现方法：OllamaLocalModelService 通过 httpx 调用 Ollama API（/api/tags、/api/pull），实现 ILocalModelService 接口
+实现方法：OllamaLocalModelService 通过 acl.ollama 适配器调用 Ollama API（/api/tags、/api/pull），
+         实现 ILocalModelService 接口
 
 层&依赖：infrastructure.ollama 层，实现 domain.interfaces.ilocal_model_service
 """
@@ -12,10 +13,10 @@ from __future__ import annotations
 import asyncio
 import subprocess
 import time
-from http import HTTPStatus
 
-import httpx
+from loguru import logger
 
+from flypig.acl.ollama import fetch_tag_names, probe
 from flypig.domain.interfaces.ilocal_model_service import ILocalModelService
 from flypig.domain.registry import ModelRegistry
 from flypig.shared.settings import AppSettings
@@ -25,6 +26,11 @@ DEFAULT_LIST_CACHE_TTL = 30
 LIST_TIMEOUT = 2
 CACHE_KEY_MODELS = "models"
 CACHE_KEY_TS = "ts"
+
+# Ollama 官方 tags 接口路径
+_TAGS_PATH = "/api/tags"
+# Windows 主机上的 Ollama 兜底地址
+_DEFAULT_WINDOWS_HOST = "host.docker.internal"
 
 
 def _is_wsl() -> bool:
@@ -38,17 +44,19 @@ def _is_wsl() -> bool:
 
 def _wsl_windows_host() -> str:
     """获取 WSL 中访问 Windows 主机的 IP（默认网关）"""
+    host = ""
     try:
-        out = subprocess.check_output(
+        host = subprocess.check_output(
             ["sh", "-c", "ip route show | grep default | awk '{print $3}'"],
             timeout=3,
             text=True,
         ).strip()
-        if out:
-            return out
     except Exception:
-        pass
-    return "host.docker.internal"
+        host = ""
+    if host:
+        return host
+    logger.debug("[ollama] 未探测到 WSL 网关，回退默认主机 {}", _DEFAULT_WINDOWS_HOST)
+    return _DEFAULT_WINDOWS_HOST
 
 
 _WSL_DETECTED = _is_wsl()
@@ -93,21 +101,31 @@ class OllamaLocalModelService(ILocalModelService):
 
     async def _try_urls(self, path: str, timeout: int) -> str | None:
         """按顺序探测多个 URL，返回第一个响应的 base_url"""
-        async with httpx.AsyncClient() as client:
-            for url in self._probe_urls():
-                try:
-                    resp = await client.get(f"{url}{path}", timeout=timeout)
-                    if resp.status_code == HTTPStatus.OK:
-                        return url
-                except Exception:
-                    continue
+        for url in self._probe_urls():
+            try:
+                if await probe(url, path, timeout):
+                    return url
+            except Exception as e:
+                logger.debug("[ollama] 探测 {} 失败: {}", url, e)
+                continue
         return None
+
+    def _to_local_model(self, name: str, base_url: str, api_path: str, provider: str) -> dict:
+        """组装本地模型条目（前端 /api/config/local-models 消费的格式）"""
+        return {
+            "name": name,
+            "provider": provider,
+            "base_url": f"{base_url}{api_path}",
+            "api_model": name,
+            "local": True,
+            "has_key": True,
+        }
 
     # ── interface implementation ──
 
     async def check_running(self) -> bool:
         timeout = self._local_cfg.get("check_timeout", OLLAMA_CHECK_TIMEOUT)
-        return await self._try_urls("/api/tags", timeout) is not None
+        return await self._try_urls(_TAGS_PATH, timeout) is not None
 
     async def list_models(self) -> list[dict]:
         now = time.time()
@@ -119,7 +137,7 @@ class OllamaLocalModelService(ILocalModelService):
         if now - self._cache[CACHE_KEY_TS] < cache_ttl:
             return self._cache[CACHE_KEY_MODELS]
 
-        found_url = await self._try_urls("/api/tags", timeout)
+        found_url = await self._try_urls(_TAGS_PATH, timeout)
         if not found_url:
             return []
 
@@ -127,31 +145,11 @@ class OllamaLocalModelService(ILocalModelService):
         if self._settings.ollama_base_url != found_url:
             self._settings.ollama_base_url = found_url
 
-        async with httpx.AsyncClient() as client:
-            try:
-                resp = await client.get(f"{found_url}/api/tags", timeout=timeout)
-                if resp.status_code != HTTPStatus.OK:
-                    return []
-                result = []
-                for m in resp.json().get("models", []):
-                    name = m.get("name", "")
-                    if not name:
-                        continue
-                    result.append(
-                        {
-                            "name": name,
-                            "provider": provider,
-                            "base_url": f"{found_url}{api_path}",
-                            "api_model": name,
-                            "local": True,
-                            "has_key": True,
-                        }
-                    )
-                self._cache[CACHE_KEY_MODELS] = result
-                self._cache[CACHE_KEY_TS] = now
-                return result
-            except Exception:
-                return []
+        names = await fetch_tag_names(found_url, timeout)
+        result = [self._to_local_model(n, found_url, api_path, provider) for n in names]
+        self._cache[CACHE_KEY_MODELS] = result
+        self._cache[CACHE_KEY_TS] = now
+        return result
 
     async def list_installed_names(self) -> list[str]:
         return [m["name"] for m in await self.list_models()]
@@ -166,4 +164,3 @@ class OllamaLocalModelService(ILocalModelService):
             stderr=asyncio.subprocess.STDOUT,
         )
         await proc.wait()
-
