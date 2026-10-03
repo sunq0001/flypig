@@ -258,14 +258,16 @@ class PricingService:
         async def _loop():
             refresh_interval = self._pricing_cfg("refresh_interval", DEFAULT_REFRESH_INTERVAL)
             try:
-                self.fetch_pricing()
+                # fetch_pricing 是同步阻塞的（httpx 逐模型抓取），必须丢到线程池执行，
+                # 否则会占住事件循环：应用启动被推迟、所有 HTTP 接口无响应（实测可达 10 分钟）
+                await asyncio.to_thread(self.fetch_pricing)
                 logger.info("[pricing] 预热完成，每天自动刷新")
             except Exception as e:
                 logger.warning("[pricing] 预热失败: {}，使用默认价格", e)
             while True:
                 await asyncio.sleep(refresh_interval)
                 try:
-                    self.fetch_pricing()
+                    await asyncio.to_thread(self.fetch_pricing)
                 except Exception:
                     logger.warning("[pricing] 自动刷新失败，下次重试")
 
