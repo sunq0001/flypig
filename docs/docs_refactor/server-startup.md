@@ -227,34 +227,67 @@ tail -40 .dev_logs/back.log      # 出现 lifecycle startup OK / pricing 预热�
 7. **文档站看不到新文档** → 新 `.md` 放入 `docs/docs_refactor/` 后，还要在
    `docs/serve_docs.py` 的 `SIDEBAR_ITEMS` 里登记，否则不会出现在左侧导航。
 8. **`git push` 报 `Connection closed by <ip> port 22` 或 SSH banner 超时** →
-   到 `github.com:22` 的网络被阻断（典型表现：SSH 解析到异常 IP、`Connection timed out
-   during banner exchange`、`Could not read from remote repository`）。
-   改走 GitHub 的 **SSH-over-443** 通道即可，一次性生效、**不需要改 git 配置**：
-
-```bash
-git -c core.sshCommand="ssh -p 443" push \
-  ssh://git@ssh.github.com:443/<owner>/<repo>.git <分支名>
-```
-
-   推送成功后同步本地跟踪引用（否则 `git status` 会一直显示「领先 N 个提交」）：
-
-```bash
-git -c core.sshCommand="ssh -p 443" fetch \
-  ssh://git@ssh.github.com:443/<owner>/<repo>.git \
-  <分支名>:refs/remotes/origin/<分支名>
-```
-
-   本仓库的实际命令（可直接复制）：
-
-```bash
-git -c core.sshCommand="ssh -p 443" push ssh://git@ssh.github.com:443/sunq0001/flypig.git architecture-refactor
-```
-
-   > 想长期生效：在 `~/.ssh/config` 里为 `github.com` 加 `Hostname ssh.github.com` 与 `Port 443`。
+   到 `github.com:22` 的网络被阻断（本机实测 `github.com` 被解析到 `28.0.0.24`，
+   `Connection timed out during banner exchange`）。
+   本仓库已固化走 GitHub 的 **SSH-over-443** 通道，日常不需要手动指定，见下一节。
 
 ---
 
-## 十、启动相关脚本速查
+## 十、多远端同步（GitHub + Gitee）
+
+**两条约定**：
+
+1. `master` 是**唯一主线**，不再开特性分支（改完直接提交到 `master`）。
+2. 一次 `git push` 同时更新 GitHub 与 Gitee 两个远端。
+
+当前 `origin` 的配置（`git remote -v` 可查）：
+
+```text
+origin  ssh://git@ssh.github.com:443/sunq0001/flypig.git  (fetch)
+origin  ssh://git@ssh.github.com:443/sunq0001/flypig.git  (push)
+origin  git@gitee.com:sunq0001/flypig.git                 (push)   ← 第二个推送目标
+gitee   git@gitee.com:sunq0001/flypig.git                 (fetch/push)
+```
+
+日常用法：
+
+```bash
+git push          # 裸命令即可：GitHub 与 Gitee 各推一次
+git fetch origin  # fetch 走 GitHub 443；要拉 Gitee 用 git fetch gitee
+```
+
+换机器 / 重建仓库时的配置命令：
+
+```bash
+git remote set-url origin ssh://git@ssh.github.com:443/sunq0001/flypig.git
+git remote set-url --add --push origin ssh://git@ssh.github.com:443/sunq0001/flypig.git
+git remote set-url --add --push origin git@gitee.com:sunq0001/flypig.git
+git branch --set-upstream-to=origin/master master
+```
+
+撤销多远端（回到只推 GitHub）：
+
+```bash
+git remote set-url --delete --push origin git@gitee.com:sunq0001/flypig.git
+```
+
+**注意**：
+
+- 两个推送目标按顺序执行。若第一个成功、第二个失败，`git push` 返回非 0，
+  此时对失败的那个远端重推一次即可（已 up-to-date 的那个重推无副作用）。
+- 临时在别的机器上没有这套配置时，用单次 443 兜底：
+
+```bash
+git -c core.sshCommand="ssh -p 443" push \
+  ssh://git@ssh.github.com:443/sunq0001/flypig.git master
+```
+
+> 想让所有 GitHub 工具都走 443：在 `~/.ssh/config` 里为 `github.com` 加
+> `Hostname ssh.github.com` 与 `Port 443`。
+
+---
+
+## 十一、启动相关脚本速查
 
 - `dev.py` —— 一键四服务（含门禁 + 崩溃重启），**首选**
 - `dev.bat` / `start-dev.bat` —— Windows 一键调 `dev.py`
