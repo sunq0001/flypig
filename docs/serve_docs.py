@@ -56,6 +56,7 @@ SIDEBAR_ITEMS = [
             ("架构指南", "architecture-guide"),
             ("架构图", "architecture-diagram"),
             ("文件夹树", "folder-tree"),
+            ("服务启动与访问", "server-startup"),
         ],
     ),
     (
@@ -179,9 +180,7 @@ class DocHandler(BaseHTTPRequestHandler):
             title_match = re.search(r"^#\s+(.+)", text)
             title = title_match.group(1) if title_match else path
             content = render_markdown(text)
-            html = HTML_TEMPLATE.format(
-                title=title, content=content, sidebar=make_sidebar(path)
-            )
+            html = HTML_TEMPLATE.format(title=title, content=content, sidebar=make_sidebar(path))
             self._send_html(html)
             return
         # 再试 api-docs-vue（Vue 组件文档）
@@ -241,9 +240,7 @@ def run(port=8765):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="FlyPig 文档预览服务")
     parser.add_argument("--port", type=int, default=8765, help="端口（默认 8765）")
-    parser.add_argument(
-        "--watch", action="store_true", help="热重载模式（改 markdown 自动刷新）"
-    )
+    parser.add_argument("--watch", action="store_true", help="热重载模式（改 markdown 自动刷新）")
     args = parser.parse_args()
 
     if args.watch:
