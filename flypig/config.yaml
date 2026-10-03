@@ -1,9 +1,18 @@
+# FlyPig 配置（随仓库分发的只有"可移植默认值"，机器相关状态不入库）
+#
+# 首次启动：
+#   workspace 为空 → 前端自动弹出工作区选择向导，选定后写入
+#   flypig/interface/flypig/data/recent_workspaces.json（该文件已被 .gitignore 忽略）
+#   API Key 由界面「设置」保存到 flypig/data/api_keys.json（同样不入库）
+#
+# 字段说明：
+#   agent.workspace        当前工作区目录（空 = 未选择，前端会走向导）
+#   agent.recent_workspaces 最近工作区列表（运行时由界面维护）
+#   api_keys               厂商 → Key 映射（也可用环境变量，优先级更高）
+#   llm.default_model      默认模型（须存在于 data/model_registry.json）
 agent:
-  recent_workspaces:
-  - C:\Users\mss\WorkBuddy\Flypig-agent\flypig\backend
-  - C:\Users\mss\WorkBuddy\Flypig-agent
-  - C:\Users\mss\WorkBuddy\mydemo
-  workspace: C:\Users\mss\WorkBuddy\Flypig-agent\flypig\backend
+  recent_workspaces: []
+  workspace:
 api_keys: {}
 llm:
-  default_model: qwen2.5:1.5b
+  default_model: deepseek-v4-flash

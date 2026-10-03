@@ -89,6 +89,10 @@ $null
 flypig-archive/
 flypig_archive2/
 
+# Per-machine runtime state & secrets（保留在磁盘，不入库）
+flypig/data/api_keys.json
+flypig/interface/flypig/data/recent_workspaces.json
+
 # 失效/过时的旧脚本与配置（保留在磁盘，git 不再跟踪；启用方式见 docs_refactor/server-startup.md）
 start.bat
 stop.bat

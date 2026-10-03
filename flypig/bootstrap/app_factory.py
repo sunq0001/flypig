@@ -174,6 +174,7 @@ def create_app(
         recent = _load_recent_workspace()
         if recent:
             settings.workspace = recent
+            _log.info("已恢复最近工作区: {}", recent)
 
     init_logging(level=settings.log_level)
     init_otel()  # 全链路追踪（Jaeger 不可用时自动降级为 noop）
