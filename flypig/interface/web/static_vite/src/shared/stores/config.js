@@ -9,7 +9,9 @@
  */
 
 // - fetchConfig() 在 App.vue onMounted 中调用
-// - workspace 为 null 时显示 InitWizard，为真时进聊天界面
+// - workspace 为 null 时不拦截界面：直接进三栏布局，左栏（FileTreeBar）显示
+//   「选择工作区 / 打开工作区」引导，点开后由 MainLayout 的切换工作区弹窗
+//   （WorkspaceStep + DirBrowser）选目录 → POST /api/config/workspace 持久化
 
 import { defineStore } from 'pinia'
 

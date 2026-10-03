@@ -39,7 +39,11 @@
 
 ### 1. Welcome / Dashboard 首页
 
-InitWizard 之后（或配置存在时）不直接进三栏布局，先展示一个**Dashboard 首页**：
+> **2026-10 更新**：已放弃"全屏初始化向导 + Dashboard 首页"的方案。首次启动**直接进三栏界面**，
+> 无工作区时由左栏（`FileTreeBar`）显示「选择工作区 / 打开工作区」引导，点开后是切换工作区弹窗
+> （`WorkspaceStep` + `DirBrowser`），选完 `POST /api/config/workspace` 持久化。原 `InitWizard.vue`
+> 及 `ApiKeyStep/ModelStep` 骨架已删除（无引用死代码）。
+> 下面这张 Dashboard 首页草图目前只是**未实现的设想**（`features/dashboard/Dashboard.vue` 是空骨架、无引用）：
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -104,7 +108,9 @@ CSS 过渡 + `vue-transition` 覆盖以下场景：
 
 ### 5. 关键设计总结
 
-- **入口流程**：首次启动 → `InitWizard`（工作区/模型/API Key 三步）→ `Dashboard` 首页 → 进入主界面。配置存在时跳过向导直接进 Dashboard。
+- **入口流程**：首次启动**直接进三栏界面**；无工作区时左栏显示「选择工作区 / 打开工作区」引导，
+  点开切换工作区弹窗（`WorkspaceStep` + `DirBrowser`）选目录 → `POST /api/config/workspace` 持久化。
+  模型与 API Key 在聊天区 model-bar 配置。**不再有全屏 InitWizard**。
 - Vercel AI SDK `useChat` 替代手写 ReadableStream
 - 终端面板 = 单面板，标签页混排（PTY 交互标签 + subprocess 只读输出标签）
 - **主题切换**：基于 CSS 变量（`data-theme` 属性），不换 UI 库。每个主题对应一个 CSS 文件覆盖变量色值 + 图标色调。通过 `ThemeSwitcher.vue` + `useTheme.js` 切换，选择持久化到 `localStorage`。初始提供默认 / 赛博朋克 / 可爱风三种主题。
