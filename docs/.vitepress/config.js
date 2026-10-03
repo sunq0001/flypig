@@ -47,6 +47,7 @@ export default defineConfig({
           text: '演进',
           items: [
             { text: '迁移路线图', link: '/docs_refactor/migration-roadmap' },
+            { text: '模型目录与定价策略', link: '/docs_refactor/model-pricing-strategy' },
           ],
         },
       ],
