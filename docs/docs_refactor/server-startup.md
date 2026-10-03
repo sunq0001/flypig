@@ -33,20 +33,20 @@ docs   架构文档站    :8765   python docs/serve_docs.py --port 8765 --watch
 
 - **Python ≥ 3.11**，安装项目与开发依赖：
 
-  ```bash
-  pip install -e flypig/.[dev]
-  ```
+```bash
+pip install -e flypig/.[dev]
+```
 
-  这一步很关键：`dev` extra 里含 `uvicorn[standard]`（`--reload` 与文档热重载所需的 `watchfiles` 都由它带入）、
-  `import-linter`、`pre-commit`、`pytest`、`ruff`、`bandit`。
-  主依赖里还有 `watchdog`（文件监听：AI 改文件后推 SSE 通知前端刷新编辑器）。
+这一步很关键：`dev` extra 里含 `uvicorn[standard]`（`--reload` 与文档热重载所需的 `watchfiles` 都由它带入）、
+`import-linter`、`pre-commit`、`pytest`、`ruff`、`bandit`。
+主依赖里还有 `watchdog`（文件监听：AI 改文件后推 SSE 通知前端刷新编辑器）。
 
 - **Node.js 20+**（前端 Vite + chat-server），两处各自安装：
 
-  ```bash
-  cd flypig/interface/web/static_vite && npm install
-  cd flypig/interface/chat-server      && npm install
-  ```
+```bash
+cd flypig/interface/web/static_vite && npm install
+cd flypig/interface/chat-server      && npm install
+```
 
 - **可选 · 本地模型**：本机装 Ollama（默认 `http://127.0.0.1:11434`），
   在模型下拉里选「💻 本地模型」（实测 `qwen2.5:3b` 可用）。不装不影响云端模型。
@@ -192,11 +192,12 @@ curl http://localhost:5173/api/config                                       # �
    `Accept-Encoding: identity`（禁 gzip，否则事件被攒住）、`setNoDelay(true)`（关 Nagle）、`timeout: 0`。
 3. Node 必须用 nvm 的 Linux 版；`dev.py` 会自动探测 `~/.nvm/.../v22.23.1/bin/node`，
    装了别的版本就改 `dev.py` 里那行路径常量。
-4. 确认服务是否真的起来，看日志而不是只看端口：
+4. 确认服务是否真的起来，看日志而不是只看端口（本页代码块一律顶格书写：
+   文档站的 markdown 渲染器只识别顶格的代码围栏）：
 
-   ```bash
-   tail -40 .dev_logs/back.log      # 出现 lifecycle startup OK / pricing 预热完成即可用
-   ```
+```bash
+tail -40 .dev_logs/back.log      # 出现 lifecycle startup OK / pricing 预热完成即可用
+```
 
 ---
 
@@ -225,6 +226,31 @@ curl http://localhost:5173/api/config                                       # �
    需用宿主 IP 而非 `localhost`。
 7. **文档站看不到新文档** → 新 `.md` 放入 `docs/docs_refactor/` 后，还要在
    `docs/serve_docs.py` 的 `SIDEBAR_ITEMS` 里登记，否则不会出现在左侧导航。
+8. **`git push` 报 `Connection closed by <ip> port 22` 或 SSH banner 超时** →
+   到 `github.com:22` 的网络被阻断（典型表现：SSH 解析到异常 IP、`Connection timed out
+   during banner exchange`、`Could not read from remote repository`）。
+   改走 GitHub 的 **SSH-over-443** 通道即可，一次性生效、**不需要改 git 配置**：
+
+```bash
+git -c core.sshCommand="ssh -p 443" push \
+  ssh://git@ssh.github.com:443/<owner>/<repo>.git <分支名>
+```
+
+   推送成功后同步本地跟踪引用（否则 `git status` 会一直显示「领先 N 个提交」）：
+
+```bash
+git -c core.sshCommand="ssh -p 443" fetch \
+  ssh://git@ssh.github.com:443/<owner>/<repo>.git \
+  <分支名>:refs/remotes/origin/<分支名>
+```
+
+   本仓库的实际命令（可直接复制）：
+
+```bash
+git -c core.sshCommand="ssh -p 443" push ssh://git@ssh.github.com:443/sunq0001/flypig.git architecture-refactor
+```
+
+   > 想长期生效：在 `~/.ssh/config` 里为 `github.com` 加 `Hostname ssh.github.com` 与 `Port 443`。
 
 ---
 
