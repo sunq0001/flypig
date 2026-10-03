@@ -83,9 +83,9 @@ frontend/static_vite/src/
 │   │   ├── chat/               ←   对话功能（ChatPanel, MessageList, InputBox 等）
 │   │   ├── input/              ←   输入栏（ModeSelect, ModelSelect, SendButton）
 │   │   └── terminal/           ←   终端功能（TermBar, TerminalPanel, XtermViewer 等）
-│   ├── dashboard/              ← 工作区首页（Dashboard）
+│   ├── dashboard/              ← 工作区首页（Dashboard，空骨架未启用）
 │   ├── tasks/                  ← 任务看板（TaskBoard）
-│   ├── init/                   ← 初始化向导（InitWizard, WorkspaceStep, ModelStep, ApiKeyStep）
+│   ├── init/                   ← 工作区选择（WorkspaceStep, DirBrowser；InitWizard 已删除）
 │   └── common/                 ← 通用组件（MarkdownRender, CodeBlock, CommandPalette 等 7 个组件）
 ├── composables/                ← useChat, useFileTree, useLayout, useMcp, useUxEnhancements 等
 └── lib/                        ← xterm-setup.js, monaco-setup.js, sfc-compiler.js
@@ -201,15 +201,23 @@ const COMPONENT_MAP = {
 3. EventRouter 中加一行映射: new_event: NewComponent,
 ```
 
-## InitWizard 初始化向导
+## 工作区选择（无全屏初始化向导）
 
-启动时的工作区选择流程，仅一步：
+**2026-10 更新**：已废弃全屏 `InitWizard`。首次启动**直接进三栏界面**，不拦截、不弹全屏卡片：
 
-1. **WorkspaceStep** — 选择工作区目录（输入路径或浏览）
-   - POST /api/config/workspace 持久化到 config.yaml
-   - 下次启动 GET /api/config 返回 workspace 则跳过 InitWizard
+1. 无工作区时，左栏 `features/file-tree/FileTreeBar.vue` 显示「选择工作区 / 打开工作区」引导区
+2. 点「打开工作区」→ `shared/layout/MainLayout.vue` 打开「切换工作区」弹窗（`WorkspaceStep.vue`）
+3. `WorkspaceStep` 内点「选择文件夹」→ `DirBrowser.vue` 目录浏览弹窗
+   （`POST /api/config/browse` 列目录、`POST /api/config/mkdir` 新建目录）
+4. 选定目录 → `POST /api/config/workspace` 持久化到
+   `flypig/interface/flypig/data/recent_workspaces.json`（该文件不入库）
+5. 启动时若 `config.yaml` 的 workspace 为空，后端会从该文件恢复最近工作区
 
-模型选择和 API Key 配置不在 InitWizard 中处理，而是在聊天界面的 model-bar 中：
+> 已删除：`InitWizard.vue`、`ApiKeyStep.vue`、`ModelStep.vue`（向导专属，无引用死代码）。
+> `features/init-wizard/` 目录现只剩 `WorkspaceStep.vue` 与 `DirBrowser.vue`（属于"工作区选择"，
+> 目录名待重命名为 `features/workspace/`）。
+
+模型选择和 API Key 配置在聊天界面的 model-bar 中：
 - 输入框上方 model-bar 显示当前模型名（来自 /api/config.default_model）
 - ⚙ 图标弹窗输入 API Key
 - 用户点发送时若该模型无 API Key 则弹出输入框，不直接发送
