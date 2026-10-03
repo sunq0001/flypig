@@ -72,3 +72,30 @@ scripts/grep_watcher.sh
 scripts/test_watchdog.sh
 scripts/rerun.sh
 scripts/install_watchdog.sh
+
+# Caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.import_linter_cache/
+
+# One-off investigation dumps / stray files
+_*.txt
+_tmp_ruff/
+_tmp_*/
+$null
+
+# Legacy archives（保留在磁盘，不再跟踪其中新增文件）
+flypig-archive/
+flypig_archive2/
+
+# 失效/过时的旧脚本与配置（保留在磁盘，git 不再跟踪；启用方式见 docs_refactor/server-startup.md）
+start.bat
+stop.bat
+restart.bat
+stop-dev.bat
+.wsl_start.sh
+flypig/Makefile
+docs/architecture_refactor_old.md
+pnpm-lock.yaml
+pnpm-workspace.yaml

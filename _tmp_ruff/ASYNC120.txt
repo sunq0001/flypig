@@ -1,3 +1,0 @@
-error: invalid value 'ASYNC120' for '--select <RULE_CODE>'
-
-For more information, try '--help'.
