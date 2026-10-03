@@ -85,6 +85,7 @@ SIDEBAR_ITEMS = [
         "演进",
         [
             ("迁移路线图", "migration-roadmap"),
+            ("模型目录与定价策略", "model-pricing-strategy"),
         ],
     ),
     (
